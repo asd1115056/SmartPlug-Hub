@@ -350,9 +350,15 @@ function updateToggleButton(btn, deviceId, childId, isOn) {
 }
 
 // === Polling ===
+function setServerOffline(offline) {
+    const banner = document.getElementById('server-offline-banner');
+    if (banner) banner.classList.toggle('d-none', !offline);
+}
+
 async function pollStatus() {
     try {
         const data = await fetchDevices();
+        setServerOffline(false);
         for (const device of data.devices) {
             const previous = currentDevices[device.id];
 
@@ -366,6 +372,7 @@ async function pollStatus() {
         }
     } catch (error) {
         console.error('Poll error:', error);
+        setServerOffline(true);
     }
 }
 
