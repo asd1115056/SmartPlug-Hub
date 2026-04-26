@@ -195,17 +195,12 @@ class DeviceManager:
 
     # === Internal ===
 
-    def _on_state_update(self, device_id: str, state: DeviceState):
+    def _on_state_update(self, device_id: str, state: DeviceState | None):
         """Callback from CommandQueue when a command completes or fails."""
-        # Preserve topology on offline transition
-        if state.status == "offline":
+        if state is None:
+            mac = self._config.resolve_id(device_id)
             previous = self._states.get(device_id)
-            if previous and state.alias is None:
-                state = build_device_state(
-                    self._config.whitelist[self._config.resolve_id(device_id)],
-                    None,
-                    previous,
-                )
+            state = build_device_state(self._config.whitelist[mac], None, previous)
         self._states[device_id] = state
 
     async def _health_check_loop(self):

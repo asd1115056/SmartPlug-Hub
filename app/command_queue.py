@@ -48,7 +48,7 @@ class CommandQueue:
         self,
         config: ConfigManager,
         ip_cache: dict[str, str],
-        on_state_update: Callable[[str, DeviceState], None],
+        on_state_update: Callable[[str, DeviceState | None], None],
     ):
         self._config = config
         self._ip_cache = ip_cache  # MAC -> IP, shared with DeviceManager
@@ -174,9 +174,7 @@ class CommandQueue:
                 except DeviceOfflineError as e:
                     cmd.status = CommandStatus.FAILED
                     cmd.error = str(e)
-                    # Get previous state for topology preservation
-                    offline_state = build_device_state(device_info, None)
-                    self._on_state_update(device_id, offline_state)
+                    self._on_state_update(device_id, None)
                     device = None
                 except Exception as e:
                     cmd.status = CommandStatus.FAILED
