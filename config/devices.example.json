@@ -1,16 +1,18 @@
 {
   "devices": [
     {
-      "mac": "AA:BB:CC:DD:EE:FF",
+      "type": "kasa",
       "name": "Living Room Strip",
+      "mac": "AA:BB:CC:DD:EE:FF",
       "broadcast": "192.168.1.255",
       "username": "your@email.com",
       "password": "your_password",
       "group": "Living Room"
     },
     {
-      "mac": "11:22:33:44:55:66",
+      "type": "kasa",
       "name": "Bedroom Plug (no auth needed)",
+      "mac": "11:22:33:44:55:66",
       "broadcast": "192.168.1.255",
       "group": "Bedroom"
     }

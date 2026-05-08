@@ -16,5 +16,6 @@ kasa-web = "app.main:run"
 [tool.uv]
 package = true
 
-[tool.setuptools]
-packages = ["app"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

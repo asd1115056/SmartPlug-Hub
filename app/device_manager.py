@@ -10,18 +10,15 @@ from pathlib import Path
 
 from .command_queue import CommandQueue, make_command
 from .config import ConfigManager
-from .connection import (
-    build_device_state,
-    connect_device,
-    discover_all,
-    discover_device_ip,
-)
 from .models import (
     CommandStatus,
+    DeviceBackend,
     DeviceOfflineError,
     DeviceOperationError,
     DeviceState,
+    build_offline_state,
 )
+from .registry import PROTOCOLS
 
 logger = logging.getLogger(__name__)
 
@@ -35,50 +32,42 @@ class DeviceManager:
         self._config = ConfigManager(config_dir)
         self._ip_cache: dict[str, str] = {}  # MAC -> IP
         self._states: dict[str, DeviceState] = {}  # device_id -> DeviceState
+        self._backends: dict[str, DeviceBackend] = {}  # device_id -> backend
         self._queue: CommandQueue | None = None
         self._health_task: asyncio.Task | None = None
 
     async def initialize(self):
-        """Load config -> discover all -> connect+update+disconnect -> build initial cache."""
+        """Load config -> register backends -> discover -> build initial state cache."""
         self._config.load()
 
-        # Initialize CommandQueue
+        for type_name, spec in PROTOCOLS.items():
+            sub_whitelist = {
+                mac: info
+                for mac, info in self._config.whitelist.items()
+                if isinstance(info, spec.config_class)
+            }
+            if not sub_whitelist:
+                continue
+
+            backend = spec.backend_class(ip_cache=self._ip_cache)
+            for cfg in sub_whitelist.values():
+                self._backends[cfg.id] = backend
+
+            self._ip_cache.update(await spec.discover_all(sub_whitelist))
+
+            for cfg in sub_whitelist.values():
+                self._states[cfg.id] = await backend.refresh(cfg)
+
         self._queue = CommandQueue(
             config=self._config,
-            ip_cache=self._ip_cache,
+            backends=self._backends,
             on_state_update=self._on_state_update,
         )
-
-        # Discover all devices
-        ip_mapping = await discover_all(self._config.whitelist)
-        self._ip_cache.update(ip_mapping)
-
-        # Connect to each discovered device to get initial state, then disconnect
-        for mac, ip in ip_mapping.items():
-            device_info = self._config.whitelist[mac]
-            device, error = await connect_device(ip, device_info.credentials)
-            if device:
-                state = build_device_state(device_info, device)
-                self._states[device_info.id] = state
-                await device.disconnect()
-                logger.info(
-                    f"Initialized {device_info.name} ({device.model}) at {ip}"
-                )
-            else:
-                logger.warning(
-                    f"Found {device_info.name} at {ip} but connection failed: {error}"
-                )
-
-        # Create offline states for undiscovered devices
-        for mac, info in self._config.whitelist.items():
-            if info.id not in self._states:
-                self._states[info.id] = build_device_state(info, None)
 
         online = sum(1 for s in self._states.values() if s.status == "online")
         total = len(self._states)
         logger.info(f"Initialization complete: {online}/{total} devices online")
 
-        # Start health check
         self._health_task = asyncio.create_task(self._health_check_loop())
 
     async def shutdown(self):
@@ -100,11 +89,7 @@ class DeviceManager:
     async def control_device(
         self, device_id: str, action: str, child_id: str | None = None
     ) -> DeviceState:
-        """Submit command to queue and wait for completion.
-
-        Returns DeviceState on success.
-        Raises DeviceOfflineError, DeviceOperationError, or ValueError.
-        """
+        """Submit command to queue and wait for completion."""
         mac = self._config.resolve_id(device_id)
         if not mac:
             raise ValueError(f"Device {device_id} not found")
@@ -112,7 +97,6 @@ class DeviceManager:
         if action not in ("on", "off"):
             raise ValueError(f"Invalid action: {action}. Use 'on' or 'off'")
 
-        # Validate child_id if provided
         if child_id is not None:
             current = self._states.get(device_id)
             if current and current.children:
@@ -127,7 +111,6 @@ class DeviceManager:
         if cmd.status == CommandStatus.COMPLETED:
             return cmd.result
 
-        # Command failed
         error_msg = cmd.error or "Unknown error"
         if "offline" in error_msg.lower():
             raise DeviceOfflineError(error_msg)
@@ -155,43 +138,19 @@ class DeviceManager:
     # === Management ===
 
     async def refresh_device(self, device_id: str) -> DeviceState:
-        """Bypass queue: discover -> connect -> update -> disconnect -> update cache.
-
-        Used for offline device recovery.
-        """
+        """Bypass queue: re-discover + connect + update cache."""
         mac = self._config.resolve_id(device_id)
         if not mac:
             raise ValueError(f"Device {device_id} not found")
 
-        device_info = self._config.whitelist[mac]
-        previous = self._states.get(device_id)
+        cfg = self._config.whitelist[mac]
+        backend = self._backends.get(device_id)
+        if not backend:
+            raise ValueError(f"No backend registered for device {device_id}")
 
-        # Try cached IP first
-        cached_ip = self._ip_cache.get(mac)
-        if cached_ip:
-            device, _ = await connect_device(cached_ip, device_info.credentials)
-            if device:
-                state = build_device_state(device_info, device)
-                self._states[device_id] = state
-                self._ip_cache[mac] = device.host
-                await device.disconnect()
-                return state
-
-        # Discover new IP
-        new_ip = await discover_device_ip(device_info)
-        if new_ip:
-            device, _ = await connect_device(new_ip, device_info.credentials)
-            if device:
-                state = build_device_state(device_info, device)
-                self._states[device_id] = state
-                self._ip_cache[mac] = new_ip
-                await device.disconnect()
-                return state
-
-        # Still offline
-        offline_state = build_device_state(device_info, None, previous)
-        self._states[device_id] = offline_state
-        return offline_state
+        state = await backend.refresh(cfg)
+        self._states[device_id] = state
+        return state
 
     # === Internal ===
 
@@ -200,7 +159,7 @@ class DeviceManager:
         if state is None:
             mac = self._config.resolve_id(device_id)
             previous = self._states.get(device_id)
-            state = build_device_state(self._config.whitelist[mac], None, previous)
+            state = build_offline_state(self._config.whitelist[mac], previous)
         self._states[device_id] = state
 
     async def _health_check_loop(self):
@@ -213,32 +172,29 @@ class DeviceManager:
                 logger.warning(f"Health check failed: {e}")
 
     async def _run_health_check(self):
-        """Connect -> update -> disconnect for idle devices."""
+        """Poll idle devices and update state cache."""
         checked = 0
         online = 0
 
-        for mac, info in self._config.whitelist.items():
-            # Skip devices with active command processors
-            if self._queue and self._queue.has_active_processor(info.id):
+        for mac, cfg in self._config.whitelist.items():
+            backend = self._backends.get(cfg.id)
+            if not backend:
                 continue
 
-            previous = self._states.get(info.id)
-            cached_ip = self._ip_cache.get(mac)
-            if not cached_ip:
+            if self._queue and self._queue.has_active_processor(cfg.id):
                 continue
 
-            device, _ = await connect_device(cached_ip, info.credentials)
-            if device:
-                state = build_device_state(info, device)
-                self._states[info.id] = state
-                self._ip_cache[mac] = device.host
-                await device.disconnect()
-                online += 1
+            state = await backend.health_check(cfg)
+            if state is None:
+                continue
+
+            if state.status == "offline":
+                prev = self._states.get(cfg.id)
+                state = build_offline_state(cfg, prev)
             else:
-                # Mark offline, preserve topology
-                offline_state = build_device_state(info, None, previous)
-                self._states[info.id] = offline_state
+                online += 1
 
+            self._states[cfg.id] = state
             checked += 1
 
         logger.debug(f"Health check: {online}/{checked} devices online")

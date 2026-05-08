@@ -6,9 +6,9 @@ import json
 import logging
 from pathlib import Path
 
-from kasa import Credentials
-
-from .models import DeviceInfo, normalize_mac, mac_to_id
+from .models import DeviceInfo
+from .registry import PROTOCOLS
+from .utils import mac_to_id, normalize_mac
 
 logger = logging.getLogger(__name__)
 
@@ -43,27 +43,22 @@ class ConfigManager:
                 mac = normalize_mac(device["mac"])
                 device_id = mac_to_id(mac)
                 name = device.get("name") or device_id
-                broadcast = device["broadcast"]
+                device_type = device.get("type")
 
-                credentials = None
-                username = device.get("username")
-                password = device.get("password")
-                if username and password:
-                    credentials = Credentials(username=username, password=password)
+                if not device_type:
+                    raise ValueError(
+                        f"Device '{name}' ({mac}) is missing required 'type' field"
+                    )
 
-                whitelist[mac] = DeviceInfo(
-                    mac=mac,
-                    name=name,
-                    broadcast=broadcast,
-                    id=device_id,
-                    credentials=credentials,
-                    group=device.get("group"),
-                )
+                spec = PROTOCOLS.get(device_type)
+                if not spec:
+                    raise ValueError(
+                        f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
+                    )
+
+                whitelist[mac] = spec.parse_config(device, mac, name)
                 id_to_mac[device_id] = mac
-                logger.debug(
-                    f"Loaded device: {name} ({mac}) broadcast={broadcast} "
-                    f"auth={'yes' if credentials else 'no'}"
-                )
+                logger.debug(f"Loaded {device_type} device: {name} ({mac})")
 
             self._whitelist = whitelist
             self._id_to_mac = id_to_mac
