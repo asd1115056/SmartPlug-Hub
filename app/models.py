@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 
 from kasa import Credentials
 
@@ -119,7 +119,10 @@ class Command:
     _event: asyncio.Event = field(default_factory=asyncio.Event)
 
 
-class DeviceBackend(ABC):
+_Cfg = TypeVar("_Cfg", bound="DeviceInfo")
+
+
+class DeviceBackend(ABC, Generic[_Cfg]):
     """Protocol backend interface.
 
     session_timeout: seconds CommandQueue processor stays alive after the last
@@ -133,16 +136,16 @@ class DeviceBackend(ABC):
     command_interval: float = 0.0
 
     @abstractmethod
-    async def execute_command(self, cmd: Command, cfg: DeviceInfo) -> DeviceState:
+    async def execute_command(self, cmd: Command, cfg: _Cfg) -> DeviceState:
         """Execute a command. Called by CommandQueue processor."""
 
     async def cleanup(self, device_id: str) -> None:
         """Called when the processor exits. Default no-op."""
 
     @abstractmethod
-    async def refresh(self, cfg: DeviceInfo) -> DeviceState:
+    async def refresh(self, cfg: _Cfg) -> DeviceState:
         """Re-discover and return current state (offline recovery / init)."""
 
     @abstractmethod
-    async def health_check(self, cfg: DeviceInfo) -> DeviceState | None:
+    async def health_check(self, cfg: _Cfg) -> DeviceState | None:
         """Periodic poll. Return None to skip this device this cycle."""

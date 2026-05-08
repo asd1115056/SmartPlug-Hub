@@ -1,14 +1,10 @@
-"""
-Stateless Kasa network functions: connect, discover, build state.
-
-Does NOT manage connection lifecycle — that is KasaBackend's responsibility.
-"""
+"""Stateless Kasa network functions: connect, discover, build state."""
 
 import asyncio
 import logging
 from datetime import datetime, timezone
 
-from kasa import Device, DeviceConfig, Discover
+from kasa import Credentials, Device, DeviceConfig, Discover
 from kasa.exceptions import AuthenticationError
 
 from ..models import ChildState, DeviceState, KasaDeviceConfig
@@ -22,23 +18,13 @@ RETRY_DELAY = 0.5
 
 
 async def connect_device(
-    ip: str, credentials=None
+    ip: str, credentials: Credentials | None = None
 ) -> tuple[Device | None, str | None]:
-    """Try to connect to a Kasa device by IP address.
-
-    Strategy (no-auth first):
-    1. Try without credentials
-    2. If auth required and credentials provided, retry with credentials
-    3. If still fails, return (None, error_reason)
-    """
+    """Attempt connection without credentials first, then with credentials if auth is required."""
     last_error: str | None = None
 
     logger.debug(f"Connecting to {ip} without credentials...")
-    config_no_auth = DeviceConfig(
-        host=ip,
-        credentials=None,
-        timeout=CONNECTION_TIMEOUT,
-    )
+    config_no_auth = DeviceConfig(host=ip, credentials=None, timeout=CONNECTION_TIMEOUT)
 
     for attempt in range(CONNECTION_RETRIES):
         try:
@@ -59,9 +45,7 @@ async def connect_device(
     if credentials:
         logger.debug(f"Connecting to {ip} with credentials...")
         config_with_auth = DeviceConfig(
-            host=ip,
-            credentials=credentials,
-            timeout=CONNECTION_TIMEOUT,
+            host=ip, credentials=credentials, timeout=CONNECTION_TIMEOUT
         )
 
         for attempt in range(CONNECTION_RETRIES):
@@ -82,7 +66,7 @@ async def connect_device(
 
 
 async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
-    """Discover a single device's IP by its MAC address via broadcast."""
+    """Discover a single device's current IP via broadcast."""
     target_mac = device_info.mac
     found_ip: str | None = None
 
@@ -97,18 +81,12 @@ async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
             except ValueError:
                 pass
 
-    await Discover.discover(
-        target=device_info.broadcast,
-        on_discovered=on_discovered,
-    )
-
+    await Discover.discover(target=device_info.broadcast, on_discovered=on_discovered)
     return found_ip
 
 
-async def discover_all(
-    whitelist: dict[str, KasaDeviceConfig],
-) -> dict[str, str]:
-    """Discover all whitelisted Kasa devices, return MAC -> IP mapping."""
+async def discover_all(whitelist: dict[str, KasaDeviceConfig]) -> dict[str, str]:
+    """Discover all whitelisted Kasa devices. Returns MAC -> IP mapping."""
     logger.info("Starting Kasa device discovery...")
 
     targets: dict[str, list[KasaDeviceConfig]] = {}
@@ -128,26 +106,18 @@ async def discover_all(
                     mac = normalize_mac(device_mac)
                     if mac in device_macs:
                         result[mac] = device.host
-                        name = whitelist[mac].name
-                        logger.info(f"Found device: {name} at {device.host}")
+                        logger.info(f"Found device: {whitelist[mac].name} at {device.host}")
                 except ValueError:
                     pass
 
-        await Discover.discover(
-            target=target,
-            on_discovered=on_discovered,
-        )
+        await Discover.discover(target=target, on_discovered=on_discovered)
 
-    found = len(result)
-    total = len(whitelist)
-    logger.info(f"Kasa discovery complete: {found}/{total} whitelisted devices found")
+    logger.info(f"Kasa discovery complete: {len(result)}/{len(whitelist)} devices found")
     return result
 
 
 def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceState:
     """Build an online DeviceState from a connected Device object."""
-    now = datetime.now().isoformat()
-
     is_strip = hasattr(device, "children") and len(device.children) > 0
     children = None
     if is_strip:
@@ -169,6 +139,6 @@ def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceS
         model=device.model,
         is_strip=is_strip,
         children=children,
-        last_updated=now,
+        last_updated=datetime.now().isoformat(),
         group=device_info.group,
     )

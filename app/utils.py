@@ -1,6 +1,6 @@
-"""
-General-purpose utility functions.
-"""
+"""General-purpose utility functions."""
+
+import hashlib
 
 
 def normalize_mac(mac: str) -> str:
@@ -12,7 +12,6 @@ def normalize_mac(mac: str) -> str:
 
 
 def mac_to_id(mac: str) -> str:
-    """Generate a stable device ID from MAC address (8-char SHA-256 hash)."""
-    import hashlib
+    """Generate a stable 8-char device ID from MAC address (SHA-256)."""
     normalized = normalize_mac(mac)
     return hashlib.sha256(normalized.encode()).hexdigest()[:8]

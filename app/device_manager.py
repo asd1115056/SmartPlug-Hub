@@ -1,8 +1,4 @@
-"""
-Device Manager - thin facade combining ConfigManager + CommandQueue.
-
-Manages device state cache and coordinates control operations.
-"""
+"""Thin facade combining ConfigManager + CommandQueue with a device state cache."""
 
 import asyncio
 import logging
@@ -28,15 +24,15 @@ HEALTH_CHECK_INTERVAL = 60
 class DeviceManager:
     """Combines ConfigManager + CommandQueue. Manages state cache."""
 
-    def __init__(self, config_dir: Path | None = None):
+    def __init__(self, config_dir: Path | None = None) -> None:
         self._config = ConfigManager(config_dir)
-        self._ip_cache: dict[str, str] = {}  # MAC -> IP
-        self._states: dict[str, DeviceState] = {}  # device_id -> DeviceState
-        self._backends: dict[str, DeviceBackend] = {}  # device_id -> backend
+        self._ip_cache: dict[str, str] = {}
+        self._states: dict[str, DeviceState] = {}
+        self._backends: dict[str, DeviceBackend] = {}
         self._queue: CommandQueue | None = None
         self._health_task: asyncio.Task | None = None
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Load config -> register backends -> discover -> build initial state cache."""
         self._config.load()
 
@@ -70,7 +66,7 @@ class DeviceManager:
 
         self._health_task = asyncio.create_task(self._health_check_loop())
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Stop health check and command queue."""
         if self._health_task:
             self._health_task.cancel()
@@ -83,8 +79,6 @@ class DeviceManager:
             await self._queue.shutdown()
 
         logger.info("Device manager shut down")
-
-    # === Control (for API) ===
 
     async def control_device(
         self, device_id: str, action: str, child_id: str | None = None
@@ -118,8 +112,6 @@ class DeviceManager:
             raise DeviceOperationError(error_msg)
         raise DeviceOperationError(error_msg)
 
-    # === State queries (zero I/O, from cache) ===
-
     def get_all_states(self) -> list[DeviceState]:
         """Get all device states from cache, in config file order."""
         return [
@@ -134,8 +126,6 @@ class DeviceManager:
         if not state:
             raise ValueError(f"Device {device_id} not found")
         return state
-
-    # === Management ===
 
     async def refresh_device(self, device_id: str) -> DeviceState:
         """Bypass queue: re-discover + connect + update cache."""
@@ -152,9 +142,7 @@ class DeviceManager:
         self._states[device_id] = state
         return state
 
-    # === Internal ===
-
-    def _on_state_update(self, device_id: str, state: DeviceState | None):
+    def _on_state_update(self, device_id: str, state: DeviceState | None) -> None:
         """Callback from CommandQueue when a command completes or fails."""
         if state is None:
             mac = self._config.resolve_id(device_id)
@@ -162,7 +150,7 @@ class DeviceManager:
             state = build_offline_state(self._config.whitelist[mac], previous)
         self._states[device_id] = state
 
-    async def _health_check_loop(self):
+    async def _health_check_loop(self) -> None:
         """Periodically check devices without active processors."""
         while True:
             await asyncio.sleep(HEALTH_CHECK_INTERVAL)
@@ -171,7 +159,7 @@ class DeviceManager:
             except Exception as e:
                 logger.warning(f"Health check failed: {e}")
 
-    async def _run_health_check(self):
+    async def _run_health_check(self) -> None:
         """Poll idle devices and update state cache."""
         checked = 0
         online = 0

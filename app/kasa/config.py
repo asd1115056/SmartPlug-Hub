@@ -1,3 +1,5 @@
+"""Parse raw device config dicts into Kasa-specific config objects."""
+
 from kasa import Credentials
 
 from ..models import KasaDeviceConfig

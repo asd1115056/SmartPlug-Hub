@@ -1,6 +1,4 @@
-"""
-Configuration management - loads device whitelist and provides ID resolution.
-"""
+"""Configuration management — loads device whitelist and provides ID resolution."""
 
 import json
 import logging

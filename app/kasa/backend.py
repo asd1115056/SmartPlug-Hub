@@ -1,6 +1,4 @@
-"""
-KasaBackend — Kasa protocol backend with persistent TCP connection pool.
-"""
+"""Kasa protocol backend with persistent TCP connection pool."""
 
 import logging
 
@@ -24,21 +22,20 @@ from .connection import (
 logger = logging.getLogger(__name__)
 
 
-class KasaBackend(DeviceBackend):
+class KasaBackend(DeviceBackend[KasaDeviceConfig]):
     """Kasa backend: persistent TCP connections, retry + rediscovery on failure."""
 
     session_timeout: float = 30.0  # processor exits after 30s idle
     command_interval: float = 0.5  # rate limiting between commands
 
-    def __init__(self, ip_cache: dict[str, str]):
+    def __init__(self, ip_cache: dict[str, str]) -> None:
         self._ip_cache = ip_cache
-        self._connections: dict[str, Device] = {}  # device_id → open Device
+        self._connections: dict[str, Device] = {}
 
     async def execute_command(self, cmd: Command, cfg: KasaDeviceConfig) -> DeviceState:
         device_id = cmd.device_id
         device = self._connections.get(device_id)
 
-        # Step 1: Try with existing connection
         if device:
             try:
                 await self._execute_action(device, cmd)
@@ -58,7 +55,6 @@ class KasaBackend(DeviceBackend):
                 device = None
                 self._connections.pop(device_id, None)
 
-        # Step 2: Reconnect to cached IP
         cached_ip = self._ip_cache.get(cfg.mac)
         if cached_ip:
             logger.info(f"Retrying {cfg.name} at cached IP {cached_ip}...")
@@ -91,7 +87,6 @@ class KasaBackend(DeviceBackend):
                             pass
                         device = None
 
-        # Step 3: Discover new IP
         logger.info(f"Discovering new IP for {cfg.name}...")
         new_ip = await discover_device_ip(cfg)
         if new_ip:
