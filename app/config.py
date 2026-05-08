@@ -56,7 +56,7 @@ class ConfigManager:
                         f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
                     )
 
-                whitelist[mac] = spec.parse_config(device, mac, name)
+                whitelist[mac] = spec.parser(device, mac, name)
                 id_to_mac[device_id] = mac
                 logger.debug(f"  [{device_type}] {name} ({mac})")
 

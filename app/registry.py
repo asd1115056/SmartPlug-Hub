@@ -1,11 +1,4 @@
-"""
-Protocol registry — the single place to register a new backend protocol.
-
-To add a new protocol (e.g. Tuya):
-  1. Create app/tuya/ subpackage with parse_config, TuyaBackend, discover_all
-  2. Add one entry to PROTOCOLS below
-  3. Nothing else needs to change
-"""
+"""Protocol registry — single source of truth for supported backend protocols."""
 
 from dataclasses import dataclass
 from typing import Callable
@@ -16,23 +9,24 @@ from .models import KasaDeviceConfig
 
 @dataclass(frozen=True)
 class ProtocolSpec:
-    parse_config: Callable  # (raw: dict, mac: str, name: str) -> DeviceInfo
-    backend_class: type     # DeviceBackend subclass; __init__ takes ip_cache: dict
-    discover_all: Callable  # async (whitelist: dict) -> dict[str, str]
-    config_class: type      # DeviceInfo subclass used by this protocol
+    parser: Callable    # (raw: dict, mac: str, name: str) -> DeviceInfo
+    backend: type       # DeviceBackend subclass; __init__ takes ip_cache: dict
+    discover: Callable  # async (whitelist: dict) -> dict[str, str]
+    model: type         # DeviceInfo subclass used by this protocol
 
 
+# To add a new protocol: import its parser/backend/discover, add one entry here.
 PROTOCOLS: dict[str, ProtocolSpec] = {
     "kasa": ProtocolSpec(
-        parse_config=kasa_parse,
-        backend_class=KasaBackend,
-        discover_all=kasa_discover,
-        config_class=KasaDeviceConfig,
+        parser=kasa_parse,
+        backend=KasaBackend,
+        discover=kasa_discover,
+        model=KasaDeviceConfig,
     ),
     # "miio": ProtocolSpec(
-    #     parse_config=miio_parse,
-    #     backend_class=MiioBackend,
-    #     discover_all=miio_discover,
-    #     config_class=MiioDeviceConfig,
+    #     parser=miio_parse,
+    #     backend=MiioBackend,
+    #     discover=miio_discover,
+    #     model=MiioDeviceConfig,
     # ),
 }

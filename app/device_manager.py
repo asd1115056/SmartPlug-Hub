@@ -44,16 +44,16 @@ class DeviceManager:
             sub_whitelist = {
                 mac: info
                 for mac, info in self._config.whitelist.items()
-                if isinstance(info, spec.config_class)
+                if isinstance(info, spec.model)
             }
             if not sub_whitelist:
                 continue
 
-            backend = spec.backend_class(ip_cache=self._ip_cache)
+            backend = spec.backend(ip_cache=self._ip_cache)
             for cfg in sub_whitelist.values():
                 self._backends[cfg.id] = backend
 
-            self._ip_cache.update(await spec.discover_all(sub_whitelist))
+            self._ip_cache.update(await spec.discover(sub_whitelist))
 
             for cfg in sub_whitelist.values():
                 self._states[cfg.id] = await backend.refresh(cfg)
