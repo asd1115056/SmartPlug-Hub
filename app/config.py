@@ -58,14 +58,20 @@ class ConfigManager:
 
                 whitelist[mac] = spec.parse_config(device, mac, name)
                 id_to_mac[device_id] = mac
-                logger.debug(f"Loaded {device_type} device: {name} ({mac})")
+                logger.debug(f"  [{device_type}] {name} ({mac})")
 
             self._whitelist = whitelist
             self._id_to_mac = id_to_mac
-            logger.info(f"Loaded {len(whitelist)} devices from whitelist")
+
+            by_type = {}
+            for info in whitelist.values():
+                by_type[info.type] = by_type.get(info.type, 0) + 1
+            breakdown = ", ".join(f"{t}: {n}" for t, n in by_type.items())
+            logger.info(f"Loaded {len(whitelist)} devices ({breakdown})")
+
             return self._whitelist
         except Exception as e:
-            logger.error(f"Failed to load whitelist: {e}")
+            logger.error(f"Failed to load {self._whitelist_path.name}: {e}")
             self._whitelist = {}
             self._id_to_mac = {}
             return self._whitelist
