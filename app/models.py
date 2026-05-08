@@ -51,7 +51,7 @@ class KasaDeviceConfig(DeviceInfo):
     def __post_init__(self):
         super().__post_init__()
         if not self.broadcast:
-            raise ValueError(f"KasaDeviceConfig '{self.name}' 缺少 broadcast")
+            raise ValueError(f"KasaDeviceConfig '{self.name}' missing required 'broadcast' field")
 
 
 # === Device State ===
