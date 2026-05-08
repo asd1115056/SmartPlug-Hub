@@ -1,6 +1,4 @@
-"""
-Shared data types, exceptions, and backend ABC.
-"""
+"""Shared data types, exceptions, and backend ABC."""
 
 import asyncio
 from abc import ABC, abstractmethod
@@ -14,18 +12,14 @@ from kasa import Credentials
 from .utils import mac_to_id
 
 
-# === Custom Exceptions ===
 class DeviceOfflineError(Exception):
     """Device confirmed offline (cannot connect after retries)."""
-    pass
 
 
 class DeviceOperationError(Exception):
     """Operation failed but device may still be online."""
-    pass
 
 
-# === Device Configuration ===
 @dataclass
 class DeviceInfo:
     """Base class for all device configurations. Protocol-agnostic fields only."""
@@ -36,7 +30,7 @@ class DeviceInfo:
     id: str = ""
     group: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.id:
             self.id = mac_to_id(self.mac)
 
@@ -48,13 +42,12 @@ class KasaDeviceConfig(DeviceInfo):
     broadcast: str = ""
     credentials: Credentials | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__post_init__()
         if not self.broadcast:
             raise ValueError(f"KasaDeviceConfig '{self.name}' missing required 'broadcast' field")
 
 
-# === Device State ===
 @dataclass
 class ChildState:
     """State of a single child outlet on a power strip."""
@@ -66,11 +59,11 @@ class ChildState:
 
 @dataclass
 class DeviceState:
-    """Device state snapshot.
+    """Snapshot of a device's state.
 
-    - status="online": is_on, alias, model, children are live data
-    - status="offline": is_on=None (untrustworthy), alias/model/is_strip/children
-      retain last known topology for UI display
+    status="online":  is_on, alias, model, children reflect live data.
+    status="offline": is_on=None; alias/model/is_strip/children retain last
+                      known topology so the UI can still render the device.
     """
 
     id: str
@@ -81,7 +74,7 @@ class DeviceState:
     model: str | None = None
     is_strip: bool = False
     children: list[ChildState] | None = None
-    last_updated: str | None = None  # ISO format
+    last_updated: str | None = None  # ISO 8601
     group: str | None = None
 
 
@@ -103,7 +96,6 @@ def build_offline_state(
     )
 
 
-# === Command (internal, not exposed in API) ===
 class CommandStatus(Enum):
     QUEUED = "queued"
     PROCESSING = "processing"
@@ -117,7 +109,7 @@ class Command:
 
     id: str
     device_id: str
-    action: str  # "on" / "off"
+    action: str  # "on" | "off"
     child_id: str | None = None
     status: CommandStatus = CommandStatus.QUEUED
     created_at: datetime = field(default_factory=datetime.now)
@@ -127,28 +119,29 @@ class Command:
     _event: asyncio.Event = field(default_factory=asyncio.Event)
 
 
-# === Backend ABC ===
 class DeviceBackend(ABC):
-    """Abstract base class for protocol backends."""
+    """Protocol backend interface.
+
+    session_timeout: seconds CommandQueue processor stays alive after the last
+        command. 0 = exit immediately (stateless, e.g. MiIO UDP); >0 = keep the
+        connection open (e.g. Kasa TCP 30 s). CommandQueue uses only this number
+        and has no knowledge of the underlying transport.
+    command_interval: minimum seconds between consecutive commands (rate limit).
+    """
 
     session_timeout: float = 0.0
-    # How long CommandQueue processor waits after last command before exiting.
-    # 0 = exit immediately (stateless); >0 = keep session (e.g. Kasa TCP 30s).
-    # CommandQueue only uses this number — it has no knowledge of TCP vs UDP.
-
     command_interval: float = 0.0
-    # Minimum interval between consecutive commands (rate limiting).
 
     @abstractmethod
     async def execute_command(self, cmd: Command, cfg: DeviceInfo) -> DeviceState:
         """Execute a command. Called by CommandQueue processor."""
 
     async def cleanup(self, device_id: str) -> None:
-        """Called when processor exits (idle timeout or shutdown). Default no-op."""
+        """Called when the processor exits. Default no-op."""
 
     @abstractmethod
     async def refresh(self, cfg: DeviceInfo) -> DeviceState:
-        """Re-discover + get fresh state (offline recovery, initialization)."""
+        """Re-discover and return current state (offline recovery / init)."""
 
     @abstractmethod
     async def health_check(self, cfg: DeviceInfo) -> DeviceState | None:
