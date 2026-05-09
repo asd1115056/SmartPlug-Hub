@@ -37,21 +37,21 @@ class DeviceManager:
         self._config.load()
 
         for type_name, spec in PROTOCOLS.items():
-            protocol_devices = {
+            sub_devices = {
                 mac: info
                 for mac, info in self._config.devices.items()
                 if isinstance(info, spec.model)
             }
-            if not protocol_devices:
+            if not sub_devices:
                 continue
 
             backend = spec.backend(ip_cache=self._ip_cache)
-            for cfg in protocol_devices.values():
+            for cfg in sub_devices.values():
                 self._backends[cfg.id] = backend
 
-            self._ip_cache.update(await spec.discover(protocol_devices))
+            self._ip_cache.update(await spec.discover(sub_devices))
 
-            for cfg in protocol_devices.values():
+            for cfg in sub_devices.values():
                 self._states[cfg.id] = await backend.refresh(cfg)
 
         self._queue = CommandQueue(
