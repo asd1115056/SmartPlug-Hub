@@ -107,7 +107,15 @@ function escapeHtml(text) {
 
 function formatTime(isoString) {
     try {
-        return new Date(isoString).toLocaleTimeString()
+        const date = new Date(isoString)
+        const offsetMin = -date.getTimezoneOffset()
+        const sign = offsetMin >= 0 ? '+' : '-'
+        const absMin = Math.abs(offsetMin)
+        const hours = Math.floor(absMin / 60)
+        const mins = absMin % 60
+        const offset = mins ? `${hours}:${String(mins).padStart(2, '0')}` : `${hours}`
+        const time = date.toLocaleTimeString(undefined, { hour12: false })
+        return `${time} UTC${sign}${offset}`
     } catch {
         return ''
     }
