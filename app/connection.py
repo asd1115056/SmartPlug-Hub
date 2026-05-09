@@ -7,7 +7,7 @@ Does NOT manage connection lifecycle - that's command_queue.py's job.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from kasa import Credentials, Device, DeviceConfig, Discover
 from kasa.exceptions import AuthenticationError
@@ -166,7 +166,7 @@ def build_device_state(
     - device is None: offline state with is_on=None, topology preserved from
       previous_state for UI display
     """
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     if device:
         is_strip = hasattr(device, "children") and len(device.children) > 0
