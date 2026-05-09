@@ -110,9 +110,12 @@ function formatTime(isoString) {
         const date = new Date(isoString)
         const offsetMin = -date.getTimezoneOffset()
         const sign = offsetMin >= 0 ? '+' : '-'
-        const hours = Math.floor(Math.abs(offsetMin) / 60)
+        const absMin = Math.abs(offsetMin)
+        const hours = Math.floor(absMin / 60)
+        const mins = absMin % 60
+        const offset = mins ? `${hours}:${String(mins).padStart(2, '0')}` : `${hours}`
         const time = date.toLocaleTimeString(undefined, { hour12: false })
-        return `${time} UTC${sign}${hours}`
+        return `${time} UTC${sign}${offset}`
     } catch {
         return ''
     }
