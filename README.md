@@ -10,7 +10,7 @@ A web-based controller for TP-Link Kasa smart devices.
 - Power strip support with individual outlet control
 - Offline device handling with preserved topology
 - Background health check for automatic state updates
-- Web UI with Bootstrap 5
+- Web UI with Bootstrap 5, group tabs, and real-time search
 
 ## Requirements
 
@@ -48,12 +48,14 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
       "name": "Living Room Strip",
       "broadcast": "192.168.1.255",
       "username": "your@email.com",
-      "password": "your_password"
+      "password": "your_password",
+      "group": "Living Room"
     },
     {
       "mac": "11:22:33:44:55:66",
       "name": "Bedroom Plug (no auth needed)",
-      "broadcast": "192.168.1.255"
+      "broadcast": "192.168.1.255",
+      "group": "Bedroom"
     }
   ]
 }
@@ -66,6 +68,7 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 | `broadcast` | Yes | Broadcast address for discovery (e.g., `192.168.1.255`) |
 | `username` | No | TP-Link account email (for newer devices requiring authentication) |
 | `password` | No | TP-Link account password |
+| `group` | No | Tab group name in the web UI (e.g., `"Living Room"`). Devices without a group appear only in All. |
 
 **Connection strategy:** The system first attempts to connect without credentials. If authentication is required, it retries with the provided credentials.
 
@@ -145,7 +148,8 @@ Returns cached state of all devices. Zero I/O, suitable for polling.
         { "id": "0", "alias": "Outlet 1", "is_on": true },
         { "id": "1", "alias": "Outlet 2", "is_on": false }
       ],
-      "last_updated": "2024-01-15T10:30:00.000000"
+      "last_updated": "2024-01-15T10:30:00.000000",
+      "group": "Living Room"
     }
   ]
 }

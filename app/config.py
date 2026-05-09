@@ -57,6 +57,7 @@ class ConfigManager:
                     broadcast=broadcast,
                     id=device_id,
                     credentials=credentials,
+                    group=device.get("group"),
                 )
                 id_to_mac[device_id] = mac
                 logger.debug(

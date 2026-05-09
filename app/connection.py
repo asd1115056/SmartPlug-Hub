@@ -191,6 +191,7 @@ def build_device_state(
             is_strip=is_strip,
             children=children,
             last_updated=now,
+            group=device_info.group,
         )
 
     # Offline: preserve topology from previous state, clear is_on
@@ -204,4 +205,5 @@ def build_device_state(
         is_strip=previous_state.is_strip if previous_state else False,
         children=previous_state.children if previous_state else None,
         last_updated=previous_state.last_updated if previous_state else None,
+        group=device_info.group,
     )
