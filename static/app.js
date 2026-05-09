@@ -136,10 +136,6 @@ function renderTabs(devices) {
     if (!container) return
 
     const groups = [...new Set(devices.filter(d => d.group).map(d => d.group))]
-    if (groups.length === 0) {
-        container.innerHTML = ''
-        return
-    }
 
     // When searching, highlight All tab
     const effectiveActive = searchQuery ? 'all' : activeGroup
