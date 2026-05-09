@@ -53,7 +53,7 @@ class ChildState:
     """State of a single child outlet on a power strip."""
 
     id: str
-    alias: str
+    alias: str | None
     is_on: bool
 
 

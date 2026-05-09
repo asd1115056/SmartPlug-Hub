@@ -166,9 +166,8 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
         target = device
         if command.child_id:
             child_found = False
-            for i, child in enumerate(getattr(device, "children", [])):
-                child_identifier = child.id if hasattr(child, "id") else str(i)
-                if child_identifier == command.child_id:
+            for child in device.children:
+                if child.device_id == command.child_id:
                     target = child
                     child_found = True
                     break

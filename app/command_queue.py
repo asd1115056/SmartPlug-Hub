@@ -1,6 +1,7 @@
 """Protocol-agnostic per-device command queue."""
 
 import asyncio
+import collections
 import logging
 import time
 import uuid
@@ -33,6 +34,7 @@ class CommandQueue:
         self._on_state_update = on_state_update
 
         self._queues: dict[str, asyncio.Queue[Command]] = {}
+        self._pending: dict[str, collections.deque[Command]] = {}
         self._processors: dict[str, asyncio.Task] = {}
         self._last_command_time: dict[str, float] = {}
 
@@ -46,10 +48,11 @@ class CommandQueue:
 
         if device_id not in self._queues:
             self._queues[device_id] = asyncio.Queue()
+            self._pending[device_id] = collections.deque()
 
         queue = self._queues[device_id]
 
-        for existing in queue._queue:
+        for existing in self._pending[device_id]:
             if (
                 existing.status == CommandStatus.QUEUED
                 and existing.device_id == device_id
@@ -63,6 +66,7 @@ class CommandQueue:
                 return existing
 
         queue.put_nowait(command)
+        self._pending[device_id].append(command)
 
         if device_id not in self._processors or self._processors[device_id].done():
             self._processors[device_id] = asyncio.create_task(
@@ -101,6 +105,7 @@ class CommandQueue:
 
         self._processors.clear()
         self._queues.clear()
+        self._pending.clear()
 
     async def _process_queue(self, device_id: str) -> None:
         """Command processing loop for a single device."""
@@ -131,6 +136,12 @@ class CommandQueue:
                     logger.info(f"Idle timeout for {cfg.name}, processor exiting")
                     break
 
+                pending = self._pending.get(device_id)
+                if pending:
+                    try:
+                        pending.remove(cmd)
+                    except ValueError:
+                        pass
                 cmd.status = CommandStatus.PROCESSING
                 await self._wait_for_rate_limit(device_id, backend.command_interval)
 

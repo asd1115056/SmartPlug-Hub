@@ -1,18 +1,18 @@
 """Protocol registry — single source of truth for supported backend protocols."""
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .kasa import KasaBackend, discover_all as kasa_discover, parse_config as kasa_parse
-from .models import KasaDeviceConfig
+from .models import DeviceBackend, DeviceInfo, KasaDeviceConfig
 
 
 @dataclass(frozen=True)
 class ProtocolSpec:
-    parser: Callable    # (raw: dict, mac: str, name: str) -> DeviceInfo
-    backend: type       # DeviceBackend subclass; __init__ takes ip_cache: dict
-    discover: Callable  # async (known_devices: dict) -> dict[str, str]
-    model: type         # DeviceInfo subclass used by this protocol
+    parser: Callable[[dict, str, str], DeviceInfo]
+    backend: Callable[[dict[str, str]], DeviceBackend]  # factory: ip_cache -> backend
+    discover: Callable[[dict], Awaitable[dict[str, str]]]
+    model: type[DeviceInfo]
 
 
 # To add a new protocol: import its parser/backend/discover, add one entry here.

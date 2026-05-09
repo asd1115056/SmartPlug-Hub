@@ -123,7 +123,7 @@ def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceS
     if is_strip:
         children = [
             ChildState(
-                id=child.id if hasattr(child, "id") else str(i),
+                id=child.device_id,
                 alias=child.alias,
                 is_on=child.is_on,
             )

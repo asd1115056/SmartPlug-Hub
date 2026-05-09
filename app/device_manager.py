@@ -45,7 +45,7 @@ class DeviceManager:
             if not sub_devices:
                 continue
 
-            backend = spec.backend(ip_cache=self._ip_cache)
+            backend = spec.backend(self._ip_cache)
             for cfg in sub_devices.values():
                 self._backends[cfg.id] = backend
 
@@ -98,11 +98,15 @@ class DeviceManager:
                 if child_id not in child_ids:
                     raise ValueError(f"Child outlet {child_id} not found")
 
+        if not self._queue:
+            raise RuntimeError("Device manager not initialized")
+
         cmd = make_command(device_id, action, child_id)
         cmd = self._queue.submit(cmd)
         cmd = await self._queue.wait_for_command(cmd)
 
         if cmd.status == CommandStatus.COMPLETED:
+            assert cmd.result is not None
             return cmd.result
 
         error_msg = cmd.error or "Unknown error"
@@ -146,6 +150,9 @@ class DeviceManager:
         """Callback from CommandQueue when a command completes or fails."""
         if state is None:
             mac = self._config.resolve_id(device_id)
+            if not mac:
+                logger.warning(f"State update for unknown device {device_id}")
+                return
             previous = self._states.get(device_id)
             state = build_offline_state(self._config.devices[mac], previous)
         self._states[device_id] = state
