@@ -1,31 +1,15 @@
 /* === Base === */
 body {
-    background-color: #f5f5f5;
-}
-
-[data-bs-theme="dark"] body {
     background-color: #212529;
 }
 
 /* === Device Cards === */
 .device-card {
     border: none;
+    border-left: 4px solid #495057;
     border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    transition: box-shadow 0.2s;
-}
-
-.device-card:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-}
-
-[data-bs-theme="dark"] .device-card {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-[data-bs-theme="dark"] .device-card:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
 }
 
 .device-card .card-header {
@@ -38,33 +22,41 @@ body {
 }
 
 /* === Device Connection States === */
+.device-card.state-online {
+    border-left-color: #198754;
+}
+
 .device-card.state-online .card-header {
-    background: linear-gradient(135deg, #198754, #157347);
+    background: linear-gradient(135deg, #198754, #146c43);
     color: white;
+}
+
+.device-card.state-offline {
+    border-left-color: #6c757d;
 }
 
 .device-card.state-offline .card-header {
-    background: linear-gradient(135deg, #adb5bd, #868e96);
+    background: linear-gradient(135deg, #6c757d, #495057);
     color: white;
 }
 
-[data-bs-theme="dark"] .device-card.state-online .card-header {
-    background: linear-gradient(135deg, #198754, #146c43);
+/* === Card Header Text === */
+.device-card .card-header .last-updated {
+    font-size: 0.75rem;
+    opacity: 0.65;
+    margin-top: 0.15rem;
 }
 
-[data-bs-theme="dark"] .device-card.state-offline .card-header {
-    background: linear-gradient(135deg, #6c757d, #495057);
+.device-card .card-header .refresh-device-btn {
+    color: white;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: transparent;
 }
 
-/* === Status Badge === */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    background: rgba(255, 255, 255, 0.2);
+.device-card .card-header .refresh-device-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: white;
+    color: white;
 }
 
 /* === Toggle Switch === */
@@ -72,7 +64,7 @@ body {
     position: relative;
     width: 80px;
     height: 40px;
-    background: #dee2e6;
+    background: #495057;
     border-radius: 20px;
     cursor: pointer;
     transition: background 0.3s;
@@ -81,7 +73,7 @@ body {
 }
 
 .toggle-switch:hover {
-    background: #ced4da;
+    background: #5a6268;
 }
 
 .toggle-switch.is-on {
@@ -89,22 +81,6 @@ body {
 }
 
 .toggle-switch.is-on:hover {
-    background: #157347;
-}
-
-[data-bs-theme="dark"] .toggle-switch {
-    background: #495057;
-}
-
-[data-bs-theme="dark"] .toggle-switch:hover {
-    background: #5a6268;
-}
-
-[data-bs-theme="dark"] .toggle-switch.is-on {
-    background: #198754;
-}
-
-[data-bs-theme="dark"] .toggle-switch.is-on:hover {
     background: #20a060;
 }
 
@@ -137,10 +113,6 @@ body {
     justify-content: center;
     gap: 1.5rem;
     padding: 1.5rem;
-    background: #f8f9fa;
-}
-
-[data-bs-theme="dark"] .single-device-control {
     background: #2b3035;
 }
 
@@ -150,13 +122,8 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #e9ecef;
-    background: white;
-    transition: background 0.2s;
-}
-
-.child-outlet:hover {
-    background: #f8f9fa;
+    border-bottom: 1px solid #373b3e;
+    background: #2b3035;
 }
 
 .child-outlet:last-child {
@@ -164,35 +131,12 @@ body {
 }
 
 .child-outlet.is-on {
-    background: linear-gradient(90deg, rgba(25, 135, 84, 0.1), transparent);
-}
-
-[data-bs-theme="dark"] .child-outlet {
-    background: #2b3035;
-    border-bottom-color: #373b3e;
-}
-
-[data-bs-theme="dark"] .child-outlet:hover {
-    background: #323639;
-}
-
-[data-bs-theme="dark"] .child-outlet.is-on {
-    background: linear-gradient(90deg, rgba(25, 135, 84, 0.15), transparent);
+    background: rgba(25, 135, 84, 0.25);
 }
 
 .outlet-name {
     font-weight: 500;
-    color: #212529;
-}
-
-[data-bs-theme="dark"] .outlet-name {
     color: #e0e0e0;
-}
-
-.outlet-status {
-    font-size: 0.85rem;
-    color: #6c757d;
-    margin-left: 0.5rem;
 }
 
 .outlet-controls {
@@ -223,12 +167,6 @@ body {
 }
 
 /* === Refresh Button === */
-.refresh-icon {
-    display: inline-block;
-    font-size: 1.2rem;
-    line-height: 1;
-}
-
 .refresh-device-btn.spinning {
     animation: spin 0.8s linear infinite;
 }
@@ -252,38 +190,20 @@ body {
 
 /* === Group Tabs === */
 #tabs-nav .nav-tabs {
-    border-bottom: 1px solid #dee2e6;
-}
-
-[data-bs-theme="dark"] #tabs-nav .nav-tabs {
-    border-bottom-color: #495057;
+    border-bottom: 1px solid #495057;
 }
 
 #tabs-nav .nav-link {
-    color: #6c757d;
+    color: #adb5bd;
     border-radius: 8px 8px 0 0;
     font-weight: 500;
 }
 
 #tabs-nav .nav-link.active {
     font-weight: 600;
-}
-
-[data-bs-theme="dark"] #tabs-nav .nav-link {
-    color: #adb5bd;
-}
-
-[data-bs-theme="dark"] #tabs-nav .nav-link.active {
     background-color: #2b3035;
     border-color: #495057 #495057 #2b3035;
     color: #e0e0e0;
-}
-
-/* === Theme Toggle === */
-#theme-toggle {
-    font-size: 1.1rem;
-    line-height: 1;
-    padding: 0.35rem 0.6rem;
 }
 
 /* === Toast === */
