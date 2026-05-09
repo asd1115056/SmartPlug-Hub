@@ -9,35 +9,6 @@ let allDeviceIds = []
 let activeGroup = 'all'
 let searchQuery = ''
 
-function initTheme() {
-    const saved = localStorage.getItem('theme')
-    const system = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    const theme = saved || system
-    document.documentElement.setAttribute('data-bs-theme', theme)
-    updateThemeIcon(theme)
-
-    // Only react to system changes when the user hasn't pinned a preference.
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        if (!localStorage.getItem('theme')) {
-            const next = e.matches ? 'dark' : 'light'
-            document.documentElement.setAttribute('data-bs-theme', next)
-            updateThemeIcon(next)
-        }
-    })
-}
-
-function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-bs-theme')
-    const next = current === 'dark' ? 'light' : 'dark'
-    document.documentElement.setAttribute('data-bs-theme', next)
-    localStorage.setItem('theme', next)
-    updateThemeIcon(next)
-}
-
-function updateThemeIcon(theme) {
-    const icon = document.getElementById('theme-icon')
-    if (icon) icon.textContent = theme === 'dark' ? '☀' : '☾'
-}
 
 async function fetchDevices() {
     const response = await fetch(`${API_BASE}/devices`)
@@ -248,7 +219,7 @@ function renderDeviceCard(device) {
     }
 
     const refreshBtn = !online ? `
-        <button class="btn btn-outline-secondary btn-sm ms-2 refresh-device-btn"
+        <button class="btn btn-sm refresh-device-btn"
                 onclick="handleRefresh('${device.id}')" title="Refresh">
             &#x21bb;
         </button>
@@ -262,12 +233,9 @@ function renderDeviceCard(device) {
                 <div>
                     <strong>${escapeHtml(device.name)}</strong>
                     ${device.model ? `<div class="device-model">${escapeHtml(device.model)}</div>` : ''}
+                    ${updatedTime ? `<div class="last-updated">Last updated: ${updatedTime}</div>` : ''}
                 </div>
-                <div class="d-flex align-items-center">
-                    <span class="status-badge">${online ? 'Online' : 'Offline'}</span>
-                    ${updatedTime ? `<span class="last-updated ms-2">${updatedTime}</span>` : ''}
-                    ${refreshBtn}
-                </div>
+                ${refreshBtn}
             </div>
             <div class="card-body">
                 ${bodyHtml}
@@ -281,10 +249,7 @@ function renderChildOutlet(deviceId, child, online) {
 
     return `
         <div class="child-outlet ${onClass}">
-            <div>
-                <span class="outlet-name">${escapeHtml(child.alias)}</span>
-                <span class="outlet-status">${online ? (child.is_on ? 'ON' : 'OFF') : ''}</span>
-            </div>
+            <span class="outlet-name">${escapeHtml(child.alias)}</span>
             <div class="outlet-controls">
                 ${renderToggleSwitch(deviceId, child.id, child.is_on, online)}
             </div>
@@ -395,8 +360,6 @@ function updateCardFromState(deviceId, device) {
                     const outlet = btn.closest('.child-outlet')
                     if (outlet) {
                         outlet.classList.toggle('is-on', child.is_on)
-                        const statusSpan = outlet.querySelector('.outlet-status')
-                        if (statusSpan) statusSpan.textContent = child.is_on ? 'ON' : 'OFF'
                     }
                     break
                 }
@@ -450,7 +413,6 @@ function startPolling() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initTheme()
     loadDevices()
     startPolling()
 
