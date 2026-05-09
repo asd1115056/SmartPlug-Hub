@@ -5,6 +5,9 @@ const POLL_INTERVAL = 5000
 
 let pollTimer = null
 const currentDevices = {}
+let allDeviceIds = []
+let activeGroup = 'all'
+let searchQuery = ''
 
 function initTheme() {
     const saved = localStorage.getItem('theme')
@@ -66,8 +69,7 @@ async function refreshDevice(deviceId) {
     const response = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/refresh`, {
         method: 'POST'
     })
-    const data = await response.json()
-    return data
+    return response.json()
 }
 
 function showToast(message, type = 'danger') {
@@ -111,10 +113,88 @@ function formatTime(isoString) {
     }
 }
 
+function getAllDevices() {
+    return allDeviceIds.map(id => currentDevices[id]).filter(Boolean)
+}
+
+function getFilteredDevices(devices) {
+    if (searchQuery) {
+        const q = searchQuery.toLowerCase()
+        return devices.filter(d =>
+            d.name.toLowerCase().includes(q) ||
+            (d.children?.some(c => c.alias.toLowerCase().includes(q)))
+        )
+    }
+    if (activeGroup !== 'all') {
+        return devices.filter(d => d.group === activeGroup)
+    }
+    return devices
+}
+
+function renderTabs(devices) {
+    const container = document.getElementById('tabs-nav')
+    if (!container) return
+
+    const groups = [...new Set(devices.filter(d => d.group).map(d => d.group))]
+    if (groups.length === 0) {
+        container.innerHTML = ''
+        return
+    }
+
+    // When searching, highlight All tab
+    const effectiveActive = searchQuery ? 'all' : activeGroup
+
+    const tabs = [
+        { id: 'all', label: 'All', count: devices.length },
+        ...groups.map(g => ({
+            id: g,
+            label: g,
+            count: devices.filter(d => d.group === g).length,
+        }))
+    ]
+
+    container.innerHTML = `
+        <ul class="nav nav-tabs mb-3">
+            ${tabs.map(tab => `
+                <li class="nav-item">
+                    <button class="nav-link ${effectiveActive === tab.id ? 'active' : ''}"
+                            data-group="${escapeHtml(tab.id)}">
+                        ${escapeHtml(tab.label)}
+                        <span class="badge text-bg-secondary ms-1">${tab.count}</span>
+                    </button>
+                </li>
+            `).join('')}
+        </ul>
+    `
+
+    container.querySelectorAll('.nav-link').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.group))
+    })
+}
+
+function switchTab(group) {
+    activeGroup = group
+    searchQuery = ''
+    const searchInput = document.getElementById('search-input')
+    if (searchInput) searchInput.value = ''
+    const all = getAllDevices()
+    renderTabs(all)
+    renderDeviceGrid(getFilteredDevices(all))
+}
+
 function renderDevices(devices) {
+    allDeviceIds = devices.map(d => d.id)
+    for (const device of devices) {
+        currentDevices[device.id] = device
+    }
+    renderTabs(devices)
+    renderDeviceGrid(getFilteredDevices(devices))
+}
+
+function renderDeviceGrid(devices) {
     const container = document.getElementById('devices-container')
 
-    if (devices.length === 0) {
+    if (getAllDevices().length === 0) {
         container.innerHTML = `
             <div class="alert alert-info">
                 <strong>No devices</strong><br>
@@ -124,19 +204,20 @@ function renderDevices(devices) {
         return
     }
 
+    if (devices.length === 0) {
+        container.innerHTML = `<div class="text-muted py-3">No matching devices.</div>`
+        return
+    }
+
     container.innerHTML = `
         <div class="row g-3">
             ${devices.map(device => `
-                <div class="col-md-6">
+                <div class="col-lg-4 col-md-6">
                     ${renderDeviceCard(device)}
                 </div>
             `).join('')}
         </div>
     `
-
-    for (const device of devices) {
-        currentDevices[device.id] = device
-    }
 }
 
 function renderDeviceCard(device) {
@@ -368,4 +449,14 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme()
     loadDevices()
     startPolling()
+
+    const searchInput = document.getElementById('search-input')
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            searchQuery = searchInput.value.trim()
+            const all = getAllDevices()
+            renderTabs(all)
+            renderDeviceGrid(getFilteredDevices(all))
+        })
+    }
 })

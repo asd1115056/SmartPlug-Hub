@@ -245,6 +245,40 @@ body {
     margin-top: 0.25rem;
 }
 
+/* === Search Input === */
+#search-input {
+    border-radius: 8px;
+}
+
+/* === Group Tabs === */
+#tabs-nav .nav-tabs {
+    border-bottom: 1px solid #dee2e6;
+}
+
+[data-bs-theme="dark"] #tabs-nav .nav-tabs {
+    border-bottom-color: #495057;
+}
+
+#tabs-nav .nav-link {
+    color: #6c757d;
+    border-radius: 8px 8px 0 0;
+    font-weight: 500;
+}
+
+#tabs-nav .nav-link.active {
+    font-weight: 600;
+}
+
+[data-bs-theme="dark"] #tabs-nav .nav-link {
+    color: #adb5bd;
+}
+
+[data-bs-theme="dark"] #tabs-nav .nav-link.active {
+    background-color: #2b3035;
+    border-color: #495057 #495057 #2b3035;
+    color: #e0e0e0;
+}
+
 /* === Theme Toggle === */
 #theme-toggle {
     font-size: 1.1rem;

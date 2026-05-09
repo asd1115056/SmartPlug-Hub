@@ -48,6 +48,7 @@ class DeviceInfo:
     broadcast: str  # Broadcast address for discovery (e.g., "192.168.1.255")
     id: str = ""
     credentials: Credentials | None = None
+    group: str | None = None
 
     def __post_init__(self):
         if not self.id:
@@ -82,6 +83,7 @@ class DeviceState:
     is_strip: bool = False
     children: list[ChildState] | None = None
     last_updated: str | None = None  # ISO format
+    group: str | None = None
 
 
 # === Command (internal, not exposed in API) ===

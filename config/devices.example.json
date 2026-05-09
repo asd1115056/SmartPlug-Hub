@@ -5,12 +5,14 @@
       "name": "Living Room Strip",
       "broadcast": "192.168.1.255",
       "username": "your@email.com",
-      "password": "your_password"
+      "password": "your_password",
+      "group": "Living Room"
     },
     {
       "mac": "11:22:33:44:55:66",
       "name": "Bedroom Plug (no auth needed)",
-      "broadcast": "192.168.1.255"
+      "broadcast": "192.168.1.255",
+      "group": "Bedroom"
     }
   ]
 }
