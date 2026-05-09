@@ -37,21 +37,21 @@ class DeviceManager:
         self._config.load()
 
         for type_name, spec in PROTOCOLS.items():
-            sub_whitelist = {
+            protocol_devices = {
                 mac: info
-                for mac, info in self._config.whitelist.items()
+                for mac, info in self._config.devices.items()
                 if isinstance(info, spec.model)
             }
-            if not sub_whitelist:
+            if not protocol_devices:
                 continue
 
             backend = spec.backend(ip_cache=self._ip_cache)
-            for cfg in sub_whitelist.values():
+            for cfg in protocol_devices.values():
                 self._backends[cfg.id] = backend
 
-            self._ip_cache.update(await spec.discover(sub_whitelist))
+            self._ip_cache.update(await spec.discover(protocol_devices))
 
-            for cfg in sub_whitelist.values():
+            for cfg in protocol_devices.values():
                 self._states[cfg.id] = await backend.refresh(cfg)
 
         self._queue = CommandQueue(
@@ -116,7 +116,7 @@ class DeviceManager:
         """Get all device states from cache, in config file order."""
         return [
             self._states[info.id]
-            for info in self._config.whitelist.values()
+            for info in self._config.devices.values()
             if info.id in self._states
         ]
 
@@ -133,7 +133,7 @@ class DeviceManager:
         if not mac:
             raise ValueError(f"Device {device_id} not found")
 
-        cfg = self._config.whitelist[mac]
+        cfg = self._config.devices[mac]
         backend = self._backends.get(device_id)
         if not backend:
             raise ValueError(f"No backend registered for device {device_id}")
@@ -147,7 +147,7 @@ class DeviceManager:
         if state is None:
             mac = self._config.resolve_id(device_id)
             previous = self._states.get(device_id)
-            state = build_offline_state(self._config.whitelist[mac], previous)
+            state = build_offline_state(self._config.devices[mac], previous)
         self._states[device_id] = state
 
     async def _health_check_loop(self) -> None:
@@ -164,7 +164,7 @@ class DeviceManager:
         checked = 0
         online = 0
 
-        for mac, cfg in self._config.whitelist.items():
+        for mac, cfg in self._config.devices.items():
             backend = self._backends.get(cfg.id)
             if not backend:
                 continue

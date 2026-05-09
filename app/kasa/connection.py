@@ -85,12 +85,12 @@ async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
     return found_ip
 
 
-async def discover_all(whitelist: dict[str, KasaDeviceConfig]) -> dict[str, str]:
-    """Discover all whitelisted Kasa devices. Returns MAC -> IP mapping."""
+async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, str]:
+    """Discover known devices on the network. Returns MAC -> IP."""
     logger.info("Starting Kasa device discovery...")
 
     targets: dict[str, list[KasaDeviceConfig]] = {}
-    for info in whitelist.values():
+    for info in known_devices.values():
         targets.setdefault(info.broadcast, []).append(info)
 
     result: dict[str, str] = {}
@@ -106,13 +106,13 @@ async def discover_all(whitelist: dict[str, KasaDeviceConfig]) -> dict[str, str]
                     mac = normalize_mac(device_mac)
                     if mac in device_macs:
                         result[mac] = device.host
-                        logger.info(f"Found device: {whitelist[mac].name} at {device.host}")
+                        logger.info(f"Found device: {known_devices[mac].name} at {device.host}")
                 except ValueError:
                     pass
 
         await Discover.discover(target=target, on_discovered=on_discovered)
 
-    logger.info(f"Kasa discovery complete: {len(result)}/{len(whitelist)} devices found")
+    logger.info(f"Kasa discovery complete: {len(result)}/{len(known_devices)} devices found")
     return result
 
 

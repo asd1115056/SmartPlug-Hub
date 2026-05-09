@@ -112,7 +112,7 @@ class CommandQueue:
             self._processors.pop(device_id, None)
             return
 
-        cfg = self._config.whitelist[mac]
+        cfg = self._config.devices[mac]
         backend = self._backends.get(device_id)
         if not backend:
             logger.error(f"Processor: no backend registered for device_id {device_id}")

@@ -11,7 +11,7 @@ from .models import KasaDeviceConfig
 class ProtocolSpec:
     parser: Callable    # (raw: dict, mac: str, name: str) -> DeviceInfo
     backend: type       # DeviceBackend subclass; __init__ takes ip_cache: dict
-    discover: Callable  # async (whitelist: dict) -> dict[str, str]
+    discover: Callable  # async (known_devices: dict) -> dict[str, str]
     model: type         # DeviceInfo subclass used by this protocol
 
 

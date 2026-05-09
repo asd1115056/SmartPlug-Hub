@@ -1,4 +1,4 @@
-"""Configuration management — loads device whitelist and provides ID resolution."""
+"""Configuration management — loads device config and provides ID resolution."""
 
 import json
 import logging
@@ -14,27 +14,27 @@ DEFAULT_CONFIG_DIR = Path(__file__).parent.parent / "config"
 
 
 class ConfigManager:
-    """Loads and manages the device whitelist configuration."""
+    """Loads and manages the configured device list."""
 
-    def __init__(self, config_dir: Path | None = None):
+    def __init__(self, config_dir: Path | None = None) -> None:
         self._config_dir = config_dir or DEFAULT_CONFIG_DIR
-        self._whitelist_path = self._config_dir / "devices.json"
-        self._whitelist: dict[str, DeviceInfo] = {}  # MAC -> DeviceInfo
-        self._id_to_mac: dict[str, str] = {}  # ID -> MAC
+        self._devices_path = self._config_dir / "devices.json"
+        self._devices: dict[str, DeviceInfo] = {}
+        self._id_to_mac: dict[str, str] = {}
 
     def load(self) -> dict[str, DeviceInfo]:
-        """Load device whitelist from config/devices.json."""
-        if not self._whitelist_path.exists():
-            logger.warning(f"Whitelist not found: {self._whitelist_path}")
-            self._whitelist = {}
+        """Load device config from config/devices.json."""
+        if not self._devices_path.exists():
+            logger.warning(f"Device config not found: {self._devices_path}")
+            self._devices = {}
             self._id_to_mac = {}
-            return self._whitelist
+            return self._devices
 
         try:
-            with open(self._whitelist_path) as f:
+            with open(self._devices_path) as f:
                 data = json.load(f)
 
-            whitelist: dict[str, DeviceInfo] = {}
+            devices: dict[str, DeviceInfo] = {}
             id_to_mac: dict[str, str] = {}
 
             for device in data.get("devices", []):
@@ -54,37 +54,37 @@ class ConfigManager:
                         f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
                     )
 
-                whitelist[mac] = spec.parser(device, mac, name)
+                devices[mac] = spec.parser(device, mac, name)
                 id_to_mac[device_id] = mac
                 logger.debug(f"  [{device_type}] {name} ({mac})")
 
-            self._whitelist = whitelist
+            self._devices = devices
             self._id_to_mac = id_to_mac
 
             by_type = {}
-            for info in whitelist.values():
+            for info in devices.values():
                 by_type[info.type] = by_type.get(info.type, 0) + 1
             breakdown = ", ".join(f"{t}: {n}" for t, n in by_type.items())
-            logger.info(f"Loaded {len(whitelist)} devices ({breakdown})")
+            logger.info(f"Loaded {len(devices)} devices ({breakdown})")
 
-            return self._whitelist
+            return self._devices
         except Exception as e:
-            logger.error(f"Failed to load {self._whitelist_path.name}: {e}")
-            self._whitelist = {}
+            logger.error(f"Failed to load {self._devices_path.name}: {e}")
+            self._devices = {}
             self._id_to_mac = {}
-            return self._whitelist
+            return self._devices
 
     def resolve_id(self, device_id: str) -> str | None:
         """Resolve device ID to MAC address. Returns None if not found."""
         return self._id_to_mac.get(device_id)
 
     def get_device_id(self, mac: str) -> str | None:
-        """Get device ID for a MAC address. Returns None if not in whitelist."""
+        """Get device ID for a MAC address. Returns None if not configured."""
         mac = normalize_mac(mac)
-        if mac in self._whitelist:
-            return self._whitelist[mac].id
+        if mac in self._devices:
+            return self._devices[mac].id
         return None
 
     @property
-    def whitelist(self) -> dict[str, DeviceInfo]:
-        return self._whitelist
+    def devices(self) -> dict[str, DeviceInfo]:
+        return self._devices
