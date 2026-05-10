@@ -35,27 +35,33 @@ class ConfigManager:
 
         devices: dict[str, DeviceInfo] = {}
         id_to_mac: dict[str, str] = {}
+        skipped = 0
 
         for device in data.get("devices", []):
-            mac = normalize_mac(device["mac"])
-            device_id = mac_to_id(mac)
-            name = device.get("name") or device_id
-            device_type = device.get("type")
+            try:
+                mac = normalize_mac(device["mac"])
+                device_id = mac_to_id(mac)
+                name = device.get("name") or device_id
+                device_type = device.get("type")
 
-            if not device_type:
-                raise ValueError(
-                    f"Device '{name}' ({mac}) is missing required 'type' field"
-                )
+                if not device_type:
+                    raise ValueError(
+                        f"Device '{name}' ({mac}) is missing required 'type' field"
+                    )
 
-            spec = PROTOCOLS.get(device_type)
-            if not spec:
-                raise ValueError(
-                    f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
-                )
+                spec = PROTOCOLS.get(device_type)
+                if not spec:
+                    raise ValueError(
+                        f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
+                    )
 
-            devices[mac] = spec.parser(device, mac, name)
-            id_to_mac[device_id] = mac
-            logger.debug(f"  [{device_type}] {name} ({mac})")
+                devices[mac] = spec.parser(device, mac, name)
+                id_to_mac[device_id] = mac
+                logger.debug(f"  [{device_type}] {name} ({mac})")
+
+            except (ValueError, KeyError) as e:
+                logger.error(f"Skipping invalid device entry: {e}")
+                skipped += 1
 
         self._devices = devices
         self._id_to_mac = id_to_mac
@@ -64,7 +70,8 @@ class ConfigManager:
         for info in devices.values():
             by_type[info.type] = by_type.get(info.type, 0) + 1
         breakdown = ", ".join(f"{t}: {n}" for t, n in by_type.items())
-        logger.info(f"Loaded {len(devices)} devices ({breakdown})")
+        suffix = f", {skipped} skipped due to errors" if skipped else ""
+        logger.info(f"Loaded {len(devices)} devices ({breakdown}{suffix})")
 
         return self._devices
 
