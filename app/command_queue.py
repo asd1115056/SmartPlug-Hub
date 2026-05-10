@@ -94,10 +94,11 @@ class CommandQueue:
 
     async def shutdown(self) -> None:
         """Cancel all processor tasks."""
-        for task in self._processors.values():
+        tasks = list(self._processors.values())
+        for task in tasks:
             task.cancel()
 
-        for task in self._processors.values():
+        for task in tasks:
             try:
                 await task
             except asyncio.CancelledError:
