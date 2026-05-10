@@ -124,17 +124,23 @@ class CommandQueue:
             self._processors.pop(device_id, None)
             return
 
-        # session_timeout=0 means stateless (e.g. MiIO): exit after each command.
-        # session_timeout>0 means keep-alive (e.g. Kasa TCP): wait for more commands.
-        timeout = backend.session_timeout if backend.session_timeout > 0 else None
-
         try:
             while True:
-                try:
-                    cmd = await asyncio.wait_for(queue.get(), timeout=timeout)
-                except asyncio.TimeoutError:
-                    logger.info(f"Idle timeout for {cfg.name}, processor exiting")
-                    break
+                if backend.session_timeout:
+                    # Stateful (e.g. Kasa TCP): hold processor open to reuse connection.
+                    try:
+                        cmd = await asyncio.wait_for(
+                            queue.get(), timeout=backend.session_timeout
+                        )
+                    except asyncio.TimeoutError:
+                        logger.info(f"Idle timeout for {cfg.name}, processor exiting")
+                        break
+                else:
+                    # Stateless (e.g. MiIO UDP): drain queue then exit immediately.
+                    try:
+                        cmd = queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
 
                 pending = self._pending.get(device_id)
                 if pending:
@@ -162,11 +168,13 @@ class CommandQueue:
                 finally:
                     cmd._event.set()
 
-                if not backend.session_timeout:
-                    break  # stateless: exit so the next command starts a fresh processor
         finally:
             await backend.cleanup(device_id)
             self._processors.pop(device_id, None)
+            if device_id in self._queues and not self._queues[device_id].empty():
+                self._processors[device_id] = asyncio.create_task(
+                    self._process_queue(device_id)
+                )
 
     async def _wait_for_rate_limit(self, device_id: str, interval: float) -> None:
         if not interval:
