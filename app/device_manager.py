@@ -93,9 +93,10 @@ class DeviceManager:
 
         if child_id is not None:
             current = self._states.get(device_id)
+            if current and not current.is_strip:
+                raise ValueError(f"Device {device_id} does not support child outlets")
             if current and current.children:
-                child_ids = {c.id for c in current.children}
-                if child_id not in child_ids:
+                if child_id not in {c.id for c in current.children}:
                     raise ValueError(f"Child outlet {child_id} not found")
 
         if not self._queue:
