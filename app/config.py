@@ -30,49 +30,43 @@ class ConfigManager:
             self._id_to_mac = {}
             return self._devices
 
-        try:
-            with open(self._devices_path) as f:
-                data = json.load(f)
+        with open(self._devices_path) as f:
+            data = json.load(f)
 
-            devices: dict[str, DeviceInfo] = {}
-            id_to_mac: dict[str, str] = {}
+        devices: dict[str, DeviceInfo] = {}
+        id_to_mac: dict[str, str] = {}
 
-            for device in data.get("devices", []):
-                mac = normalize_mac(device["mac"])
-                device_id = mac_to_id(mac)
-                name = device.get("name") or device_id
-                device_type = device.get("type")
+        for device in data.get("devices", []):
+            mac = normalize_mac(device["mac"])
+            device_id = mac_to_id(mac)
+            name = device.get("name") or device_id
+            device_type = device.get("type")
 
-                if not device_type:
-                    raise ValueError(
-                        f"Device '{name}' ({mac}) is missing required 'type' field"
-                    )
+            if not device_type:
+                raise ValueError(
+                    f"Device '{name}' ({mac}) is missing required 'type' field"
+                )
 
-                spec = PROTOCOLS.get(device_type)
-                if not spec:
-                    raise ValueError(
-                        f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
-                    )
+            spec = PROTOCOLS.get(device_type)
+            if not spec:
+                raise ValueError(
+                    f"Device '{name}' ({mac}) has unsupported type '{device_type}'"
+                )
 
-                devices[mac] = spec.parser(device, mac, name)
-                id_to_mac[device_id] = mac
-                logger.debug(f"  [{device_type}] {name} ({mac})")
+            devices[mac] = spec.parser(device, mac, name)
+            id_to_mac[device_id] = mac
+            logger.debug(f"  [{device_type}] {name} ({mac})")
 
-            self._devices = devices
-            self._id_to_mac = id_to_mac
+        self._devices = devices
+        self._id_to_mac = id_to_mac
 
-            by_type = {}
-            for info in devices.values():
-                by_type[info.type] = by_type.get(info.type, 0) + 1
-            breakdown = ", ".join(f"{t}: {n}" for t, n in by_type.items())
-            logger.info(f"Loaded {len(devices)} devices ({breakdown})")
+        by_type = {}
+        for info in devices.values():
+            by_type[info.type] = by_type.get(info.type, 0) + 1
+        breakdown = ", ".join(f"{t}: {n}" for t, n in by_type.items())
+        logger.info(f"Loaded {len(devices)} devices ({breakdown})")
 
-            return self._devices
-        except Exception as e:
-            logger.error(f"Failed to load {self._devices_path.name}: {e}")
-            self._devices = {}
-            self._id_to_mac = {}
-            return self._devices
+        return self._devices
 
     def resolve_id(self, device_id: str) -> str | None:
         """Resolve device ID to MAC address. Returns None if not found."""
