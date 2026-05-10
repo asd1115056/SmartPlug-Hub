@@ -59,8 +59,9 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 |-------|----------|-------------|
 | `mac` | Yes | Device MAC address (formats: `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABBCCDDEEFF`) |
 | `name` | No | Display name (defaults to device ID if omitted) |
-| `type` | Yes | Protocol: `"kasa"` |
+| `type` | Yes | Protocol: `"kasa"` or `"miio"` |
 | `broadcast` | Yes | Broadcast address for discovery (e.g., `192.168.1.255`) |
+| `group` | No | Tab group name in the web UI (e.g., `"Living Room"`). Devices without a group appear only in All. |
 
 #### Kasa-specific fields
 
@@ -68,7 +69,6 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 |-------|----------|-------------|
 | `username` | No | TP-Link account email (for newer devices requiring authentication) |
 | `password` | No | TP-Link account password |
-| `group` | No | Tab group name in the web UI (e.g., `"Living Room"`). Devices without a group appear only in All. |
 
 **Connection strategy:** The system first attempts to connect without credentials. If authentication is required, it retries with the provided credentials.
 
@@ -76,6 +76,27 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 ```bash
 uv run kasa discover
 ```
+
+#### MiIO-specific fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `token` | Yes | 32-character hex device token (e.g., `a1b2c3...`) |
+| `miio_id` | Yes | Device DID used to match UDP discovery responses |
+
+**Finding your MiIO token and miio_id:**
+
+Option 1 — via Xiaomi Mi Home app:
+1. Enable developer mode in Mi Home → My Profile → Experimental Features
+2. Open the device, tap the three-dot menu → About → tap version number 5 times
+3. The token and DID appear at the bottom
+
+Option 2 — via python-miio CLI (after initial setup):
+```bash
+miiocli cloud
+```
+
+If the token is unknown, fill in `"00000000000000000000000000000000"` as a placeholder — the device will appear as offline but the server will start normally.
 
 ## Architecture
 
@@ -87,12 +108,14 @@ app/
 │   ├── __init__.py      # Exports KasaBackend, discover_all
 │   ├── connection.py    # Stateless Kasa network functions
 │   └── backend.py       # KasaBackend: persistent TCP connection pool
-├── miio/                # Phase 1 (in progress)
-│   ├── __init__.py
-│   ├── connection.py
-│   └── backend.py
-├── models.py            # DeviceInfo, KasaDeviceConfig, DeviceBackend ABC
+├── miio/
+│   ├── __init__.py      # Exports MiioBackend, discover_all
+│   ├── connection.py    # UDP discovery, get_status, set_power
+│   ├── config.py        # parse_config for MiIO devices
+│   └── backend.py       # MiioBackend: stateless UDP
+├── models.py            # DeviceInfo, KasaDeviceConfig, MiioDeviceConfig, DeviceBackend ABC
 ├── config.py            # Whitelist loading and ID resolution
+├── registry.py          # Protocol registry (add new protocols here only)
 ├── command_queue.py     # Protocol-agnostic per-device command queue
 ├── device_manager.py    # Thin facade: lifecycle, state cache
 └── main.py              # FastAPI routes and lifecycle
@@ -108,6 +131,15 @@ Kasa devices can't handle frequent TCP connections, but long-lived connections g
 - Consecutive commands to the same device reuse the connection
 - After 30 seconds of idle, the connection is automatically closed
 - On failure: retry with cached IP → discover new IP → retry → mark offline
+
+### Connection Strategy (MiIO)
+
+MiIO (python-miio) uses **stateless UDP** — each command opens and closes a connection. `MiioBackend` has `session_timeout = 0`, so the command queue processor exits immediately after each command:
+
+- `execute_command`: sends `set_properties` then reads back state with `get_status`
+- `refresh`: re-runs UDP broadcast discovery, then calls `get_status`
+- `health_check`: calls `get_status` with the cached IP; skips if IP is unknown
+- Invalid token (not a 32-char hex): `get_status` returns offline state; `set_power` raises `DeviceOfflineError`
 
 ### Backend ABC
 
@@ -219,9 +251,15 @@ smartplug-hub/
 │   │   ├── __init__.py
 │   │   ├── connection.py       # Stateless Kasa network functions
 │   │   └── backend.py          # KasaBackend
+│   ├── miio/
+│   │   ├── __init__.py
+│   │   ├── connection.py       # UDP discovery, get_status, set_power
+│   │   ├── config.py           # parse_config for MiIO devices
+│   │   └── backend.py          # MiioBackend
 │   ├── __init__.py
 │   ├── models.py               # Shared types, exceptions, DeviceBackend ABC
 │   ├── config.py               # Whitelist configuration
+│   ├── registry.py             # Protocol registry
 │   ├── command_queue.py        # Protocol-agnostic command queue
 │   ├── device_manager.py       # Facade combining all modules
 │   └── main.py                 # FastAPI routes and lifecycle

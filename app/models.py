@@ -49,6 +49,25 @@ class KasaDeviceConfig(DeviceInfo):
 
 
 @dataclass
+class MiioDeviceConfig(DeviceInfo):
+    """MiIO protocol-specific configuration (Gosund WP12 and similar)."""
+
+    broadcast: str = ""
+    token: str = ""      # 32-char hex; format validated in connection layer
+    miio_id: str = ""    # Device DID used for UDP discovery matching
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        for field_name, val in [
+            ("broadcast", self.broadcast),
+            ("token", self.token),
+            ("miio_id", self.miio_id),
+        ]:
+            if not val:
+                raise ValueError(f"MiioDeviceConfig '{self.name}' missing required '{field_name}' field")
+
+
+@dataclass
 class ChildState:
     """State of a single child outlet on a power strip."""
 

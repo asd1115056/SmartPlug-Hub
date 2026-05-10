@@ -4,7 +4,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from .kasa import KasaBackend, discover_all as kasa_discover, parse_config as kasa_parse
-from .models import DeviceBackend, DeviceInfo, KasaDeviceConfig
+from .miio import MiioBackend, discover_all as miio_discover, parse_config as miio_parse
+from .models import DeviceBackend, DeviceInfo, KasaDeviceConfig, MiioDeviceConfig
 
 
 @dataclass(frozen=True)
@@ -23,10 +24,10 @@ PROTOCOLS: dict[str, ProtocolSpec] = {
         discover=kasa_discover,
         model=KasaDeviceConfig,
     ),
-    # "miio": ProtocolSpec(
-    #     parser=miio_parse,
-    #     backend=MiioBackend,
-    #     discover=miio_discover,
-    #     model=MiioDeviceConfig,
-    # ),
+    "miio": ProtocolSpec(
+        parser=miio_parse,
+        backend=MiioBackend,
+        discover=miio_discover,
+        model=MiioDeviceConfig,
+    ),
 }
