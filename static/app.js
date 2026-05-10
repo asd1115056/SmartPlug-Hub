@@ -1,4 +1,4 @@
-// Kasa Web Controller frontend — theme, polling, device card rendering.
+// SmartPlug Hub frontend — theme, polling, device card rendering.
 
 const API_BASE = '/api/v1'
 const POLL_INTERVAL = 5000
