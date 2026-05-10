@@ -270,5 +270,48 @@ smartplug-hub/
 │   ├── index.html              # Web UI
 │   ├── app.js                  # Frontend logic
 │   └── style.css
+├── tests/
+│   ├── kasa/
+│   │   ├── test_discover.py        # Discover Kasa devices on the network
+│   │   ├── test_device.py          # Connect by IP, print info, control
+│   │   └── test_device_by_mac.py   # Find device by MAC, control
+│   └── miio/
+│       ├── test_discover.py        # UDP broadcast discover, print DID→IP
+│       └── test_device.py          # Connect by IP+token, print outlets, control
 └── pyproject.toml
+```
+
+## Manual Testing Scripts
+
+The `tests/` directory contains standalone CLI scripts for testing devices directly (no server required). Run them with `uv run python`.
+
+### Kasa
+
+```bash
+# Discover all Kasa devices on the network
+uv run python tests/kasa/test_discover.py
+
+# Connect to a device by IP
+uv run python tests/kasa/test_device.py 192.168.1.100
+uv run python tests/kasa/test_device.py 192.168.1.100 on        # turn on
+uv run python tests/kasa/test_device.py 192.168.1.100 off 2     # turn off outlet 2 (strip)
+
+# Find a device by MAC address
+uv run python tests/kasa/test_device_by_mac.py AA:BB:CC:DD:EE:FF
+uv run python tests/kasa/test_device_by_mac.py AA:BB:CC:DD:EE:FF toggle
+```
+
+### MiIO
+
+```bash
+# Step 1: discover devices to find your DID (miio_id)
+uv run python tests/miio/test_discover.py 192.168.1.255
+
+# Step 2: connect by IP + token, print outlet states
+uv run python tests/miio/test_device.py 192.168.1.50 <32-char-token> <did>
+
+# Step 3: control outlets
+uv run python tests/miio/test_device.py 192.168.1.50 <token> <did> on       # main switch on
+uv run python tests/miio/test_device.py 192.168.1.50 <token> <did> off 3    # outlet 3 off
+uv run python tests/miio/test_device.py 192.168.1.50 <token> <did> on usb   # USB on
 ```
