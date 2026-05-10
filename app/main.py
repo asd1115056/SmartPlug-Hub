@@ -1,9 +1,4 @@
-"""
-Kasa Web Controller - FastAPI Backend
-
-Provides REST API (v1) for controlling TP-Link Kasa smart devices.
-Uses per-device command queue with short-term persistent connections.
-"""
+"""SmartPlug Hub - FastAPI backend with per-device command queue and multi-protocol support."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -56,21 +51,21 @@ def _state_to_dict(state) -> dict:
 async def lifespan(app: FastAPI):
     global device_manager
 
-    logger.info("Starting Kasa Web Controller...")
+    logger.info("Starting SmartPlug Hub...")
     device_manager = DeviceManager()
     await device_manager.initialize()
 
     yield
 
-    logger.info("Shutting down Kasa Web Controller...")
+    logger.info("Shutting down SmartPlug Hub...")
     if device_manager:
         await device_manager.shutdown()
 
 
 # === App ===
 app = FastAPI(
-    title="Kasa Web Controller",
-    description="Control TP-Link Kasa smart devices via command queue",
+    title="SmartPlug Hub",
+    description="Multi-protocol web controller for smart plugs and power strips",
     lifespan=lifespan,
 )
 

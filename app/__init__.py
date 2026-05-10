@@ -1,1 +1,1 @@
-"""Kasa Web Controller application package."""
+"""SmartPlug Hub application package."""

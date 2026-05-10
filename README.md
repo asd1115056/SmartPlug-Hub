@@ -1,18 +1,6 @@
-# Kasa Web Controller
+# SmartPlug Hub
 
-A web-based controller for smart devices. Supports TP-Link Kasa devices through a unified API, with more protocols easy to add.
-
-## Features
-
-- Multi-protocol backend architecture (Kasa)
-- MAC-based device identification (stable across IP changes)
-- Per-device command queue with deduplication and concurrency control
-- Short-term persistent connections for Kasa (30s idle disconnect)
-- Automatic retry + rediscovery on connection failure
-- Power strip support with individual outlet control
-- Offline device handling with preserved topology
-- Background health check for automatic state updates
-- Web UI with Bootstrap 5, group tabs, and real-time search
+A web-based controller for smart plugs and power strips. Supports multiple protocols (Kasa, MiIO) through a unified API, with more protocols easy to add.
 
 ## Requirements
 
@@ -29,7 +17,7 @@ uv sync
 cp config/devices.example.json config/devices.json
 
 # Run the server
-uv run kasa-web
+uv run smartplug-hub
 # Or with auto-reload for development
 uv run uvicorn app.main:app --reload
 
@@ -225,7 +213,7 @@ Rediscover an offline device. Returns `DeviceState` with status code 200 (online
 ## Project Structure
 
 ```
-kasa-web-controller/
+smartplug-hub/
 ├── app/
 │   ├── kasa/
 │   │   ├── __init__.py

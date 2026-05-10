@@ -1,7 +1,7 @@
 [project]
-name = "kasa-web-controller"
+name = "smartplug-hub"
 version = "0.1.0"
-description = "Web-based controller for TP-Link Kasa smart devices"
+description = "Multi-protocol web controller for smart plugs and power strips"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-kasa-web = "app.main:run"
+smartplug-hub = "app.main:run"
 
 [tool.uv]
 package = true
