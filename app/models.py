@@ -147,5 +147,5 @@ class DeviceBackend(ABC, Generic[_Cfg]):
         """Re-discover and return current state (offline recovery / init)."""
 
     @abstractmethod
-    async def health_check(self, cfg: _Cfg) -> DeviceState | None:
+    async def health_check(self, cfg: _Cfg, previous: DeviceState | None = None) -> DeviceState | None:
         """Periodic poll. Return None to skip this device this cycle."""

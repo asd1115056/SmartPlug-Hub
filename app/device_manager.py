@@ -179,14 +179,11 @@ class DeviceManager:
             if self._queue and self._queue.has_active_processor(cfg.id):
                 continue
 
-            state = await backend.health_check(cfg)
+            state = await backend.health_check(cfg, self._states.get(cfg.id))
             if state is None:
                 continue
 
-            if state.status == "offline":
-                prev = self._states.get(cfg.id)
-                state = build_offline_state(cfg, prev)
-            else:
+            if state.status == "online":
                 online += 1
 
             self._states[cfg.id] = state
