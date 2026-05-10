@@ -110,6 +110,8 @@ class CommandQueue:
 
     async def _process_queue(self, device_id: str) -> None:
         """Command processing loop for a single device."""
+        if device_id not in self._queues:
+            return  # spawned during shutdown after queues were cleared
         queue = self._queues[device_id]
 
         mac = self._config.resolve_id(device_id)
