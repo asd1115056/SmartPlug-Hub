@@ -1,69 +1,85 @@
-"""UDP broadcast discovery for MiIO devices — no python-miio required.
+"""Discover MiIO devices via UDP broadcast and print raw response fields.
 
-Sends the standard MiIO hello packet and prints all responding devices
-with their IP and DID. Use this to find your device's miio_id before
-adding it to devices.json.
+Sends the standard MiIO hello packet, then uses python-miio's Message.parse()
+to decode each response. Prints IP, DID, token, and timestamp for every
+responding device.
+
+The hello response's checksum field IS the device token in plaintext —
+no app or cloud access needed to retrieve it.
 
 Usage:
     python tests/miio/test_discover.py <broadcast> [timeout]
 
 Arguments:
     broadcast   Broadcast address (e.g. 192.168.1.255)
-    timeout     Seconds to wait for responses (default: 3)
+    timeout     Seconds to wait for responses (default: 5)
 
 Example:
     python tests/miio/test_discover.py 192.168.1.255
-    python tests/miio/test_discover.py 192.168.1.255 5
+    python tests/miio/test_discover.py 192.168.1.255 10
 """
 
+import binascii
+import codecs
 import socket
-import struct
 import sys
-import time
+
+from miio.protocol import Message
 
 _MIIO_PORT = 54321
-_HELLO = bytes.fromhex('21310020' + 'ff' * 28)
+_HELLO = bytes.fromhex("21310020" + "ff" * 28)
 
 
-def discover(broadcast: str, timeout: float = 3.0) -> list[dict]:
-    """Send hello broadcast; return list of {ip, did} for all responders."""
-    found: list[dict] = []
+def discover(broadcast: str, timeout: int = 5) -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.settimeout(timeout)
-        sock.sendto(_HELLO, (broadcast, _MIIO_PORT))
+
+        for _ in range(3):
+            sock.sendto(_HELLO, (broadcast, _MIIO_PORT))
         print(f"Sent hello to {broadcast}:{_MIIO_PORT}, waiting {timeout}s...\n")
 
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        seen: set[str] = set()
+        while True:
             try:
                 data, addr = sock.recvfrom(1024)
-                if len(data) >= 12:
-                    did = str(struct.unpack('>I', data[8:12])[0])
-                    found.append({"ip": addr[0], "did": did})
+                ip = addr[0]
+                if ip in seen:
+                    continue
+                seen.add(ip)
+
+                print(f"{'='*50}")
+                print(f"  IP:         {ip}")
+                print(f"  raw bytes:  {data.hex()}")
+
+                try:
+                    m = Message.parse(data)
+                    assert m is not None
+                    header = m.header.value
+
+                    did_bytes: bytes = header.device_id
+                    did_hex = binascii.hexlify(did_bytes).decode()
+                    did_dec = int.from_bytes(did_bytes, byteorder="big")
+                    token = codecs.encode(m.checksum, "hex").decode()
+
+                    print(f"  DID (hex):  {did_hex}")
+                    print(f"  DID (dec):  {did_dec}   ← use as miio_id")
+                    print(f"  token:      {token}   ← use as token")
+                    print(f"  timestamp:  {header.ts}")
+                    print(f"  unknown:    {header.unknown:#010x}")
+                except Exception as e:
+                    print(f"  (parse error: {e})")
+                print()
+
             except socket.timeout:
                 break
     finally:
         sock.close()
-    return found
 
-
-def main(broadcast: str, timeout: float = 3.0) -> None:
-    results = discover(broadcast, timeout)
-
-    if not results:
-        print("No MiIO devices found.")
-        print("Check that the broadcast address is correct and devices are on the same network.")
-        return
-
-    print(f"Found {len(results)} device(s):\n")
-    print(f"  {'IP':<18} {'DID (miio_id)'}")
-    print(f"  {'-'*17} {'-'*20}")
-    for r in results:
-        print(f"  {r['ip']:<18} {r['did']}")
-    print()
-    print("Add the DID as 'miio_id' in your devices.json.")
+    if not seen:
+        print("No MiIO devices responded.")
+        print("Check broadcast address and that devices are on the same network.")
 
 
 if __name__ == "__main__":
@@ -72,5 +88,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     broadcast_addr = sys.argv[1]
-    wait = float(sys.argv[2]) if len(sys.argv) > 2 else 3.0
-    main(broadcast_addr, wait)
+    wait = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+    discover(broadcast_addr, wait)
