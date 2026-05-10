@@ -30,20 +30,26 @@ class ControlRequest(BaseModel):
     child_id: str | None = None
 
 
-# === Dependency ===
-def get_device_manager() -> DeviceManager:
-    if not device_manager:
-        raise HTTPException(status_code=503, detail="Device manager not initialized")
-    return device_manager
+def _err(error: str, message: str) -> dict:
+    return {"error": error, "message": message}
 
 
 def _state_to_dict(state) -> dict:
     """Convert DeviceState dataclass to dict for JSON response."""
     d = asdict(state)
-    # Remove None children to keep response clean
     if d.get("children") is None:
         d.pop("children", None)
     return d
+
+
+# === Dependency ===
+def get_device_manager() -> DeviceManager:
+    if not device_manager:
+        raise HTTPException(
+            status_code=503,
+            detail=_err("service_unavailable", "Device manager not initialized"),
+        )
+    return device_manager
 
 
 # === Lifecycle ===
@@ -85,7 +91,7 @@ def get_device(device_id: str, dm: DeviceManager = Depends(get_device_manager)):
         state = dm.get_device_state(device_id)
         return _state_to_dict(state)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=_err("not_found", str(e)))
 
 
 @app.patch("/api/v1/devices/{device_id}")
@@ -104,25 +110,16 @@ async def control_device(
         )
         return _state_to_dict(state)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_err("invalid_request", str(e)))
     except DeviceOfflineError as e:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "offline", "message": str(e)},
-        )
+        raise HTTPException(status_code=503, detail=_err("offline", str(e)))
     except DeviceOperationError as e:
         if "timed out" in str(e).lower():
-            raise HTTPException(
-                status_code=504,
-                detail={"error": "timeout", "message": str(e)},
-            )
-        raise HTTPException(
-            status_code=502,
-            detail={"error": "operation_failed", "message": str(e)},
-        )
+            raise HTTPException(status_code=504, detail=_err("timeout", str(e)))
+        raise HTTPException(status_code=502, detail=_err("operation_failed", str(e)))
     except Exception as e:
         logger.error(f"Failed to control device {device_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Control failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=_err("internal_error", str(e)))
 
 
 @app.post("/api/v1/devices/{device_id}/refresh")
@@ -135,10 +132,10 @@ async def refresh_device(
         code = 200 if state.status == "online" else 503
         return JSONResponse(content=_state_to_dict(state), status_code=code)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=_err("not_found", str(e)))
     except Exception as e:
         logger.error(f"Failed to refresh device {device_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Refresh failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=_err("internal_error", str(e)))
 
 
 # === Static Files & Root ===
