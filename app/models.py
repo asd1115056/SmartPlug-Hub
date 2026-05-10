@@ -68,6 +68,7 @@ class DeviceState:
 
     id: str
     name: str
+    type: str
     status: Literal["online", "offline"]
     is_on: bool | None = None
     alias: str | None = None
@@ -85,6 +86,7 @@ def build_offline_state(
     return DeviceState(
         id=device_info.id,
         name=device_info.name,
+        type=device_info.type,
         status="offline",
         is_on=None,
         alias=previous.alias if previous else None,

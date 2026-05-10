@@ -1,4 +1,4 @@
-// Kasa Web Controller frontend — theme, polling, device card rendering.
+// SmartPlug Hub frontend — theme, polling, device card rendering.
 
 const API_BASE = '/api/v1'
 const POLL_INTERVAL = 5000
@@ -229,7 +229,7 @@ function renderDeviceCard(device) {
             <div class="card-header d-flex justify-content-between align-items-center">
                 <div>
                     <strong>${escapeHtml(device.name)}</strong>
-                    ${device.model ? `<div class="device-model">${escapeHtml(device.model)}</div>` : ''}
+                    ${device.model ? `<div class="device-model">${escapeHtml(device.type[0].toUpperCase() + device.type.slice(1))} ${escapeHtml(device.model)}</div>` : ''}
                     ${updatedTime ? `<div class="last-updated">Last updated: ${updatedTime}</div>` : ''}
                 </div>
                 ${refreshBtn}
