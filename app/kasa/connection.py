@@ -133,6 +133,7 @@ def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceS
     return DeviceState(
         id=device_info.id,
         name=device_info.name,
+        type=device_info.type,
         status="online",
         is_on=device.is_on,
         alias=device.alias,
