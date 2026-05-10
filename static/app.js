@@ -28,10 +28,7 @@ async function controlDevice(deviceId, action, childId = null) {
 
     if (!response.ok) {
         const error = await response.json()
-        if (error.detail && typeof error.detail === 'object') {
-            throw new Error(error.detail.message || 'Control failed')
-        }
-        throw new Error(error.detail || 'Control failed')
+        throw new Error(error.detail?.message || 'Control failed')
     }
     return response.json()
 }

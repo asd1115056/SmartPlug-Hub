@@ -1,16 +1,6 @@
-# Kasa Web Controller
+# SmartPlug Hub
 
-A web-based controller for TP-Link Kasa smart devices.
-
-## Features
-
-- MAC-based device identification (stable across IP changes)
-- Per-device command queue with short-term persistent connections
-- Automatic retry + rediscovery on connection failure
-- Power strip support with individual outlet control
-- Offline device handling with preserved topology
-- Background health check for automatic state updates
-- Web UI with Bootstrap 5, group tabs, and real-time search
+A web-based controller for smart plugs and power strips. Supports multiple protocols (Kasa, MiIO) through a unified API, with more protocols easy to add.
 
 ## Requirements
 
@@ -27,7 +17,7 @@ uv sync
 cp config/devices.example.json config/devices.json
 
 # Run the server
-uv run kasa-web
+uv run smartplug-hub
 # Or with auto-reload for development
 uv run uvicorn app.main:app --reload
 
@@ -46,6 +36,7 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
     {
       "mac": "AA:BB:CC:DD:EE:FF",
       "name": "Living Room Strip",
+      "type": "kasa",
       "broadcast": "192.168.1.255",
       "username": "your@email.com",
       "password": "your_password",
@@ -54,6 +45,7 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
     {
       "mac": "11:22:33:44:55:66",
       "name": "Bedroom Plug (no auth needed)",
+      "type": "kasa",
       "broadcast": "192.168.1.255",
       "group": "Bedroom"
     }
@@ -61,43 +53,74 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 }
 ```
 
+#### Common fields
+
 | Field | Required | Description |
 |-------|----------|-------------|
 | `mac` | Yes | Device MAC address (formats: `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABBCCDDEEFF`) |
 | `name` | No | Display name (defaults to device ID if omitted) |
+| `type` | Yes | Protocol: `"kasa"` |
 | `broadcast` | Yes | Broadcast address for discovery (e.g., `192.168.1.255`) |
+
+#### Kasa-specific fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
 | `username` | No | TP-Link account email (for newer devices requiring authentication) |
 | `password` | No | TP-Link account password |
 | `group` | No | Tab group name in the web UI (e.g., `"Living Room"`). Devices without a group appear only in All. |
 
 **Connection strategy:** The system first attempts to connect without credentials. If authentication is required, it retries with the provided credentials.
 
-**Finding your device MAC address:**
+**Finding your Kasa device MAC address:**
 ```bash
 uv run kasa discover
 ```
 
 ## Architecture
 
-### Connection Strategy
+### Module Structure
 
-Kasa devices can't handle frequent TCP connections, but long-lived connections go stale (XorTransport has no keep-alive, KLAP/AES transports have 24hr session timeouts). The solution is **short-term persistent connections**:
+```
+app/
+├── kasa/
+│   ├── __init__.py      # Exports KasaBackend, discover_all
+│   ├── connection.py    # Stateless Kasa network functions
+│   └── backend.py       # KasaBackend: persistent TCP connection pool
+├── miio/                # Phase 1 (in progress)
+│   ├── __init__.py
+│   ├── connection.py
+│   └── backend.py
+├── models.py            # DeviceInfo, KasaDeviceConfig, DeviceBackend ABC
+├── config.py            # Whitelist loading and ID resolution
+├── command_queue.py     # Protocol-agnostic per-device command queue
+├── device_manager.py    # Thin facade: lifecycle, state cache
+└── main.py              # FastAPI routes and lifecycle
+```
+
+Adding a new protocol only requires a new `app/<protocol>/` subpackage — no changes to `app/` root files.
+
+### Connection Strategy (Kasa)
+
+Kasa devices can't handle frequent TCP connections, but long-lived connections go stale. The solution is **short-term persistent connections** managed by `KasaBackend`:
 
 - The command queue processor connects on the first command (not at startup)
 - Consecutive commands to the same device reuse the connection
 - After 30 seconds of idle, the connection is automatically closed
 - On failure: retry with cached IP → discover new IP → retry → mark offline
 
-### Module Structure
+### Backend ABC
+
+All protocol backends implement `DeviceBackend`:
 
 ```
-app/
-├── models.py          # Shared types: DeviceState, Command, exceptions
-├── config.py          # Whitelist loading and ID resolution
-├── connection.py      # Stateless connection/discovery utilities
-├── command_queue.py   # Per-device command queue + connection management
-├── device_manager.py  # Thin facade combining the above
-└── main.py            # FastAPI routes and lifecycle
+DeviceBackend (ABC)
+  session_timeout    # How long CommandQueue processor stays alive after last command
+  command_interval   # Rate limiting between commands
+  execute_command()  # Called by CommandQueue for each command
+  cleanup()          # Called on idle timeout or shutdown (default: no-op)
+  refresh()          # Re-discover + get fresh state (offline recovery)
+  health_check()     # Periodic poll (return None to skip this cycle)
 ```
 
 ## API Reference
@@ -190,21 +213,24 @@ Rediscover an offline device. Returns `DeviceState` with status code 200 (online
 ## Project Structure
 
 ```
-kasa-web-controller/
+smartplug-hub/
 ├── app/
+│   ├── kasa/
+│   │   ├── __init__.py
+│   │   ├── connection.py       # Stateless Kasa network functions
+│   │   └── backend.py          # KasaBackend
 │   ├── __init__.py
-│   ├── models.py           # Shared types and exceptions
-│   ├── config.py           # Whitelist configuration
-│   ├── connection.py       # Connection/discovery utilities
-│   ├── command_queue.py    # Per-device command queue
-│   ├── device_manager.py   # Facade combining all modules
-│   └── main.py             # FastAPI routes and lifecycle
+│   ├── models.py               # Shared types, exceptions, DeviceBackend ABC
+│   ├── config.py               # Whitelist configuration
+│   ├── command_queue.py        # Protocol-agnostic command queue
+│   ├── device_manager.py       # Facade combining all modules
+│   └── main.py                 # FastAPI routes and lifecycle
 ├── config/
-│   ├── devices.json        # Device whitelist (create from example)
+│   ├── devices.json            # Device whitelist (create from example)
 │   └── devices.example.json
 ├── static/
-│   ├── index.html          # Web UI
-│   ├── app.js              # Frontend logic
+│   ├── index.html              # Web UI
+│   ├── app.js                  # Frontend logic
 │   └── style.css
 └── pyproject.toml
 ```
