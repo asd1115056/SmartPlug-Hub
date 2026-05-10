@@ -37,6 +37,7 @@ class CommandQueue:
         self._pending: dict[str, collections.deque[Command]] = {}
         self._processors: dict[str, asyncio.Task] = {}
         self._last_command_time: dict[str, float] = {}
+        self._shutting_down: bool = False
 
     def submit(self, command: Command) -> Command:
         """Submit a command, returning the canonical Command (may be deduplicated).
@@ -94,6 +95,7 @@ class CommandQueue:
 
     async def shutdown(self) -> None:
         """Cancel all processor tasks."""
+        self._shutting_down = True
         tasks = list(self._processors.values())
         for task in tasks:
             task.cancel()
@@ -174,7 +176,7 @@ class CommandQueue:
         finally:
             await backend.cleanup(device_id)
             self._processors.pop(device_id, None)
-            if device_id in self._queues and not self._queues[device_id].empty():
+            if not self._shutting_down and device_id in self._queues and not self._queues[device_id].empty():
                 self._processors[device_id] = asyncio.create_task(
                     self._process_queue(device_id)
                 )
