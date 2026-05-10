@@ -139,6 +139,6 @@ def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceS
         model=device.model,
         is_strip=is_strip,
         children=children,
-        last_updated=datetime.now().isoformat(),
+        last_updated=datetime.now(timezone.utc).isoformat(),
         group=device_info.group,
     )

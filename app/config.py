@@ -33,6 +33,12 @@ class ConfigManager:
         with open(self._devices_path) as f:
             data = json.load(f)
 
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"{self._devices_path.name}: expected a JSON object at the root, "
+                f"got {type(data).__name__}"
+            )
+
         devices: dict[str, DeviceInfo] = {}
         id_to_mac: dict[str, str] = {}
         skipped = 0
@@ -59,7 +65,7 @@ class ConfigManager:
                 id_to_mac[device_id] = mac
                 logger.debug(f"  [{device_type}] {name} ({mac})")
 
-            except (ValueError, KeyError) as e:
+            except (ValueError, KeyError, TypeError) as e:
                 logger.error(f"Skipping invalid device entry: {e}")
                 skipped += 1
 
