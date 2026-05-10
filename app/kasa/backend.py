@@ -121,7 +121,9 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
             except Exception:
                 pass
 
-    async def refresh(self, cfg: KasaDeviceConfig) -> DeviceState:
+    async def refresh(
+        self, cfg: KasaDeviceConfig, previous: DeviceState | None = None
+    ) -> DeviceState:
         """Re-discover + connect + return current state. Always disconnects after."""
         cached_ip = self._ip_cache.get(cfg.mac)
         if cached_ip:
@@ -144,7 +146,7 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
                 return state
 
         logger.warning(f"Could not reach {cfg.name} during refresh")
-        return build_offline_state(cfg)
+        return build_offline_state(cfg, previous)
 
     async def health_check(
         self, cfg: KasaDeviceConfig, previous: DeviceState | None = None

@@ -143,7 +143,7 @@ class DeviceBackend(ABC, Generic[_Cfg]):
         """Called when the processor exits. Default no-op."""
 
     @abstractmethod
-    async def refresh(self, cfg: _Cfg) -> DeviceState:
+    async def refresh(self, cfg: _Cfg, previous: DeviceState | None = None) -> DeviceState:
         """Re-discover and return current state (offline recovery / init)."""
 
     @abstractmethod

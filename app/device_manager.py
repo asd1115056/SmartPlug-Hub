@@ -143,7 +143,8 @@ class DeviceManager:
         if not backend:
             raise ValueError(f"No backend registered for device {device_id}")
 
-        state = await backend.refresh(cfg)
+        previous = self._states.get(device_id)
+        state = await backend.refresh(cfg, previous)
         self._states[device_id] = state
         return state
 
