@@ -1,6 +1,7 @@
 """SmartPlug Hub - FastAPI backend with per-device command queue and multi-protocol support."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
@@ -16,7 +17,7 @@ from .core.models import Device, DeviceOfflineError, DeviceOperationError, Devic
 PROJECT_ROOT = Path(__file__).parent.parent
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -156,7 +157,8 @@ async def root():
 # === Entry Point ===
 def run():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
