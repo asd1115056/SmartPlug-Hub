@@ -28,16 +28,21 @@ async def connect_device(
     config_no_auth = DeviceConfig(host=ip, credentials=None, timeout=CONNECTION_TIMEOUT)
 
     for attempt in range(CONNECTION_RETRIES):
+        device = None
         try:
             device = await Device.connect(config=config_no_auth)
             await device.update()
             logger.debug(f"Connected to {ip} without credentials")
             return device, None
         except AuthenticationError as e:
+            if device:
+                await device.disconnect()
             logger.debug(f"Device at {ip} requires authentication")
             last_error = f"{type(e).__name__}: {e}"
             break
         except Exception as e:
+            if device:
+                await device.disconnect()
             last_error = f"{type(e).__name__}: {e}"
             if attempt < CONNECTION_RETRIES - 1:
                 logger.debug(f"Connection to {ip} failed (attempt {attempt + 1}): {e}")
@@ -50,12 +55,15 @@ async def connect_device(
         )
 
         for attempt in range(CONNECTION_RETRIES):
+            device = None
             try:
                 device = await Device.connect(config=config_with_auth)
                 await device.update()
                 logger.debug(f"Connected to {ip} with credentials")
                 return device, None
             except Exception as e:
+                if device:
+                    await device.disconnect()
                 last_error = f"{type(e).__name__}: {e}"
                 if attempt < CONNECTION_RETRIES - 1:
                     logger.debug(
@@ -81,6 +89,10 @@ async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
                     logger.info(f"Discovered {target_mac} at {found_ip}")
             except ValueError:
                 pass
+        try:
+            await device.disconnect()
+        except Exception:
+            pass
 
     await Discover.discover(target=device_info.broadcast, on_discovered=on_discovered)
     return found_ip
@@ -110,6 +122,10 @@ async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, 
                         logger.info(f"Found device: {known_devices[mac].name} at {device.host}")
                 except ValueError:
                     pass
+            try:
+                await device.disconnect()
+            except Exception:
+                pass
 
         await Discover.discover(target=target, on_discovered=on_discovered)
 

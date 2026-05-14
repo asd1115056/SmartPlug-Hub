@@ -67,7 +67,7 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
                     return state
                 except Exception as e:
                     logger.warning(f"Command failed at cached IP {self.ip} for {cfg.name}: {e}")
-                    await self._close_connection()
+                    await self._safe_disconnect(device)
 
         # Last resort: broadcast rediscovery.
         logger.info(f"Attempting rediscovery for {cfg.name}...")
@@ -86,7 +86,7 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
                     return state
                 except Exception as e:
                     logger.warning(f"Command failed at rediscovered IP {new_ip} for {cfg.name}: {e}")
-                    await self._close_connection()
+                    await self._safe_disconnect(device)
 
         raise DeviceOfflineError(f"{cfg.name} is offline — all connection attempts failed")
 
