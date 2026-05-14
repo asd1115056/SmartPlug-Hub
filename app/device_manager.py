@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Literal
 
 from .command_queue import CommandQueue, make_command
-from .config import ConfigManager
-from .models import (
+from .core.config import ConfigManager
+from .core.models import (
     Device,
     DeviceOfflineError,
     DeviceOperationError,
@@ -16,7 +16,7 @@ from .models import (
     DeviceStatus,
     make_offline_state,
 )
-from .registry import PROTOCOLS
+from .core.registry import PROTOCOLS
 
 logger = logging.getLogger(__name__)
 

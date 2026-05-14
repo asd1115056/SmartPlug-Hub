@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 from kasa import Credentials, Device, DeviceConfig, Discover
 from kasa.exceptions import AuthenticationError
 
-from ..models import ChildState, DeviceState, DeviceStatus
+from ..core.models import ChildState, DeviceState, DeviceStatus
 from .config import KasaDeviceConfig
-from ..utils import normalize_mac
+from ..core.utils import normalize_mac
 
 logger = logging.getLogger(__name__)
 

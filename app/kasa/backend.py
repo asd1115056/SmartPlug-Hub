@@ -5,14 +5,14 @@ import logging
 
 from kasa import Device
 
-from ..models import (
+from ..core.models import (
     Command,
     DeviceBackend,
     DeviceOfflineError,
     DeviceState,
 )
 from .config import KasaDeviceConfig
-from ..utils import normalize_mac
+from ..core.utils import normalize_mac
 from .connection import (
     build_device_state,
     connect_device,

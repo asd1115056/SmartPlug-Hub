@@ -7,7 +7,7 @@ import time
 import uuid
 from datetime import datetime
 
-from .models import (
+from .core.models import (
     Command,
     CommandStatus,
     Device,

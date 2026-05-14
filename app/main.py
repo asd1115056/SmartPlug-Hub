@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .device_manager import DeviceManager
-from .models import Device, DeviceOfflineError, DeviceOperationError, DeviceStatus
+from .core.models import Device, DeviceOfflineError, DeviceOperationError, DeviceStatus
 
 PROJECT_ROOT = Path(__file__).parent.parent
 

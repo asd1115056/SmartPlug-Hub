@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from kasa import Credentials
 
-from ..models import DeviceInfo
+from ..core.models import DeviceInfo
 
 
 @dataclass
