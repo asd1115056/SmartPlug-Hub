@@ -152,14 +152,3 @@ app.mount("/static", StaticFiles(directory=PROJECT_ROOT / "static"), name="stati
 @app.get("/")
 async def root():
     return FileResponse(PROJECT_ROOT / "static/index.html")
-
-
-# === Entry Point ===
-def run():
-    import uvicorn
-    port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
-
-if __name__ == "__main__":
-    run()

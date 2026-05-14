@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-smartplug-hub = "app.main:run"
+smartplug-hub = "app.__main__:main"
 
 [tool.uv]
 package = true
