@@ -12,7 +12,6 @@ from .core.models import (
     CommandStatus,
     Device,
     DeviceOfflineError,
-    DeviceOperationError,
     DeviceState,
 )
 
@@ -67,14 +66,10 @@ class CommandQueue:
 
         return command
 
-    async def wait_for_command(self, command: Command, timeout: float = 30.0) -> DeviceState:
+    async def wait_for_command(self, command: Command) -> DeviceState:
         """Wait for a command to complete, returning its DeviceState or raising on failure."""
         assert command._future is not None
-        try:
-            return await asyncio.wait_for(asyncio.shield(command._future), timeout=timeout)
-        except asyncio.TimeoutError:
-            command.status = CommandStatus.FAILED
-            raise DeviceOperationError("Command timed out")
+        return await command._future
 
     def has_active_processor(self, device_id: str) -> bool:
         """Return True if a processor task is currently running for this device."""
@@ -96,15 +91,15 @@ class CommandQueue:
         cfg = device.info
         backend = device.backend
 
-        logger.debug(f"Processor running for device {device_id} (session_timeout={backend.session_timeout}s)")
+        logger.debug(f"Processor running for device {device_id} (session_timeout={backend.policy.session_timeout}s)")
 
         try:
             while True:
-                if backend.session_timeout:
+                if backend.policy.session_timeout:
                     # Stateful: hold processor open so the backend can reuse its connection.
                     try:
                         cmd = await asyncio.wait_for(
-                            queue.get(), timeout=backend.session_timeout
+                            queue.get(), timeout=backend.policy.session_timeout
                         )
                     except asyncio.TimeoutError:
                         logger.debug(f"Processor idle timeout for device {device_id}, exiting")
@@ -125,7 +120,7 @@ class CommandQueue:
 
                 cmd.status = CommandStatus.PROCESSING
                 logger.debug(f"Processing command {cmd.id} for device {device_id} action={cmd.action}")
-                await self._wait_for_rate_limit(device_id, backend.command_interval)
+                await self._wait_for_rate_limit(device_id, backend.policy.command_interval)
 
                 assert cmd._future is not None
                 try:

@@ -6,6 +6,7 @@ import logging
 from kasa import Device
 
 from ..core.models import (
+    BackendPolicy,
     Command,
     DeviceBackend,
     DeviceOfflineError,
@@ -22,11 +23,13 @@ from .connection import (
 logger = logging.getLogger(__name__)
 
 
-class KasaBackend(DeviceBackend[KasaDeviceConfig]):
-    """Kasa backend: persistent TCP connection, self-managed idle timer, retry + rediscovery."""
+_COMMAND_TIMEOUT = 25.0  # hard deadline for execute_command
 
-    session_timeout: float = 30.0
-    command_interval: float = 0.5
+
+class KasaBackend(DeviceBackend[KasaDeviceConfig]):
+    """Kasa backend: persistent TCP connection, self-managed idle timer."""
+
+    policy = BackendPolicy(session_timeout=60.0, command_interval=0.5)
 
     def __init__(self) -> None:
         super().__init__()
@@ -37,6 +40,16 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
 
     async def execute_command(self, cmd: Command, cfg: KasaDeviceConfig) -> DeviceState:
         """Execute command, reusing or re-establishing the persistent TCP connection."""
+        try:
+            return await asyncio.wait_for(self._run_command(cmd, cfg), timeout=_COMMAND_TIMEOUT)
+        except asyncio.TimeoutError:
+            await self._close_connection()
+            raise DeviceOfflineError(f"{cfg.name} did not respond within {_COMMAND_TIMEOUT:.0f}s")
+        except asyncio.CancelledError:
+            await self._close_connection()
+            raise
+
+    async def _run_command(self, cmd: Command, cfg: KasaDeviceConfig) -> DeviceState:
         # Try existing open connection first.
         if self._connection:
             try:
@@ -69,26 +82,7 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
                     logger.warning(f"Command failed at cached IP {self.ip} for {cfg.name}: {e}")
                     await self._safe_disconnect(device)
 
-        # Last resort: broadcast rediscovery.
-        logger.info(f"Attempting rediscovery for {cfg.name}...")
-        new_ip = await self.find_ip(cfg)
-        if new_ip:
-            device = await self._connect_verified(new_ip, cfg)
-            if device:
-                try:
-                    await self._execute_action(device, cmd)
-                    await device.update()
-                    state = build_device_state(cfg, kasa_device=device)
-                    self.ip = device.host
-                    self._connection = device
-                    self._reset_close_timer(cfg.name)
-                    logger.info(f"Command '{cmd.action}' on {cfg.name} succeeded (rediscovered at {self.ip})")
-                    return state
-                except Exception as e:
-                    logger.warning(f"Command failed at rediscovered IP {new_ip} for {cfg.name}: {e}")
-                    await self._safe_disconnect(device)
-
-        raise DeviceOfflineError(f"{cfg.name} is offline — all connection attempts failed")
+        raise DeviceOfflineError(f"{cfg.name} is offline — use refresh to rediscover")
 
     async def fetch_state(self, cfg: KasaDeviceConfig, ip: str) -> DeviceState | None:
         """One-shot: connect, verify MAC, read state, disconnect."""
@@ -157,15 +151,15 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
     def _reset_close_timer(self, device_name: str) -> None:
         if self._close_task and not self._close_task.done():
             self._close_task.cancel()
-        if self.session_timeout > 0:
+        if self.policy.session_timeout > 0:
             self._close_task = asyncio.create_task(
                 self._idle_close(device_name)
             )
 
     async def _idle_close(self, device_name: str) -> None:
         try:
-            await asyncio.sleep(self.session_timeout)
-            logger.info(f"Session idle for {self.session_timeout}s — closing connection to {device_name}")
+            await asyncio.sleep(self.policy.session_timeout)
+            logger.info(f"Session idle for {self.policy.session_timeout}s — closing connection to {device_name}")
             await self._close_connection()
         except asyncio.CancelledError:
             pass

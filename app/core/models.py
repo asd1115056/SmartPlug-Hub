@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
 from .utils import mac_to_id
 
@@ -114,17 +114,24 @@ class Command:
 _Cfg = TypeVar("_Cfg", bound="DeviceInfo")
 
 
-class DeviceBackend(ABC, Generic[_Cfg]):
-    """Protocol backend interface. One instance per device.
+@dataclass(frozen=True)
+class BackendPolicy:
+    """Queue-visible behavioral parameters for a DeviceBackend.
 
-    session_timeout: seconds both the CommandQueue processor and the backend's
-        own connection linger after the last command. 0 = stateless (exit/close
-        immediately); >0 = keep alive.
+    session_timeout: seconds to keep the processor and connection alive after the
+        last command. 0 = stateless (exit and close immediately after each command).
     command_interval: minimum seconds between consecutive commands (rate limit).
+        0 = no rate limit.
     """
 
     session_timeout: float = 0.0
     command_interval: float = 0.0
+
+
+class DeviceBackend(ABC, Generic[_Cfg]):
+    """Protocol backend interface. One instance per device."""
+
+    policy: ClassVar[BackendPolicy] = BackendPolicy()
 
     def __init__(self) -> None:
         self.ip: str | None = None  # last known IP, updated by the backend

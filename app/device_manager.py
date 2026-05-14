@@ -11,7 +11,6 @@ from .core.config import ConfigManager
 from .core.models import (
     Device,
     DeviceOfflineError,
-    DeviceOperationError,
     DeviceState,
     DeviceStatus,
     make_offline_state,
@@ -98,7 +97,7 @@ class DeviceManager:
         cmd = self._queue.submit(cmd)
         try:
             state = await self._queue.wait_for_command(cmd)
-        except (DeviceOfflineError, DeviceOperationError):
+        except DeviceOfflineError:
             self._update_state(device_id, make_offline_state(device_id, self._devices[device_id].state))
             raise
         self._update_state(device_id, state)
