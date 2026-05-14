@@ -5,15 +5,14 @@ import collections
 import logging
 import time
 import uuid
-from collections.abc import Callable
 from datetime import datetime
 
-from .config import ConfigManager
 from .models import (
     Command,
     CommandStatus,
-    DeviceBackend,
+    Device,
     DeviceOfflineError,
+    DeviceOperationError,
     DeviceState,
 )
 
@@ -23,21 +22,13 @@ logger = logging.getLogger(__name__)
 class CommandQueue:
     """Per-device command queue. Delegates execution to DeviceBackend."""
 
-    def __init__(
-        self,
-        config: ConfigManager,
-        backends: dict[str, DeviceBackend],
-        on_state_update: Callable[[str, DeviceState | None], None],
-    ) -> None:
-        self._config = config
-        self._backends = backends
-        self._on_state_update = on_state_update
+    def __init__(self, devices: dict[str, Device]) -> None:
+        self._devices = devices
 
         self._queues: dict[str, asyncio.Queue[Command]] = {}
         self._pending: dict[str, collections.deque[Command]] = {}
         self._processors: dict[str, asyncio.Task] = {}
         self._last_command_time: dict[str, float] = {}
-        self._shutting_down: bool = False
 
     def submit(self, command: Command) -> Command:
         """Submit a command, returning the canonical Command (may be deduplicated).
@@ -51,8 +42,6 @@ class CommandQueue:
             self._queues[device_id] = asyncio.Queue()
             self._pending[device_id] = collections.deque()
 
-        queue = self._queues[device_id]
-
         for existing in self._pending[device_id]:
             if (
                 existing.status == CommandStatus.QUEUED
@@ -61,87 +50,67 @@ class CommandQueue:
                 and existing.action == command.action
             ):
                 logger.debug(
-                    f"Dedup: reusing command {existing.id} for {device_id} "
+                    f"Dedup: reusing command {existing.id} for device {device_id} "
                     f"action={command.action} child={command.child_id}"
                 )
                 return existing
 
-        queue.put_nowait(command)
+        self._queues[device_id].put_nowait(command)
         self._pending[device_id].append(command)
+        logger.debug(f"Queued command {command.id} for device {device_id} action={command.action}")
 
         if device_id not in self._processors or self._processors[device_id].done():
             self._processors[device_id] = asyncio.create_task(
                 self._process_queue(device_id)
             )
+            logger.debug(f"Started processor for device {device_id}")
 
         return command
 
-    async def wait_for_command(
-        self, command: Command, timeout: float = 30.0
-    ) -> Command:
-        """Wait for a command to complete."""
+    async def wait_for_command(self, command: Command, timeout: float = 30.0) -> DeviceState:
+        """Wait for a command to complete, returning its DeviceState or raising on failure."""
+        assert command._future is not None
         try:
-            await asyncio.wait_for(command._event.wait(), timeout=timeout)
+            return await asyncio.wait_for(asyncio.shield(command._future), timeout=timeout)
         except asyncio.TimeoutError:
             command.status = CommandStatus.FAILED
-            command.error = "Command timed out"
-            command._event.set()
-        return command
+            raise DeviceOperationError("Command timed out")
 
     def has_active_processor(self, device_id: str) -> bool:
         """Return True if a processor task is currently running for this device."""
         task = self._processors.get(device_id)
         return task is not None and not task.done()
 
-    async def shutdown(self) -> None:
-        """Cancel all processor tasks."""
-        self._shutting_down = True
-        tasks = list(self._processors.values())
-        for task in tasks:
-            task.cancel()
-
-        for task in tasks:
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-
-        self._processors.clear()
-        self._queues.clear()
-        self._pending.clear()
-
     async def _process_queue(self, device_id: str) -> None:
         """Command processing loop for a single device."""
         if device_id not in self._queues:
-            return  # spawned during shutdown after queues were cleared
-        queue = self._queues[device_id]
+            return
 
-        mac = self._config.resolve_id(device_id)
-        if not mac:
+        queue = self._queues[device_id]
+        device = self._devices.get(device_id)
+        if not device:
             logger.error(f"Processor: unknown device_id {device_id}")
             self._processors.pop(device_id, None)
             return
 
-        cfg = self._config.devices[mac]
-        backend = self._backends.get(device_id)
-        if not backend:
-            logger.error(f"Processor: no backend registered for device_id {device_id}")
-            self._processors.pop(device_id, None)
-            return
+        cfg = device.info
+        backend = device.backend
+
+        logger.debug(f"Processor running for device {device_id} (session_timeout={backend.session_timeout}s)")
 
         try:
             while True:
                 if backend.session_timeout:
-                    # Stateful (e.g. Kasa TCP): hold processor open to reuse connection.
+                    # Stateful: hold processor open so the backend can reuse its connection.
                     try:
                         cmd = await asyncio.wait_for(
                             queue.get(), timeout=backend.session_timeout
                         )
                     except asyncio.TimeoutError:
-                        logger.info(f"Idle timeout for {cfg.name}, processor exiting")
+                        logger.debug(f"Processor idle timeout for device {device_id}, exiting")
                         break
                 else:
-                    # Stateless (e.g. MiIO UDP): drain queue then exit immediately.
+                    # Stateless: drain queue then exit immediately.
                     try:
                         cmd = queue.get_nowait()
                     except asyncio.QueueEmpty:
@@ -153,30 +122,36 @@ class CommandQueue:
                         pending.remove(cmd)
                     except ValueError:
                         pass
+
                 cmd.status = CommandStatus.PROCESSING
+                logger.debug(f"Processing command {cmd.id} for device {device_id} action={cmd.action}")
                 await self._wait_for_rate_limit(device_id, backend.command_interval)
 
+                assert cmd._future is not None
                 try:
                     state = await backend.execute_command(cmd, cfg)
                     cmd.status = CommandStatus.COMPLETED
                     cmd.completed_at = datetime.now()
-                    cmd.result = state
-                    self._on_state_update(device_id, state)
+                    if not cmd._future.done():
+                        cmd._future.set_result(state)
+                    logger.debug(f"Command {cmd.id} completed for device {device_id}")
                 except DeviceOfflineError as e:
                     cmd.status = CommandStatus.FAILED
-                    cmd.error = str(e)
-                    self._on_state_update(device_id, None)
+                    if not cmd._future.done():
+                        cmd._future.set_exception(e)
+                    logger.info(f"Device {device_id} is offline: {e}")
                 except Exception as e:
                     cmd.status = CommandStatus.FAILED
-                    cmd.error = str(e)
-                    logger.error(f"Unexpected error processing command for {cfg.name}: {e}")
-                finally:
-                    cmd._event.set()
+                    if not cmd._future.done():
+                        cmd._future.set_exception(e)
+                    logger.error(f"Unexpected error processing command {cmd.id} for device {device_id}: {e}")
 
         finally:
-            await backend.cleanup(device_id)
             self._processors.pop(device_id, None)
-            if not self._shutting_down and device_id in self._queues and not self._queues[device_id].empty():
+            logger.debug(f"Processor exited for device {device_id}")
+            # Restart if commands arrived while we were winding down.
+            if device_id in self._queues and not self._queues[device_id].empty():
+                logger.debug(f"Commands pending — restarting processor for device {device_id}")
                 self._processors[device_id] = asyncio.create_task(
                     self._process_queue(device_id)
                 )
@@ -195,9 +170,11 @@ def make_command(
     device_id: str, action: str, child_id: str | None = None
 ) -> Command:
     """Create a new Command with a unique ID."""
-    return Command(
+    cmd = Command(
         id=uuid.uuid4().hex[:8],
         device_id=device_id,
         action=action,
         child_id=child_id,
     )
+    cmd._future = asyncio.get_event_loop().create_future()
+    return cmd

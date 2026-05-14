@@ -3,15 +3,15 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from .kasa import KasaBackend, discover_all as kasa_discover, parse_config as kasa_parse
-from .models import DeviceBackend, DeviceInfo, KasaDeviceConfig
+from .kasa import KasaBackend, KasaDeviceConfig, discover_all as kasa_discover, parse_config as kasa_parse
+from .models import DeviceBackend, DeviceInfo
 
 
 @dataclass(frozen=True)
 class ProtocolSpec:
     parser: Callable[[dict, str, str], DeviceInfo]
-    backend: Callable[[dict[str, str]], DeviceBackend]  # factory: ip_cache -> backend
-    discover: Callable[[dict], Awaitable[dict[str, str]]]
+    backend: Callable[[], DeviceBackend]  # zero-arg factory, one instance per device
+    discover_all: Callable[[dict], Awaitable[dict[str, str]]]
     model: type[DeviceInfo]
 
 
@@ -20,13 +20,13 @@ PROTOCOLS: dict[str, ProtocolSpec] = {
     "kasa": ProtocolSpec(
         parser=kasa_parse,
         backend=KasaBackend,
-        discover=kasa_discover,
+        discover_all=kasa_discover,
         model=KasaDeviceConfig,
     ),
     # "miio": ProtocolSpec(
     #     parser=miio_parse,
     #     backend=MiioBackend,
-    #     discover=miio_discover,
+    #     discover_all=miio_discover,
     #     model=MiioDeviceConfig,
     # ),
 }

@@ -1,5 +1,6 @@
-"""Kasa protocol backend with persistent TCP connection pool."""
+"""Kasa protocol backend with persistent TCP connection and self-managed session timer."""
 
+import asyncio
 import logging
 
 from kasa import Device
@@ -9,9 +10,8 @@ from ..models import (
     DeviceBackend,
     DeviceOfflineError,
     DeviceState,
-    KasaDeviceConfig,
-    build_offline_state,
 )
+from .config import KasaDeviceConfig
 from ..utils import normalize_mac
 from .connection import (
     build_device_state,
@@ -23,162 +23,176 @@ logger = logging.getLogger(__name__)
 
 
 class KasaBackend(DeviceBackend[KasaDeviceConfig]):
-    """Kasa backend: persistent TCP connections, retry + rediscovery on failure."""
+    """Kasa backend: persistent TCP connection, self-managed idle timer, retry + rediscovery."""
 
-    session_timeout: float = 30.0  # processor exits after 30s idle
-    command_interval: float = 0.5  # rate limiting between commands
+    session_timeout: float = 30.0
+    command_interval: float = 0.5
 
-    def __init__(self, ip_cache: dict[str, str]) -> None:
-        self._ip_cache = ip_cache
-        self._connections: dict[str, Device] = {}
+    def __init__(self) -> None:
+        super().__init__()
+        self._connection: Device | None = None
+        self._close_task: asyncio.Task | None = None
+
+    # ── Public ABC methods ────────────────────────────────────────────────────
 
     async def execute_command(self, cmd: Command, cfg: KasaDeviceConfig) -> DeviceState:
-        device_id = cmd.device_id
-        device = self._connections.get(device_id)
-
-        if device:
+        """Execute command, reusing or re-establishing the persistent TCP connection."""
+        # Try existing open connection first.
+        if self._connection:
             try:
-                await self._execute_action(device, cmd)
-                await device.update()
-                state = build_device_state(cfg, device)
-                self._ip_cache[cfg.mac] = device.host
-                self._connections[device_id] = device
+                await self._execute_action(self._connection, cmd)
+                await self._connection.update()
+                state = build_device_state(cfg, self._connection)
+                self.ip = self._connection.host
+                self._reset_close_timer(cfg.name)
+                logger.info(f"Command '{cmd.action}' on {cfg.name} succeeded (existing connection)")
                 return state
             except Exception as e:
-                logger.warning(
-                    f"Command failed on existing connection for {cfg.name}: {e}"
-                )
-                try:
-                    await device.disconnect()
-                except Exception:
-                    pass
-                device = None
-                self._connections.pop(device_id, None)
+                logger.warning(f"Command failed on existing connection for {cfg.name}: {e}")
+                await self._close_connection()
 
-        cached_ip = self._ip_cache.get(cfg.mac)
-        if cached_ip:
-            logger.info(f"Retrying {cfg.name} at cached IP {cached_ip}...")
-            device, _ = await connect_device(cached_ip, cfg.credentials)
-            if device:
-                device_mac = getattr(device, "mac", None)
-                try:
-                    mac_mismatch = device_mac and normalize_mac(device_mac) != cfg.mac
-                except ValueError:
-                    mac_mismatch = True
-                if mac_mismatch:
-                    logger.warning(f"IP {cached_ip} no longer belongs to {cfg.mac}")
-                    await device.disconnect()
-                    device = None
-                else:
-                    try:
-                        await self._execute_action(device, cmd)
-                        await device.update()
-                        state = build_device_state(cfg, device)
-                        self._ip_cache[cfg.mac] = device.host
-                        self._connections[device_id] = device
-                        return state
-                    except Exception as e:
-                        logger.warning(
-                            f"Retry at cached IP failed for {cfg.name}: {e}"
-                        )
-                        try:
-                            await device.disconnect()
-                        except Exception:
-                            pass
-                        device = None
-
-        logger.info(f"Discovering new IP for {cfg.name}...")
-        new_ip = await discover_device_ip(cfg)
-        if new_ip:
-            device, _ = await connect_device(new_ip, cfg.credentials)
+        # Try cached IP.
+        if self.ip:
+            logger.debug(f"Connecting to {cfg.name} at cached IP {self.ip}")
+            device = await self._connect_verified(self.ip, cfg)
             if device:
                 try:
                     await self._execute_action(device, cmd)
                     await device.update()
-                    state = build_device_state(cfg, device)
-                    self._ip_cache[cfg.mac] = new_ip
-                    self._connections[device_id] = device
+                    state = build_device_state(cfg, kasa_device=device)
+                    self.ip = device.host
+                    self._connection = device
+                    self._reset_close_timer(cfg.name)
+                    logger.info(f"Command '{cmd.action}' on {cfg.name} succeeded (cached IP {self.ip})")
                     return state
                 except Exception as e:
-                    logger.warning(
-                        f"Command at discovered IP failed for {cfg.name}: {e}"
-                    )
-                    try:
-                        await device.disconnect()
-                    except Exception:
-                        pass
+                    logger.warning(f"Command failed at cached IP {self.ip} for {cfg.name}: {e}")
+                    await self._close_connection()
 
-        raise DeviceOfflineError(
-            f"Device {cfg.name} is offline (all retry attempts failed)"
-        )
-
-    async def cleanup(self, device_id: str) -> None:
-        device = self._connections.pop(device_id, None)
-        if device:
-            try:
-                await device.disconnect()
-                logger.info(f"Disconnected idle session for device {device_id}")
-            except Exception:
-                pass
-
-    async def refresh(
-        self, cfg: KasaDeviceConfig, previous: DeviceState | None = None
-    ) -> DeviceState:
-        """Re-discover + connect + return current state. Always disconnects after."""
-        cached_ip = self._ip_cache.get(cfg.mac)
-        if cached_ip:
-            device, _ = await connect_device(cached_ip, cfg.credentials)
-            if device:
-                state = build_device_state(cfg, device)
-                self._ip_cache[cfg.mac] = device.host
-                await device.disconnect()
-                logger.info(f"Initialized {cfg.name} ({device.model}) at {cached_ip}")
-                return state
-
-        new_ip = await discover_device_ip(cfg)
+        # Last resort: broadcast rediscovery.
+        logger.info(f"Attempting rediscovery for {cfg.name}...")
+        new_ip = await self.find_ip(cfg)
         if new_ip:
-            device, _ = await connect_device(new_ip, cfg.credentials)
+            device = await self._connect_verified(new_ip, cfg)
             if device:
-                state = build_device_state(cfg, device)
-                self._ip_cache[cfg.mac] = new_ip
-                await device.disconnect()
-                logger.info(f"Initialized {cfg.name} ({device.model}) at {new_ip}")
-                return state
+                try:
+                    await self._execute_action(device, cmd)
+                    await device.update()
+                    state = build_device_state(cfg, kasa_device=device)
+                    self.ip = device.host
+                    self._connection = device
+                    self._reset_close_timer(cfg.name)
+                    logger.info(f"Command '{cmd.action}' on {cfg.name} succeeded (rediscovered at {self.ip})")
+                    return state
+                except Exception as e:
+                    logger.warning(f"Command failed at rediscovered IP {new_ip} for {cfg.name}: {e}")
+                    await self._close_connection()
 
-        logger.warning(f"Could not reach {cfg.name} during refresh")
-        return build_offline_state(cfg, previous)
+        raise DeviceOfflineError(f"{cfg.name} is offline — all connection attempts failed")
 
-    async def health_check(
-        self, cfg: KasaDeviceConfig, previous: DeviceState | None = None
-    ) -> DeviceState | None:
-        """Connect + get state. Returns None if no IP is known (skip this cycle)."""
-        cached_ip = self._ip_cache.get(cfg.mac)
-        if not cached_ip:
+    async def fetch_state(self, cfg: KasaDeviceConfig, ip: str) -> DeviceState | None:
+        """One-shot: connect, verify MAC, read state, disconnect."""
+        logger.debug(f"Fetching state for {cfg.name} at {ip}")
+        device, error = await connect_device(ip, cfg.credentials)
+        if not device:
+            logger.debug(f"Cannot reach {cfg.name} at {ip}: {error}")
             return None
-
-        device, _ = await connect_device(cached_ip, cfg.credentials)
-        if device:
-            state = build_device_state(cfg, device)
-            self._ip_cache[cfg.mac] = device.host
-            await device.disconnect()
+        try:
+            if not self._mac_matches(device, cfg.mac, cfg.name):
+                return None
+            state = build_device_state(cfg, kasa_device=device)
+            self.ip = device.host
+            logger.debug(f"State fetched for {cfg.name}: {'on' if state.is_on else 'off'}")
             return state
+        finally:
+            await self._safe_disconnect(device)
 
-        return build_offline_state(cfg, previous)
+    async def find_ip(self, cfg: KasaDeviceConfig) -> str | None:
+        """Broadcast to locate this device's current IP."""
+        logger.debug(f"Broadcasting to find {cfg.name} ({cfg.mac})")
+        ip = await discover_device_ip(cfg)
+        if ip:
+            self.ip = ip
+            logger.info(f"Discovered {cfg.name} at {ip}")
+        else:
+            logger.warning(f"Broadcast discovery found no result for {cfg.name}")
+        return ip
 
-    async def _execute_action(self, device: Device, command: Command) -> None:
-        """Execute a single on/off command on a device or child outlet."""
+    async def close(self) -> None:
+        """Cancel the idle timer and close the TCP connection immediately."""
+        if self._close_task and not self._close_task.done():
+            self._close_task.cancel()
+        await self._close_connection()
+
+    # ── Internal helpers ──────────────────────────────────────────────────────
+
+    async def _connect_verified(
+        self, ip: str, cfg: KasaDeviceConfig
+    ) -> Device | None:
+        """Connect to ip and verify MAC. Returns device on success, None otherwise."""
+        device, error = await connect_device(ip, cfg.credentials)
+        if not device:
+            logger.debug(f"Connection to {cfg.name} at {ip} failed: {error}")
+            return None
+        if not self._mac_matches(device, cfg.mac, cfg.name):
+            await self._safe_disconnect(device)
+            return None
+        return device
+
+    def _mac_matches(self, device: Device, expected_mac: str, name: str) -> bool:
+        device_mac = getattr(device, "mac", None)
+        if not device_mac:
+            return True  # cannot verify, assume ok
+        try:
+            if normalize_mac(device_mac) != expected_mac:
+                logger.warning(
+                    f"MAC mismatch for {name}: expected {expected_mac}, got {device_mac}"
+                )
+                return False
+        except ValueError:
+            logger.warning(f"Unparseable MAC from device at {device.host}: {device_mac!r}")
+            return False
+        return True
+
+    def _reset_close_timer(self, device_name: str) -> None:
+        if self._close_task and not self._close_task.done():
+            self._close_task.cancel()
+        if self.session_timeout > 0:
+            self._close_task = asyncio.create_task(
+                self._idle_close(device_name)
+            )
+
+    async def _idle_close(self, device_name: str) -> None:
+        try:
+            await asyncio.sleep(self.session_timeout)
+            logger.info(f"Session idle for {self.session_timeout}s — closing connection to {device_name}")
+            await self._close_connection()
+        except asyncio.CancelledError:
+            pass
+
+    async def _close_connection(self) -> None:
+        if self._connection:
+            await self._safe_disconnect(self._connection)
+            self._connection = None
+
+    @staticmethod
+    async def _safe_disconnect(device: Device) -> None:
+        try:
+            await device.disconnect()
+        except Exception:
+            pass
+
+    async def _execute_action(self, device: Device, cmd: Command) -> None:
         target = device
-        if command.child_id:
-            child_found = False
+        if cmd.child_id:
             for child in device.children:
-                if child.device_id == command.child_id:
+                if child.device_id == cmd.child_id:
                     target = child
-                    child_found = True
                     break
-            if not child_found:
-                raise ValueError(f"Child outlet {command.child_id} not found")
+            else:
+                raise ValueError(f"Child outlet {cmd.child_id} not found on {device.host}")
 
-        if command.action == "on":
+        if cmd.action == "on":
             await target.turn_on()
         else:
             await target.turn_off()

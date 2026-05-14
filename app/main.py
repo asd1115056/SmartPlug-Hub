@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .device_manager import DeviceManager
-from .models import DeviceOfflineError, DeviceOperationError
+from .models import Device, DeviceOfflineError, DeviceOperationError, DeviceStatus
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -34,12 +34,23 @@ def _err(error: str, message: str) -> dict:
     return {"error": error, "message": message}
 
 
-def _state_to_dict(state) -> dict:
-    """Convert DeviceState dataclass to dict for JSON response."""
-    d = asdict(state)
-    if d.get("children") is None:
-        d.pop("children", None)
-    return d
+def _build_response(device: Device) -> dict:
+    """Compose DeviceInfo + DeviceState into an API response dict."""
+    info = device.info
+    state = device.state
+    return {
+        "id": state.id,
+        "name": info.name,
+        "type": info.type,
+        "group": info.group,
+        "status": state.status.value,
+        "is_on": state.is_on,
+        "alias": state.alias,
+        "model": state.model,
+        "is_strip": state.is_strip,
+        "children": [asdict(c) for c in state.children] if state.children else None,
+        "last_updated": state.last_updated.isoformat() if state.last_updated else None,
+    }
 
 
 # === Dependency ===
@@ -80,16 +91,14 @@ app = FastAPI(
 @app.get("/api/v1/devices")
 def list_devices(dm: DeviceManager = Depends(get_device_manager)):
     """Get cached status of all devices (zero I/O)."""
-    states = dm.get_all_states()
-    return {"devices": [_state_to_dict(s) for s in states]}
+    return {"devices": [_build_response(d) for d in dm.get_all_devices()]}
 
 
 @app.get("/api/v1/devices/{device_id}")
 def get_device(device_id: str, dm: DeviceManager = Depends(get_device_manager)):
     """Get a single device's cached status."""
     try:
-        state = dm.get_device_state(device_id)
-        return _state_to_dict(state)
+        return _build_response(dm.get_device(device_id))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=_err("not_found", str(e)))
 
@@ -103,12 +112,8 @@ async def control_device(
     """Control a device (on/off). Blocks until operation completes."""
     action = "on" if request.is_on else "off"
     try:
-        state = await dm.control_device(
-            device_id=device_id,
-            action=action,
-            child_id=request.child_id,
-        )
-        return _state_to_dict(state)
+        await dm.set_device_power(device_id=device_id, action=action, child_id=request.child_id)
+        return _build_response(dm.get_device(device_id))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=_err("invalid_request", str(e)))
     except DeviceOfflineError as e:
@@ -128,9 +133,10 @@ async def refresh_device(
 ):
     """Refresh a single device (discover + connect). For offline recovery."""
     try:
-        state = await dm.refresh_device(device_id)
-        code = 200 if state.status == "online" else 503
-        return JSONResponse(content=_state_to_dict(state), status_code=code)
+        await dm.refresh_device(device_id)
+        device = dm.get_device(device_id)
+        code = 200 if device.state.status == DeviceStatus.ONLINE else 503
+        return JSONResponse(content=_build_response(device), status_code=code)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=_err("not_found", str(e)))
     except Exception as e:
@@ -150,7 +156,7 @@ async def root():
 # === Entry Point ===
 def run():
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 
 if __name__ == "__main__":

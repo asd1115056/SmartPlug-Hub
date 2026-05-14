@@ -1,15 +1,20 @@
 """Shared data types, exceptions, and backend ABC."""
 
+from __future__ import annotations
+
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Generic, Literal, TypeVar
-
-from kasa import Credentials
+from typing import Generic, TypeVar
 
 from .utils import mac_to_id
+
+
+class DeviceStatus(Enum):
+    ONLINE = "online"
+    OFFLINE = "offline"
 
 
 class DeviceOfflineError(Exception):
@@ -35,20 +40,8 @@ class DeviceInfo:
             self.id = mac_to_id(self.mac)
 
 
-@dataclass
-class KasaDeviceConfig(DeviceInfo):
-    """Kasa protocol-specific configuration."""
 
-    broadcast: str = ""
-    credentials: Credentials | None = None
-
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        if not self.broadcast:
-            raise ValueError(f"KasaDeviceConfig '{self.name}' missing required 'broadcast' field")
-
-
-@dataclass
+@dataclass(frozen=True)
 class ChildState:
     """State of a single child outlet on a power strip."""
 
@@ -57,45 +50,44 @@ class ChildState:
     is_on: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class DeviceState:
-    """Snapshot of a device's state.
-
-    status="online":  is_on, alias, model, children reflect live data.
-    status="offline": is_on=None; alias/model/is_strip/children retain last
-                      known topology so the UI can still render the device.
-    """
+    """Immutable snapshot of device-reported state. is_on is None when OFFLINE."""
 
     id: str
-    name: str
-    type: str
-    status: Literal["online", "offline"]
+    status: DeviceStatus
     is_on: bool | None = None
     alias: str | None = None
     model: str | None = None
-    is_strip: bool = False
-    children: list[ChildState] | None = None
-    last_updated: str | None = None  # ISO 8601
-    group: str | None = None
+    children: tuple[ChildState, ...] | None = None
+    last_updated: datetime | None = None
+
+    @property
+    def is_strip(self) -> bool:
+        return self.children is not None
 
 
-def build_offline_state(
-    device_info: DeviceInfo, previous: DeviceState | None = None
+def make_offline_state(
+    device_id: str, previous: DeviceState | None = None
 ) -> DeviceState:
-    """Build an offline DeviceState, preserving topology from previous state."""
+    """Build an offline snapshot, preserving topology from previous if available."""
     return DeviceState(
-        id=device_info.id,
-        name=device_info.name,
-        type=device_info.type,
-        status="offline",
-        is_on=None,
+        id=device_id,
+        status=DeviceStatus.OFFLINE,
         alias=previous.alias if previous else None,
         model=previous.model if previous else None,
-        is_strip=previous.is_strip if previous else False,
         children=previous.children if previous else None,
         last_updated=previous.last_updated if previous else None,
-        group=device_info.group,
     )
+
+
+@dataclass
+class Device:
+    """Aggregate: per-device config, backend, and current state in one place."""
+
+    info: DeviceInfo
+    backend: DeviceBackend  # forward ref — DeviceBackend defined below
+    state: DeviceState
 
 
 class CommandStatus(Enum):
@@ -116,38 +108,39 @@ class Command:
     status: CommandStatus = CommandStatus.QUEUED
     created_at: datetime = field(default_factory=datetime.now)
     completed_at: datetime | None = None
-    result: DeviceState | None = None
-    error: str | None = None
-    _event: asyncio.Event = field(default_factory=asyncio.Event)
+    _future: asyncio.Future[DeviceState] | None = field(default=None, init=False, repr=False)
 
 
 _Cfg = TypeVar("_Cfg", bound="DeviceInfo")
 
 
 class DeviceBackend(ABC, Generic[_Cfg]):
-    """Protocol backend interface.
+    """Protocol backend interface. One instance per device.
 
-    session_timeout: seconds CommandQueue processor stays alive after the last
-        command. 0 = exit immediately (stateless, e.g. MiIO UDP); >0 = keep the
-        connection open (e.g. Kasa TCP 30 s). CommandQueue uses only this number
-        and has no knowledge of the underlying transport.
+    session_timeout: seconds both the CommandQueue processor and the backend's
+        own connection linger after the last command. 0 = stateless (exit/close
+        immediately); >0 = keep alive.
     command_interval: minimum seconds between consecutive commands (rate limit).
     """
 
     session_timeout: float = 0.0
     command_interval: float = 0.0
 
+    def __init__(self) -> None:
+        self.ip: str | None = None  # last known IP, updated by the backend
+
     @abstractmethod
     async def execute_command(self, cmd: Command, cfg: _Cfg) -> DeviceState:
-        """Execute a command. Called by CommandQueue processor."""
-
-    async def cleanup(self, device_id: str) -> None:
-        """Called when the processor exits. Default no-op."""
+        """Execute a command. Backend owns retry, rediscovery, and connection lifecycle."""
 
     @abstractmethod
-    async def refresh(self, cfg: _Cfg, previous: DeviceState | None = None) -> DeviceState:
-        """Re-discover and return current state (offline recovery / init)."""
+    async def fetch_state(self, cfg: _Cfg, ip: str) -> DeviceState | None:
+        """One-shot: connect to ip, verify identity, read state, disconnect.
+        Returns None if unreachable or identity mismatch."""
 
     @abstractmethod
-    async def health_check(self, cfg: _Cfg, previous: DeviceState | None = None) -> DeviceState | None:
-        """Periodic poll. Return None to skip this device this cycle."""
+    async def find_ip(self, cfg: _Cfg) -> str | None:
+        """Broadcast to locate this device's current IP. Returns IP or None."""
+
+    async def close(self) -> None:
+        """Close any open connections on application shutdown."""

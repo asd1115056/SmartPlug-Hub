@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from kasa import Credentials, Device, DeviceConfig, Discover
 from kasa.exceptions import AuthenticationError
 
-from ..models import ChildState, DeviceState, KasaDeviceConfig
+from ..models import ChildState, DeviceState, DeviceStatus
+from .config import KasaDeviceConfig
 from ..utils import normalize_mac
 
 logger = logging.getLogger(__name__)
@@ -116,30 +117,21 @@ async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, 
     return result
 
 
-def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceState:
-    """Build an online DeviceState from a connected Device object."""
-    is_strip = hasattr(device, "children") and len(device.children) > 0
-    children = None
-    if is_strip:
-        children = [
-            ChildState(
-                id=child.device_id,
-                alias=child.alias,
-                is_on=child.is_on,
-            )
-            for i, child in enumerate(device.children)
-        ]
+def build_device_state(device_info: KasaDeviceConfig, kasa_device: Device) -> DeviceState:
+    """Build an online DeviceState from a connected Kasa Device object."""
+    children: tuple[ChildState, ...] | None = None
+    if hasattr(kasa_device, "children") and kasa_device.children:
+        children = tuple(
+            ChildState(id=child.device_id, alias=child.alias, is_on=child.is_on)
+            for child in kasa_device.children
+        )
 
     return DeviceState(
         id=device_info.id,
-        name=device_info.name,
-        type=device_info.type,
-        status="online",
-        is_on=device.is_on,
-        alias=device.alias,
-        model=device.model,
-        is_strip=is_strip,
+        status=DeviceStatus.ONLINE,
+        is_on=kasa_device.is_on,
+        alias=kasa_device.alias,
+        model=kasa_device.model,
         children=children,
-        last_updated=datetime.now(timezone.utc).isoformat(),
-        group=device_info.group,
+        last_updated=datetime.now(timezone.utc),
     )
