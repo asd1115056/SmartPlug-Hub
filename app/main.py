@@ -139,9 +139,6 @@ async def refresh_device(
         return JSONResponse(content=_build_response(device), status_code=code)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=_err("not_found", str(e)))
-    except Exception as e:
-        logger.error(f"Failed to refresh device {device_id}: {e}")
-        raise HTTPException(status_code=500, detail=_err("internal_error", str(e)))
 
 
 _SSE_HEARTBEAT = 30.0  # keepalive interval when no state changes occur
