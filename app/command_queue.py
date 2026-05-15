@@ -68,7 +68,8 @@ class CommandQueue:
 
     async def wait_for_command(self, command: Command) -> DeviceState:
         """Wait for a command to complete, returning its DeviceState or raising on failure."""
-        assert command._future is not None
+        if command._future is None:
+            raise RuntimeError(f"Command {command.id} has no future attached")
         return await command._future
 
     def has_active_processor(self, device_id: str) -> bool:
@@ -122,7 +123,8 @@ class CommandQueue:
                 logger.debug(f"Processing command {cmd.id} for device {device_id} action={cmd.action}")
                 await self._wait_for_rate_limit(device_id, backend.policy.command_interval)
 
-                assert cmd._future is not None
+                if cmd._future is None:
+                    raise RuntimeError(f"Command {cmd.id} has no future attached")
                 try:
                     state = await backend.execute_command(cmd, cfg)
                     cmd.status = CommandStatus.COMPLETED

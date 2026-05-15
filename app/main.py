@@ -125,9 +125,6 @@ async def control_device(
         if "timed out" in str(e).lower():
             raise HTTPException(status_code=504, detail=_err("timeout", str(e)))
         raise HTTPException(status_code=502, detail=_err("operation_failed", str(e)))
-    except Exception as e:
-        logger.error(f"Failed to control device {device_id}: {e}")
-        raise HTTPException(status_code=500, detail=_err("internal_error", str(e)))
 
 
 @app.post("/api/v1/devices/{device_id}/refresh")
