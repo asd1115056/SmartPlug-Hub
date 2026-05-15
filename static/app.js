@@ -382,10 +382,11 @@ async function handleRefresh(deviceId) {
         const result = await refreshDevice(deviceId)
         currentDevices[deviceId] = result
 
+        const deviceName = result.name || deviceId
         if (result.status === 'online') {
-            showToast('Device reconnected', 'success')
+            showToast(`${deviceName}: reconnected`, 'success')
         } else {
-            showToast('Device still offline', 'warning')
+            showToast(`${deviceName}: still offline`, 'warning')
         }
 
         updateCardFromState(deviceId, result)
