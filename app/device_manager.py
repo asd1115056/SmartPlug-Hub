@@ -19,7 +19,7 @@ from .core.registry import PROTOCOLS
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL: float = 30.0  # seconds between polling cycles
+POLL_INTERVAL: float = 60.0  # seconds between polling cycles
 
 
 class DeviceManager:
