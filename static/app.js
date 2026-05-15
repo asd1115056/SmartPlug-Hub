@@ -35,6 +35,10 @@ async function refreshDevice(deviceId) {
     const response = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/refresh`, {
         method: 'POST'
     })
+    if (!response.ok && response.status !== 503) {
+        const error = await response.json()
+        throw new Error(error.detail?.message || 'Refresh failed')
+    }
     return response.json()
 }
 
@@ -398,6 +402,7 @@ function connectSSE() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadDevices()
     connectSSE()
 
     const searchInput = document.getElementById('search-input')
