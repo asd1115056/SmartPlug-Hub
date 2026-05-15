@@ -122,10 +122,13 @@ class BackendPolicy:
         last command. 0 = stateless (exit and close immediately after each command).
     command_interval: minimum seconds between consecutive commands (rate limit).
         0 = no rate limit.
+    command_timeout: hard deadline in seconds for a single execute_command call.
+        0 = no timeout.
     """
 
     session_timeout: float = 0.0
     command_interval: float = 0.0
+    command_timeout: float = 0.0
 
 
 class DeviceBackend(ABC, Generic[_Cfg]):

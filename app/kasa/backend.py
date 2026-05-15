@@ -23,13 +23,10 @@ from .connection import (
 logger = logging.getLogger(__name__)
 
 
-_COMMAND_TIMEOUT = 25.0  # hard deadline for execute_command
-
-
 class KasaBackend(DeviceBackend[KasaDeviceConfig]):
     """Kasa backend: persistent TCP connection, self-managed idle timer."""
 
-    policy = BackendPolicy(session_timeout=60.0, command_interval=0.5)
+    policy = BackendPolicy(session_timeout=60.0, command_interval=0.5, command_timeout=25.0)
 
     def __init__(self) -> None:
         super().__init__()
@@ -41,10 +38,10 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
     async def execute_command(self, cmd: Command, cfg: KasaDeviceConfig) -> DeviceState:
         """Execute command, reusing or re-establishing the persistent TCP connection."""
         try:
-            return await asyncio.wait_for(self._run_command(cmd, cfg), timeout=_COMMAND_TIMEOUT)
+            return await asyncio.wait_for(self._run_command(cmd, cfg), timeout=self.policy.command_timeout or None)
         except asyncio.TimeoutError:
             await self._close_connection()
-            raise DeviceOfflineError(f"{cfg.name} did not respond within {_COMMAND_TIMEOUT:.0f}s")
+            raise DeviceOfflineError(f"{cfg.name} did not respond within {self.policy.command_timeout:.0f}s")
         except asyncio.CancelledError:
             await self._close_connection()
             raise
