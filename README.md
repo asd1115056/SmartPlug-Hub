@@ -108,7 +108,7 @@ Kasa devices can't handle frequent TCP connections, but long-lived connections g
 - The command queue processor connects on the first command (not at startup)
 - Consecutive commands to the same device reuse the connection
 - After 60 seconds of idle, the connection is automatically closed
-- On failure: retry with cached IP → discover new IP → retry → mark offline
+- On failure: retry with cached IP → mark offline (use `POST /refresh` to trigger rediscovery)
 
 ### Backend ABC
 
@@ -176,7 +176,7 @@ Returns cached state of all devices. Zero I/O.
         { "id": "0", "alias": "Outlet 1", "is_on": true },
         { "id": "1", "alias": "Outlet 2", "is_on": false }
       ],
-      "last_updated": "2024-01-15T10:30:00.000000",
+      "last_updated": "2024-01-15T10:30:00+00:00",
       "group": "Living Room"
     }
   ]
