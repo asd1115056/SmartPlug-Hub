@@ -86,7 +86,7 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
         logger.debug(f"Fetching state for {cfg.name} at {ip}")
         device, error = await connect_device(ip, cfg.credentials)
         if not device:
-            logger.debug(f"Cannot reach {cfg.name} at {ip}: {error}")
+            logger.warning(f"Cannot reach {cfg.name} at {ip}: {error}")
             return None
         try:
             if not self._mac_matches(device, cfg.mac, cfg.name):
