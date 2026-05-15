@@ -1,52 +1,26 @@
-"""Simple discover example using python-kasa."""
+"""Discover all Kasa devices on the local network."""
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 from pprint import pprint
 
-from dotenv import load_dotenv
-from kasa import Credentials, Discover
+from kasa import Discover
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
-ENV_PATH = CONFIG_DIR / ".env"
-
-
-def load_credentials() -> Credentials | None:
-    """Load credentials from config/.env if it exists."""
-    if not ENV_PATH.exists():
-        return None
-
-    load_dotenv(ENV_PATH)
-
-    username = os.getenv("KASA_USERNAME")
-    password = os.getenv("KASA_PASSWORD")
-
-    if not username or not password:
-        return None
-
-    return Credentials(username=username, password=password)
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import load_credentials
 
 
-async def discover_devices(raw: bool = False):
-    """Discover all Kasa devices on the local network."""
+async def discover_devices(raw: bool = False) -> None:
     credentials = load_credentials()
-
-    if credentials:
-        print("Using credentials from config/.env")
-    else:
-        print("No config/.env found, discovering without credentials")
-
+    print("Using credentials from config/.env" if credentials else "No credentials found, discovering without")
     print("Discovering devices...\n")
 
     device_count = 0
 
-    async def on_device_discovered(device):
-        """Callback for each discovered device."""
+    async def on_device_discovered(device) -> None:
         nonlocal device_count
         device_count += 1
-
         if raw:
             print(f"\n[{device.host}]")
             print("-" * 40)
@@ -73,14 +47,8 @@ async def discover_devices(raw: bool = False):
     if raw:
         print("=" * 60)
 
-    found_devices = await Discover.discover(
-        on_discovered=on_device_discovered,
-        credentials=credentials,
-    )
-
+    found_devices = await Discover.discover(on_discovered=on_device_discovered, credentials=credentials)
     print(f"\nDiscovery complete. Found {device_count} device(s).")
-
-    # Close all device connections
     for device in found_devices.values():
         await device.disconnect()
 
