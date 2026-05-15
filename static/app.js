@@ -2,10 +2,20 @@
 
 const API_BASE = '/api/v1'
 
+const TOAST_ICONS = {
+    success: 'bi-check-circle-fill',
+    warning: 'bi-exclamation-triangle-fill',
+    danger: 'bi-x-circle-fill',
+    info: 'bi-info-circle-fill',
+}
+
 const currentDevices = {}
 let allDeviceIds = []
 let activeGroup = 'all'
 let searchQuery = ''
+
+const notificationHistory = []
+let unreadCount = 0
 
 
 async function fetchDevices() {
@@ -51,11 +61,14 @@ function showToast(message, type = 'danger') {
         info: 'text-bg-info',
     }[type] || 'text-bg-danger'
 
+    const icon = TOAST_ICONS[type] || 'bi-circle-fill'
+
     const toastEl = document.createElement('div')
     toastEl.className = `toast ${colorClass}`
     toastEl.setAttribute('role', 'alert')
     toastEl.innerHTML = `
-        <div class="d-flex">
+        <div class="d-flex align-items-center">
+            <span class="toast-icon"><i class="bi ${icon}"></i></span>
             <div class="toast-body">${escapeHtml(message)}</div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto"
                     data-bs-dismiss="toast"></button>
@@ -66,6 +79,54 @@ function showToast(message, type = 'danger') {
     const toast = new bootstrap.Toast(toastEl, { delay: 5000 })
     toast.show()
     toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove())
+
+    notificationHistory.unshift({ message, type, icon, time: new Date().toISOString() })
+    if (notificationHistory.length > 20) notificationHistory.pop()
+    unreadCount++
+    updateNotifBadge()
+}
+
+function updateNotifBadge() {
+    const badge = document.getElementById('notif-badge')
+    if (!badge) return
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount)
+        badge.classList.remove('d-none')
+    } else {
+        badge.classList.add('d-none')
+    }
+}
+
+function renderNotifDropdown() {
+    const dropdown = document.getElementById('notif-dropdown')
+    if (!dropdown) return
+    if (notificationHistory.length === 0) {
+        dropdown.innerHTML = '<p class="notif-empty">No notifications yet</p>'
+        return
+    }
+    dropdown.innerHTML = notificationHistory.map(n => `
+        <div class="notif-item">
+            <span class="notif-item-icon type-${n.type}"><i class="bi ${n.icon}"></i></span>
+            <div class="notif-item-body">
+                <div class="notif-item-msg">${escapeHtml(n.message)}</div>
+                <div class="notif-item-time">${formatTime(n.time)}</div>
+            </div>
+        </div>
+    `).join('')
+}
+
+function toggleNotifDropdown() {
+    const dropdown = document.getElementById('notif-dropdown')
+    if (!dropdown) return
+    const isOpen = !dropdown.classList.contains('d-none')
+    if (isOpen) {
+        dropdown.classList.add('d-none')
+    } else {
+        unreadCount = 0
+        updateNotifBadge()
+        renderNotifDropdown()
+        dropdown.classList.remove('d-none')
+    }
 }
 
 function escapeHtml(text) {
@@ -414,4 +475,20 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDeviceGrid(getFilteredDevices(all))
         })
     }
+
+    const notifBtn = document.getElementById('notif-btn')
+    if (notifBtn) {
+        notifBtn.addEventListener('click', e => {
+            e.stopPropagation()
+            toggleNotifDropdown()
+        })
+    }
+
+    document.addEventListener('click', e => {
+        const wrapper = document.getElementById('notif-wrapper')
+        if (wrapper && !wrapper.contains(e.target)) {
+            const dropdown = document.getElementById('notif-dropdown')
+            if (dropdown) dropdown.classList.add('d-none')
+        }
+    })
 })
