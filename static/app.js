@@ -447,6 +447,18 @@ function setServerOffline(offline) {
     if (banner) banner.classList.toggle('d-none', !offline)
 }
 
+function detectStatusChanges(newDevices) {
+    for (const device of newDevices) {
+        const prev = currentDevices[device.id]
+        if (!prev || prev.status === device.status) continue
+        if (device.status === 'online') {
+            showToast(`${device.name}: back online`, 'success')
+        } else {
+            showToast(`${device.name}: went offline`, 'warning')
+        }
+    }
+}
+
 function connectSSE() {
     const es = new EventSource(`${API_BASE}/events`)
 
@@ -454,6 +466,7 @@ function connectSSE() {
         try {
             const data = JSON.parse(event.data)
             setServerOffline(false)
+            detectStatusChanges(data.devices)
             renderDevices(data.devices)
         } catch (e) {
             console.error('SSE parse error:', e)
