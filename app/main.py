@@ -1,5 +1,7 @@
 """SmartPlug Hub - FastAPI backend with per-device command queue and multi-protocol support."""
 
+import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -7,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -143,6 +145,33 @@ async def refresh_device(
     except Exception as e:
         logger.error(f"Failed to refresh device {device_id}: {e}")
         raise HTTPException(status_code=500, detail=_err("internal_error", str(e)))
+
+
+_SSE_HEARTBEAT = 30.0  # keepalive interval when no state changes occur
+
+
+@app.get("/api/v1/events")
+async def device_events(dm: DeviceManager = Depends(get_device_manager)):
+    """SSE stream: push on state change, heartbeat comment when idle."""
+    q = dm.subscribe()
+
+    async def generator():
+        try:
+            yield f"data: {json.dumps({'devices': [_build_response(d) for d in dm.get_all_devices()]})}\n\n"
+            while True:
+                try:
+                    await asyncio.wait_for(q.get(), timeout=_SSE_HEARTBEAT)
+                    yield f"data: {json.dumps({'devices': [_build_response(d) for d in dm.get_all_devices()]})}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": heartbeat\n\n"
+        finally:
+            dm.unsubscribe(q)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # === Static Files & Root ===

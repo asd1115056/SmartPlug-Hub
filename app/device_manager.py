@@ -32,6 +32,7 @@ class DeviceManager:
         self._devices: dict[str, Device] = {}
         self._queue: CommandQueue | None = None
         self._poll_task: asyncio.Task | None = None
+        self._subscribers: set[asyncio.Queue] = set()
 
     async def initialize(self) -> None:
         """Load config → discover → build Device aggregates → probe initial state → start polling."""
@@ -146,12 +147,25 @@ class DeviceManager:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
+    def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+        self._subscribers.add(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue) -> None:
+        self._subscribers.discard(q)
+
     def _update_state(self, device_id: str, new_state: DeviceState) -> None:
         """Single write point for the state cache."""
         device = self._devices[device_id]
         previous = device.state
         device.state = new_state
         self._log_status_change(device.info.name, previous, new_state)
+        for q in self._subscribers:
+            try:
+                q.put_nowait(None)
+            except asyncio.QueueFull:
+                pass  # subscriber already has a pending notification
 
     @staticmethod
     def _log_status_change(

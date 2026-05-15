@@ -323,7 +323,7 @@ async function handleRefresh(deviceId) {
             showToast('Device still offline', 'warning')
         }
 
-        await loadDevices()
+        updateCardFromState(deviceId, result)
     } catch (error) {
         console.error('Refresh error:', error)
         showToast('Refresh failed: ' + error.message)
@@ -381,8 +381,24 @@ function setServerOffline(offline) {
     if (banner) banner.classList.toggle('d-none', !offline)
 }
 
+function connectSSE() {
+    const es = new EventSource(`${API_BASE}/events`)
+
+    es.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data)
+            setServerOffline(false)
+            renderDevices(data.devices)
+        } catch (e) {
+            console.error('SSE parse error:', e)
+        }
+    }
+
+    es.onerror = () => setServerOffline(true)
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-    loadDevices()
+    connectSSE()
 
     const searchInput = document.getElementById('search-input')
     if (searchInput) {
