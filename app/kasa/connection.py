@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from kasa import Credentials, Device, DeviceConfig, Discover
 from kasa.exceptions import AuthenticationError
 
-from ..models import ChildState, DeviceState, KasaDeviceConfig
-from ..utils import normalize_mac
+from ..core.models import ChildState, DeviceState, DeviceStatus
+from .config import KasaDeviceConfig
+from ..core.utils import normalize_mac
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +28,21 @@ async def connect_device(
     config_no_auth = DeviceConfig(host=ip, credentials=None, timeout=CONNECTION_TIMEOUT)
 
     for attempt in range(CONNECTION_RETRIES):
+        device = None
         try:
             device = await Device.connect(config=config_no_auth)
             await device.update()
             logger.debug(f"Connected to {ip} without credentials")
             return device, None
         except AuthenticationError as e:
+            if device:
+                await device.disconnect()
             logger.debug(f"Device at {ip} requires authentication")
             last_error = f"{type(e).__name__}: {e}"
             break
         except Exception as e:
+            if device:
+                await device.disconnect()
             last_error = f"{type(e).__name__}: {e}"
             if attempt < CONNECTION_RETRIES - 1:
                 logger.debug(f"Connection to {ip} failed (attempt {attempt + 1}): {e}")
@@ -49,12 +55,15 @@ async def connect_device(
         )
 
         for attempt in range(CONNECTION_RETRIES):
+            device = None
             try:
                 device = await Device.connect(config=config_with_auth)
                 await device.update()
                 logger.debug(f"Connected to {ip} with credentials")
                 return device, None
             except Exception as e:
+                if device:
+                    await device.disconnect()
                 last_error = f"{type(e).__name__}: {e}"
                 if attempt < CONNECTION_RETRIES - 1:
                     logger.debug(
@@ -80,6 +89,10 @@ async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
                     logger.info(f"Discovered {target_mac} at {found_ip}")
             except ValueError:
                 pass
+        try:
+            await device.disconnect()
+        except Exception:
+            pass
 
     await Discover.discover(target=device_info.broadcast, on_discovered=on_discovered)
     return found_ip
@@ -109,6 +122,10 @@ async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, 
                         logger.info(f"Found device: {known_devices[mac].name} at {device.host}")
                 except ValueError:
                     pass
+            try:
+                await device.disconnect()
+            except Exception:
+                pass
 
         await Discover.discover(target=target, on_discovered=on_discovered)
 
@@ -116,30 +133,21 @@ async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, 
     return result
 
 
-def build_device_state(device_info: KasaDeviceConfig, device: Device) -> DeviceState:
-    """Build an online DeviceState from a connected Device object."""
-    is_strip = hasattr(device, "children") and len(device.children) > 0
-    children = None
-    if is_strip:
-        children = [
-            ChildState(
-                id=child.device_id,
-                alias=child.alias,
-                is_on=child.is_on,
-            )
-            for i, child in enumerate(device.children)
-        ]
+def build_device_state(device_info: KasaDeviceConfig, kasa_device: Device) -> DeviceState:
+    """Build an online DeviceState from a connected Kasa Device object."""
+    children: tuple[ChildState, ...] | None = None
+    if hasattr(kasa_device, "children") and kasa_device.children:
+        children = tuple(
+            ChildState(id=child.device_id, alias=child.alias, is_on=child.is_on)
+            for child in kasa_device.children
+        )
 
     return DeviceState(
         id=device_info.id,
-        name=device_info.name,
-        type=device_info.type,
-        status="online",
-        is_on=device.is_on,
-        alias=device.alias,
-        model=device.model,
-        is_strip=is_strip,
+        status=DeviceStatus.ONLINE,
+        is_on=kasa_device.is_on,
+        alias=kasa_device.alias,
+        model=kasa_device.model,
         children=children,
-        last_updated=datetime.now(timezone.utc).isoformat(),
-        group=device_info.group,
+        last_updated=datetime.now(timezone.utc),
     )

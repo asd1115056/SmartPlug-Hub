@@ -1,8 +1,23 @@
-"""Parse raw device config dicts into Kasa-specific config objects."""
+"""Kasa-specific device config model and parser."""
+
+from dataclasses import dataclass
 
 from kasa import Credentials
 
-from ..models import KasaDeviceConfig
+from ..core.models import DeviceInfo
+
+
+@dataclass
+class KasaDeviceConfig(DeviceInfo):
+    """Kasa protocol-specific configuration."""
+
+    broadcast: str = ""
+    credentials: Credentials | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not self.broadcast:
+            raise ValueError(f"KasaDeviceConfig '{self.name}' missing required 'broadcast' field")
 
 
 def parse_config(raw: dict, mac: str, name: str) -> KasaDeviceConfig:

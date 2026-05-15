@@ -1,9 +1,7 @@
-// SmartPlug Hub frontend — theme, polling, device card rendering.
+// SmartPlug Hub frontend — theme, device card rendering.
 
 const API_BASE = '/api/v1'
-const POLL_INTERVAL = 5000
 
-let pollTimer = null
 const currentDevices = {}
 let allDeviceIds = []
 let activeGroup = 'all'
@@ -37,6 +35,10 @@ async function refreshDevice(deviceId) {
     const response = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/refresh`, {
         method: 'POST'
     })
+    if (!response.ok && response.status !== 503) {
+        const error = await response.json()
+        throw new Error(error.detail?.message || 'Refresh failed')
+    }
     return response.json()
 }
 
@@ -325,7 +327,7 @@ async function handleRefresh(deviceId) {
             showToast('Device still offline', 'warning')
         }
 
-        await loadDevices()
+        updateCardFromState(deviceId, result)
     } catch (error) {
         console.error('Refresh error:', error)
         showToast('Refresh failed: ' + error.message)
@@ -383,35 +385,25 @@ function setServerOffline(offline) {
     if (banner) banner.classList.toggle('d-none', !offline)
 }
 
-async function pollStatus() {
-    try {
-        const data = await fetchDevices()
-        setServerOffline(false)
-        for (const device of data.devices) {
-            const previous = currentDevices[device.id]
+function connectSSE() {
+    const es = new EventSource(`${API_BASE}/events`)
 
-            if (previous && previous.status !== device.status) {
-                renderDevices(data.devices)
-                return
-            }
-
-            currentDevices[device.id] = device
-            updateCardFromState(device.id, device)
+    es.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data)
+            setServerOffline(false)
+            renderDevices(data.devices)
+        } catch (e) {
+            console.error('SSE parse error:', e)
         }
-    } catch (error) {
-        console.error('Poll error:', error)
-        setServerOffline(true)
     }
-}
 
-function startPolling() {
-    if (pollTimer) return
-    pollTimer = setInterval(pollStatus, POLL_INTERVAL)
+    es.onerror = () => setServerOffline(true)
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     loadDevices()
-    startPolling()
+    connectSSE()
 
     const searchInput = document.getElementById('search-input')
     if (searchInput) {

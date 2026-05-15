@@ -83,22 +83,23 @@ uv run kasa discover
 
 ```
 app/
+├── core/
+│   ├── config.py        # Whitelist loading and ID resolution
+│   ├── models.py        # Shared types, exceptions, DeviceBackend ABC
+│   ├── registry.py      # Protocol registration
+│   └── utils.py         # Shared utilities (e.g. MAC normalisation)
 ├── kasa/
 │   ├── __init__.py      # Exports KasaBackend, discover_all
-│   ├── connection.py    # Stateless Kasa network functions
-│   └── backend.py       # KasaBackend: persistent TCP connection pool
-├── miio/                # Phase 1 (in progress)
-│   ├── __init__.py
-│   ├── connection.py
-│   └── backend.py
-├── models.py            # DeviceInfo, KasaDeviceConfig, DeviceBackend ABC
-├── config.py            # Whitelist loading and ID resolution
+│   ├── backend.py       # KasaBackend: persistent TCP connection pool
+│   ├── config.py        # KasaDeviceConfig dataclass
+│   └── connection.py    # Stateless Kasa network functions
+├── __main__.py          # Entry point (uv run smartplug-hub)
 ├── command_queue.py     # Protocol-agnostic per-device command queue
-├── device_manager.py    # Thin facade: lifecycle, state cache
+├── device_manager.py    # Facade: lifecycle, state cache, polling, SSE broadcast
 └── main.py              # FastAPI routes and lifecycle
 ```
 
-Adding a new protocol only requires a new `app/<protocol>/` subpackage — no changes to `app/` root files.
+Adding a new protocol only requires a new `app/<protocol>/` subpackage — no changes to `app/core/` or `app/` root files.
 
 ### Connection Strategy (Kasa)
 
@@ -106,7 +107,7 @@ Kasa devices can't handle frequent TCP connections, but long-lived connections g
 
 - The command queue processor connects on the first command (not at startup)
 - Consecutive commands to the same device reuse the connection
-- After 30 seconds of idle, the connection is automatically closed
+- After 60 seconds of idle, the connection is automatically closed
 - On failure: retry with cached IP → discover new IP → retry → mark offline
 
 ### Backend ABC
@@ -115,13 +116,16 @@ All protocol backends implement `DeviceBackend`:
 
 ```
 DeviceBackend (ABC)
-  session_timeout    # How long CommandQueue processor stays alive after last command
-  command_interval   # Rate limiting between commands
-  execute_command()  # Called by CommandQueue for each command
-  cleanup()          # Called on idle timeout or shutdown (default: no-op)
-  refresh()          # Re-discover + get fresh state (offline recovery)
-  health_check()     # Periodic poll (return None to skip this cycle)
+  policy             # BackendPolicy: session_timeout, command_interval, command_timeout
+  execute_command()  # Called by CommandQueue; owns retry, rediscovery, connection lifecycle
+  fetch_state()      # One-shot: connect, verify identity, read state, disconnect
+  find_ip()          # Broadcast to locate this device's current IP
+  close()            # Close open connections on shutdown (default: no-op)
 ```
+
+### Real-time Updates (SSE)
+
+The frontend subscribes to `GET /api/v1/events` (Server-Sent Events). State changes — from commands, refresh, or the background polling loop — fan-out immediately to all connected clients via a per-subscriber `asyncio.Queue`. The background loop polls physical devices every 60 seconds to detect external changes (physical button, Kasa app).
 
 ## API Reference
 
@@ -135,6 +139,7 @@ All endpoints are under `/api/v1/`.
 | GET | `/api/v1/devices/{id}` | Get single device cached status |
 | PATCH | `/api/v1/devices/{id}` | Control device (on/off), blocks until complete |
 | POST | `/api/v1/devices/{id}/refresh` | Rediscover offline device |
+| GET | `/api/v1/events` | SSE stream: push state on change, heartbeat every 30s when idle |
 
 ### Device ID
 
@@ -154,7 +159,7 @@ Example: MAC `AA:BB:CC:DD:EE:FF` → ID `a1b2c3d4`
 
 #### GET /api/v1/devices
 
-Returns cached state of all devices. Zero I/O, suitable for polling.
+Returns cached state of all devices. Zero I/O.
 
 ```json
 {
@@ -215,13 +220,17 @@ Rediscover an offline device. Returns `DeviceState` with status code 200 (online
 ```
 smartplug-hub/
 ├── app/
+│   ├── core/
+│   │   ├── config.py           # Whitelist configuration
+│   │   ├── models.py           # Shared types, exceptions, DeviceBackend ABC
+│   │   ├── registry.py         # Protocol registration
+│   │   └── utils.py            # Shared utilities
 │   ├── kasa/
 │   │   ├── __init__.py
-│   │   ├── connection.py       # Stateless Kasa network functions
-│   │   └── backend.py          # KasaBackend
-│   ├── __init__.py
-│   ├── models.py               # Shared types, exceptions, DeviceBackend ABC
-│   ├── config.py               # Whitelist configuration
+│   │   ├── backend.py          # KasaBackend
+│   │   ├── config.py           # KasaDeviceConfig
+│   │   └── connection.py       # Stateless Kasa network functions
+│   ├── __main__.py             # Entry point
 │   ├── command_queue.py        # Protocol-agnostic command queue
 │   ├── device_manager.py       # Facade combining all modules
 │   └── main.py                 # FastAPI routes and lifecycle

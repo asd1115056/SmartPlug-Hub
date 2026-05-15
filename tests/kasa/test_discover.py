@@ -1,52 +1,28 @@
-"""Simple discover example using python-kasa."""
+"""Discover all Kasa devices on the local network."""
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 from pprint import pprint
 
-from dotenv import load_dotenv
-from kasa import Credentials, Discover
+from kasa import Discover
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
-ENV_PATH = CONFIG_DIR / ".env"
-
-
-def load_credentials() -> Credentials | None:
-    """Load credentials from config/.env if it exists."""
-    if not ENV_PATH.exists():
-        return None
-
-    load_dotenv(ENV_PATH)
-
-    username = os.getenv("KASA_USERNAME")
-    password = os.getenv("KASA_PASSWORD")
-
-    if not username or not password:
-        return None
-
-    return Credentials(username=username, password=password)
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import load_credentials
 
 
-async def discover_devices(raw: bool = False):
-    """Discover all Kasa devices on the local network."""
+async def discover_devices(raw: bool = False, broadcast: str | None = None) -> None:
     credentials = load_credentials()
-
-    if credentials:
-        print("Using credentials from config/.env")
-    else:
-        print("No config/.env found, discovering without credentials")
-
+    print("Using credentials from config/.env" if credentials else "No credentials found, discovering without")
+    if broadcast:
+        print(f"Broadcast target: {broadcast}")
     print("Discovering devices...\n")
 
     device_count = 0
 
-    async def on_device_discovered(device):
-        """Callback for each discovered device."""
+    async def on_device_discovered(device) -> None:
         nonlocal device_count
         device_count += 1
-
         if raw:
             print(f"\n[{device.host}]")
             print("-" * 40)
@@ -73,18 +49,21 @@ async def discover_devices(raw: bool = False):
     if raw:
         print("=" * 60)
 
-    found_devices = await Discover.discover(
-        on_discovered=on_device_discovered,
-        credentials=credentials,
-    )
-
+    discover_kwargs = {'on_discovered': on_device_discovered, 'credentials': credentials}
+    if broadcast:
+        discover_kwargs['target'] = broadcast
+    found_devices = await Discover.discover(**discover_kwargs)
     print(f"\nDiscovery complete. Found {device_count} device(s).")
-
-    # Close all device connections
     for device in found_devices.values():
         await device.disconnect()
 
 
 if __name__ == "__main__":
-    raw_mode = len(sys.argv) > 1 and sys.argv[1] == "--raw"
-    asyncio.run(discover_devices(raw=raw_mode))
+    _args = sys.argv[1:]
+    raw_mode = '--raw' in _args
+    broadcast = None
+    if '--broadcast' in _args:
+        _idx = _args.index('--broadcast')
+        if _idx + 1 < len(_args):
+            broadcast = _args[_idx + 1]
+    asyncio.run(discover_devices(raw=raw_mode, broadcast=broadcast))
