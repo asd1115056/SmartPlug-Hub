@@ -10,10 +10,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 from utils import control_device, load_credentials, normalize_mac, print_device_info
 
 
-async def find_device_by_mac(target_mac: str) -> Device | None:
+async def find_device_by_mac(target_mac: str, broadcast: str | None = None) -> Device | None:
     credentials = load_credentials()
     target_mac = normalize_mac(target_mac)
     print(f"Searching for device with MAC: {target_mac}")
+    if broadcast:
+        print(f"Broadcast target: {broadcast}")
     print("Discovering devices...\n")
 
     found_device = None
@@ -25,12 +27,15 @@ async def find_device_by_mac(target_mac: str) -> Device | None:
             found_device = device
             print(f"Found! IP: {device.host}")
 
-    await Discover.discover(on_discovered=on_device_discovered, credentials=credentials)
+    discover_kwargs = {'on_discovered': on_device_discovered, 'credentials': credentials}
+    if broadcast:
+        discover_kwargs['target'] = broadcast
+    await Discover.discover(**discover_kwargs)
     return found_device
 
 
-async def main(mac: str, action: str | None = None, child_index: int | None = None) -> None:
-    device = await find_device_by_mac(mac)
+async def main(mac: str, action: str | None = None, child_index: int | None = None, broadcast: str | None = None) -> None:
+    device = await find_device_by_mac(mac, broadcast)
     if not device:
         print(f"\nDevice with MAC {normalize_mac(mac)} not found.")
         return
@@ -60,10 +65,17 @@ def print_usage() -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    _args = sys.argv[1:]
+    _positional = [a for a in _args if not a.startswith('--')]
+    if not _positional:
         print_usage()
         sys.exit(1)
-    mac = sys.argv[1]
-    action = sys.argv[2] if len(sys.argv) > 2 else None
-    child_index = int(sys.argv[3]) if len(sys.argv) > 3 else None
-    asyncio.run(main(mac, action, child_index))
+    mac = _positional[0]
+    action = _positional[1] if len(_positional) > 1 else None
+    child_index = int(_positional[2]) if len(_positional) > 2 else None
+    broadcast = None
+    if '--broadcast' in _args:
+        _idx = _args.index('--broadcast')
+        if _idx + 1 < len(_args):
+            broadcast = _args[_idx + 1]
+    asyncio.run(main(mac, action, child_index, broadcast))
