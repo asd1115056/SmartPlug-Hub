@@ -77,6 +77,15 @@ class CommandQueue:
         task = self._processors.get(device_id)
         return task is not None and not task.done()
 
+    async def shutdown(self) -> None:
+        """Cancel all running processor tasks and wait for them to finish."""
+        tasks = [t for t in self._processors.values() if not t.done()]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._processors.clear()
+
     async def _process_queue(self, device_id: str) -> None:
         """Command processing loop for a single device."""
         if device_id not in self._queues:
@@ -173,5 +182,5 @@ def make_command(
         action=action,
         child_id=child_id,
     )
-    cmd._future = asyncio.get_event_loop().create_future()
+    cmd._future = asyncio.get_running_loop().create_future()
     return cmd

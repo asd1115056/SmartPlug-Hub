@@ -80,6 +80,9 @@ class DeviceManager:
                 await self._poll_task
             logger.info("Polling stopped")
 
+        if self._queue:
+            await self._queue.shutdown()
+
         for device in self._devices.values():
             await device.backend.close()
 

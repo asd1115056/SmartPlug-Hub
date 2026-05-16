@@ -47,13 +47,20 @@ class KasaBackend(DeviceBackend[KasaDeviceConfig]):
             raise
 
     async def _run_command(self, cmd: Command, cfg: KasaDeviceConfig) -> DeviceState:
+        # Cancel the idle-close timer before touching the connection so it cannot
+        # disconnect mid-command between await points.
+        if self._close_task and not self._close_task.done():
+            self._close_task.cancel()
+            self._close_task = None
+
         # Try existing open connection first.
-        if self._connection:
+        conn = self._connection
+        if conn:
             try:
-                await self._execute_action(self._connection, cmd)
-                await self._connection.update()
-                state = build_device_state(cfg, self._connection)
-                self.ip = self._connection.host
+                await self._execute_action(conn, cmd)
+                await conn.update()
+                state = build_device_state(cfg, conn)
+                self.ip = conn.host
                 self._reset_close_timer(cfg.name)
                 logger.info(f"Command '{cmd.action}' on {cfg.name} succeeded (existing connection)")
                 return state
