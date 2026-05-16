@@ -11,6 +11,7 @@ from .core.config import ConfigManager
 from .core.models import (
     Device,
     DeviceOfflineError,
+    DeviceOperationError,
     DeviceState,
     DeviceStatus,
     make_offline_state,
@@ -198,8 +199,11 @@ class DeviceManager:
                 try:
                     state = await device.backend.fetch_state(device.info, device.backend.ip)
                     self._update_state(device_id, state or make_offline_state(device_id, device.state))
-                except Exception as e:
+                except (DeviceOfflineError, DeviceOperationError, asyncio.TimeoutError, OSError) as e:
                     logger.warning(f"Polling probe failed for {device.info.name}: {e}")
+                    self._update_state(device_id, make_offline_state(device_id, device.state))
+                except Exception:
+                    logger.exception(f"Unexpected error polling {device.info.name}")
                     self._update_state(device_id, make_offline_state(device_id, device.state))
 
             logger.debug("Polling cycle complete")
