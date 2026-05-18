@@ -235,7 +235,7 @@ function renderDeviceGrid(devices) {
         container.innerHTML = `
             <div class="alert alert-info">
                 <strong>No devices</strong><br>
-                Please configure whitelisted devices in <code>config/devices.json</code>.
+                Add devices from the <a href="/admin">Admin panel</a>.
             </div>
         `
         return
