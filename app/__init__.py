@@ -1,1 +1,0 @@
-"""SmartPlug Hub application package."""
