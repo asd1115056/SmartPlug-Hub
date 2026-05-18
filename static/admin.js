@@ -217,7 +217,8 @@ function renderDevices(devices) {
   tbody.innerHTML = devices.map(d => {
     const outletCell = d.is_strip
       ? `<button class="btn btn-sm btn-outline-secondary"
-           onclick="openOutletsModal('${d.id}', ${JSON.stringify(d.name)})">
+           data-device-id="${d.id}" data-device-name="${esc(d.name)}"
+           onclick="openOutletsModal(this.dataset.deviceId, this.dataset.deviceName)">
            <i class="bi bi-diagram-3"></i>
          </button>`
       : '<span class="text-muted">—</span>'
