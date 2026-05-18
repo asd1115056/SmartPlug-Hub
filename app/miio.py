@@ -73,11 +73,14 @@ def _udp_discover_sync(broadcast: str, timeout: float = 3.0) -> dict[str, str]:
         while time.monotonic() < deadline:
             try:
                 data, addr = sock.recvfrom(1024)
-                m = Message.parse(data)
-                did = str(int.from_bytes(m.header.value.device_id, byteorder="big"))
-                found[did] = addr[0]
-            except (socket.timeout, Exception):
+            except socket.timeout:
                 break
+            try:
+                m = Message.parse(data)
+                did = str(int.from_bytes(m.header.value.device_id, byteorder="big"))  # type: ignore[union-attr]
+                found[did] = addr[0]
+            except Exception:
+                pass  # skip malformed packets
     except OSError as e:
         logger.warning(f"UDP discover on {broadcast} failed: {e}")
     finally:
