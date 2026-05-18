@@ -338,6 +338,13 @@ function renderToggleSwitch(deviceId, childId, isOn, enabled) {
     `
 }
 
+function getTargetLabel(device, childId) {
+    const name = device.name || device.id
+    if (!childId || !device.children) return name
+    const child = device.children.find(c => c.id === childId)
+    return child ? `${name} / ${child.alias}` : name
+}
+
 async function loadDevices() {
     try {
         const data = await fetchDevices()
@@ -357,25 +364,11 @@ async function handleToggle(deviceId, action, childId) {
         const result = await controlDevice(deviceId, action, childId)
         currentDevices[deviceId] = result
         updateCardFromState(deviceId, result)
-        const deviceName = result.name || deviceId
-        let msg = `Turned ${action}: ${deviceName}`
-        if (childId && result.children) {
-            const child = result.children.find(c => c.id === childId)
-            if (child) msg = `Turned ${action}: ${deviceName} / ${child.alias}`
-        }
-        showToast(msg, 'success')
+        showToast(`Turned ${action}: ${getTargetLabel(result, childId)}`, 'success')
     } catch (error) {
         console.error('Toggle error:', error)
-        const deviceName = currentDevices[deviceId]?.name || deviceId
-        let target = deviceName
-        if (childId) {
-            const prev = currentDevices[deviceId]
-            if (prev?.children) {
-                const child = prev.children.find(c => c.id === childId)
-                if (child) target = `${deviceName} / ${child.alias}`
-            }
-        }
-        showToast(`${error.message}: ${target}`)
+        const prev = currentDevices[deviceId]
+        showToast(`${error.message}: ${prev ? getTargetLabel(prev, childId) : deviceId}`)
     } finally {
         pendingToggles.delete(deviceId)
         if (card) card.classList.remove('loading')
