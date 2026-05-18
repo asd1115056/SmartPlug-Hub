@@ -28,13 +28,13 @@ class DeviceResponse(BaseModel):
 
     @classmethod
     def from_device(cls, device: Device) -> "DeviceResponse":
-        info = device.info
+        cfg = device.config
         state = device.state
         return cls(
             id=state.id,
-            name=info.name,
-            type=info.type,
-            group=info.group_name,  # DeviceInfo uses group_name
+            name=cfg.name,
+            type=cfg.type,
+            group=cfg.group_name,
             status=state.status.value,
             is_on=state.is_on,
             alias=state.alias,

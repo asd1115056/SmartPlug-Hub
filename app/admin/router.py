@@ -3,8 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..core.exceptions import DeviceOfflineError
-from ..core.utils import mac_to_id, normalize_mac
-from ..db import Account, DeviceInfo
+from ..db import Account
 from ..device_manager import DeviceManager
 from ..schemas import (
     AccountResponse,
@@ -46,7 +45,10 @@ async def create_account(body: AddAccountRequest, dm: DeviceManager = Depends(_g
 
 @router.delete("/accounts/{account_id}", status_code=204)
 async def delete_account(account_id: int, dm: DeviceManager = Depends(_get_dm)):
-    await dm.remove_account(account_id)
+    try:
+        await dm.remove_account(account_id)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 # ── Devices ──────────────────────────────────────────────────────────────────
@@ -55,20 +57,20 @@ async def delete_account(account_id: int, dm: DeviceManager = Depends(_get_dm)):
 async def list_devices_admin(dm: DeviceManager = Depends(_get_dm)):
     return [
         AdminDeviceDetail(
-            id=d.info.id,
-            mac=d.info.mac,
-            name=d.info.name,
-            type=d.info.type,
+            id=d.config.id,
+            mac=d.config.mac,
+            name=d.config.name,
+            type=d.config.type,
             status=d.state.status.value,
-            broadcast=d.info.broadcast,
-            group_name=d.info.group_name,
-            account_id=d.info.account_id,
-            alias=d.info.alias,
-            model=d.info.model,
-            is_strip=d.info.is_strip,
-            last_known_ip=d.info.last_known_ip,
-            token=d.info.token,
-            miio_id=d.info.miio_id,
+            broadcast=d.config.broadcast,
+            group_name=d.config.group_name,
+            account_id=d.config.account_id,
+            alias=d.config.alias,
+            model=d.config.model,
+            is_strip=d.config.is_strip,
+            last_known_ip=d.config.last_known_ip,
+            token=d.config.token,
+            miio_id=d.config.miio_id,
         )
         for d in dm.get_all_devices()
     ]
@@ -77,20 +79,8 @@ async def list_devices_admin(dm: DeviceManager = Depends(_get_dm)):
 @router.post("/devices", status_code=201)
 async def add_device(body: AddDeviceRequest, dm: DeviceManager = Depends(_get_dm)):
     try:
-        mac = normalize_mac(body.mac)
-        info = DeviceInfo(
-            id=mac_to_id(mac),
-            mac=mac,
-            name=body.name,
-            type=body.type,
-            broadcast=body.broadcast,
-            group_name=body.group_name,
-            account_id=body.account_id,
-            token=body.token,
-            miio_id=body.miio_id,
-        )
-        await dm.add_device(info)
-        return {"id": info.id}
+        device = await dm.add_device(body)
+        return {"id": device.config.id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

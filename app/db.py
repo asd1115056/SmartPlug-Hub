@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import Field, SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from .core.config import DeviceConfig
 from .core.utils import mac_to_id, normalize_mac
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,17 @@ class Outlet(SQLModel, table=True):
     device_id: str = Field(foreign_key="deviceinfo.id", primary_key=True)
     outlet_id: str = Field(primary_key=True)  # kasa: child.device_id; miio: index
     alias: str | None = None  # user-visible label
+
+
+def _to_config(info: DeviceInfo) -> DeviceConfig:
+    """Convert a DeviceInfo ORM row to a plain DeviceConfig (session-independent)."""
+    return DeviceConfig(
+        id=info.id, mac=info.mac, name=info.name, type=info.type,
+        broadcast=info.broadcast, group_name=info.group_name,
+        account_id=info.account_id, alias=info.alias, model=info.model,
+        is_strip=info.is_strip, last_known_ip=info.last_known_ip,
+        token=info.token, miio_id=info.miio_id,
+    )
 
 
 class Database:
@@ -106,12 +118,12 @@ class Database:
 
     # ── Device ───────────────────────────────────────────────────────────────
 
-    async def get_all_devices(self) -> list[DeviceInfo]:
+    async def get_all_devices(self) -> list[DeviceConfig]:
         async with AsyncSession(self._engine) as session:
             result = await session.execute(select(DeviceInfo))
-            return list(result.scalars().all())
+            return [_to_config(r) for r in result.scalars().all()]
 
-    async def add_device(self, row: DeviceInfo) -> None:
+    async def add_device(self, row: DeviceInfo) -> DeviceConfig:
         async with AsyncSession(self._engine) as session:
             existing = await session.execute(select(DeviceInfo).where(DeviceInfo.mac == row.mac))
             if existing.scalars().first():
@@ -119,6 +131,7 @@ class Database:
             session.add(row)
             await session.commit()
             await session.refresh(row)
+            return _to_config(row)
 
     async def remove_device(self, device_id: str) -> None:
         async with AsyncSession(self._engine) as session:

@@ -7,12 +7,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
+from .config import DeviceConfig
 from .models import DeviceState
-
-if TYPE_CHECKING:
-    from ..db import DeviceInfo
 
 _Cfg = TypeVar("_Cfg")
 

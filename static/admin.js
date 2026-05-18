@@ -193,7 +193,7 @@ async function addAccount(e) {
 }
 
 async function deleteAccount(id) {
-  if (!await confirmDelete(`Delete account ${id}? Devices using it will lose their credentials.`)) return
+  if (!await confirmDelete(`Delete account ${id}?`)) return
   try {
     await api('DELETE', `/api/v1/admin/accounts/${id}`)
     flash('Account deleted', true)

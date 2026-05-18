@@ -33,6 +33,11 @@ class CommandQueue:
         """
         device_id = command.device_id
 
+        if device_id not in self._devices:
+            if command._future and not command._future.done():
+                command._future.set_exception(ValueError(f"Device {device_id} not found"))
+            return command
+
         if device_id not in self._queues:
             self._queues[device_id] = asyncio.Queue()
             self._pending[device_id] = collections.deque()
@@ -94,7 +99,7 @@ class CommandQueue:
             self._processors.pop(device_id, None)
             return
 
-        cfg = device.info
+        cfg = device.config
         backend = device.backend
 
         logger.debug(f"Processor running for device {device_id} (session_timeout={backend.policy.session_timeout}s)")

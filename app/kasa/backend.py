@@ -6,10 +6,11 @@ import logging
 from kasa import Credentials, Device
 
 from ..core.backend import BackendPolicy, Command, DeviceBackend
+from ..core.config import DeviceConfig
 from ..core.exceptions import DeviceOfflineError
 from ..core.models import DeviceState
 from ..core.utils import normalize_mac
-from ..db import Account, DeviceInfo
+from ..db import Account
 from .connection import (
     build_device_state,
     connect_device,
@@ -19,7 +20,7 @@ from .connection import (
 logger = logging.getLogger(__name__)
 
 
-class KasaBackend(DeviceBackend[DeviceInfo]):
+class KasaBackend(DeviceBackend[DeviceConfig]):
     """Kasa backend: persistent TCP connection, self-managed idle timer."""
 
     policy = BackendPolicy(session_timeout=60.0, command_interval=0.5, command_timeout=25.0)
@@ -32,18 +33,18 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
 
     # ── Public ABC methods ────────────────────────────────────────────────────
 
-    async def execute_command(self, cmd: Command, cfg: DeviceInfo) -> DeviceState:
+    async def execute_command(self, cmd: Command, cfg: DeviceConfig) -> DeviceState:
         """Execute command, reusing or re-establishing the persistent TCP connection."""
         try:
             return await asyncio.wait_for(self._run_command(cmd, cfg), timeout=self.policy.command_timeout or None)
         except asyncio.TimeoutError:
             await self._close_connection()
             raise DeviceOfflineError(f"{cfg.name} did not respond within {self.policy.command_timeout:.0f}s")
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, Exception):
             await self._close_connection()
             raise
 
-    async def _run_command(self, cmd: Command, cfg: DeviceInfo) -> DeviceState:
+    async def _run_command(self, cmd: Command, cfg: DeviceConfig) -> DeviceState:
         # Cancel the idle-close timer before touching the connection so it cannot
         # disconnect mid-command between await points.
         if self._close_task and not self._close_task.done():
@@ -85,7 +86,7 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
 
         raise DeviceOfflineError(f"{cfg.name} is offline — use refresh to rediscover")
 
-    async def fetch_state(self, cfg: DeviceInfo, ip: str) -> DeviceState | None:
+    async def fetch_state(self, cfg: DeviceConfig, ip: str) -> DeviceState | None:
         """One-shot: connect, verify MAC, read state, disconnect."""
         logger.debug(f"Fetching state for {cfg.name} at {ip}")
         device, error = await connect_device(ip, self._credentials(cfg))
@@ -102,7 +103,7 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
         finally:
             await self._safe_disconnect(device)
 
-    async def find_ip(self, cfg: DeviceInfo) -> str | None:
+    async def find_ip(self, cfg: DeviceConfig) -> str | None:
         """Broadcast to locate this device's current IP."""
         logger.debug(f"Broadcasting to find {cfg.name} ({cfg.mac})")
         ip = await discover_device_ip(cfg)
@@ -113,7 +114,7 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
             logger.warning(f"Broadcast discovery found no result for {cfg.name}")
         return ip
 
-    async def rename_outlet(self, cfg: DeviceInfo, outlet_id: str, new_name: str) -> None:
+    async def rename_outlet(self, cfg: DeviceConfig, outlet_id: str, new_name: str) -> None:
         if not self.ip:
             raise DeviceOfflineError(f"{cfg.name}: IP unknown, cannot rename outlet")
         device, error = await connect_device(self.ip, self._credentials(cfg))
@@ -128,7 +129,7 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
         finally:
             await self._safe_disconnect(device)
 
-    async def rename_device(self, cfg: DeviceInfo, new_name: str) -> None:
+    async def rename_device(self, cfg: DeviceConfig, new_name: str) -> None:
         if not self.ip:
             raise DeviceOfflineError(f"{cfg.name}: IP unknown, cannot rename device")
         device, error = await connect_device(self.ip, self._credentials(cfg))
@@ -150,13 +151,13 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
     def configure(self, account: object) -> None:
         self._account = account if isinstance(account, Account) else None
 
-    def _credentials(self, cfg: DeviceInfo) -> Credentials | None:
+    def _credentials(self, cfg: DeviceConfig) -> Credentials | None:
         if not self._account:
             return None
         return Credentials(username=self._account.username, password=self._account.password)
 
     async def _connect_verified(
-        self, ip: str, cfg: DeviceInfo
+        self, ip: str, cfg: DeviceConfig
     ) -> Device | None:
         """Connect to ip and verify MAC. Returns device on success, None otherwise."""
         device, error = await connect_device(ip, self._credentials(cfg))

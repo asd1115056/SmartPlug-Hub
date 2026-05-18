@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from .config import DeviceConfig
+
 if TYPE_CHECKING:
     from .backend import DeviceBackend
-    from ..db import DeviceInfo
 
 
 class DeviceStatus(Enum):
@@ -47,9 +48,10 @@ class DeviceState:
 class Device:
     """Aggregate: per-device config, backend, and current state in one place."""
 
-    info: DeviceInfo
+    config: DeviceConfig
     backend: DeviceBackend
     state: DeviceState
+    outlet_labels: dict[str, str] = field(default_factory=dict)  # outlet_id → user label
 
 
 def make_offline_state(

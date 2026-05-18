@@ -7,10 +7,13 @@ import logging
 from typing import Literal
 
 from .command_queue import CommandQueue, make_command
+from .core.config import DeviceConfig
 from .core.exceptions import DeviceOfflineError, DeviceOperationError
 from .core.models import ChildState, Device, DeviceState, DeviceStatus, make_offline_state
 from .core.registry import PROTOCOLS
+from .core.utils import mac_to_id, normalize_mac
 from .db import Account, Database, DeviceInfo, Outlet
+from .schemas import AddDeviceRequest
 
 logger = logging.getLogger(__name__)
 
@@ -29,38 +32,41 @@ class DeviceManager:
 
     async def initialize(self) -> None:
         """Load from DB → discover → probe initial state → start polling."""
-        infos = await self._db.get_all_devices()
+        configs = await self._db.get_all_devices()
         accounts = {a.id: a for a in await self._db.get_all_accounts() if a.id is not None}
+        all_outlets = await self._db.get_all_outlets()
 
-        for info in infos:
-            spec = PROTOCOLS.get(info.type)
+        for cfg in configs:
+            spec = PROTOCOLS.get(cfg.type)
             if not spec:
-                logger.error(f"Unknown protocol '{info.type}' for device '{info.name}', skipping")
+                logger.error(f"Unknown protocol '{cfg.type}' for device '{cfg.name}', skipping")
                 continue
 
-            outlets = await self._db.get_outlets(info.id)
+            outlets = all_outlets.get(cfg.id, [])
             initial_state = DeviceState(
-                id=info.id,
+                id=cfg.id,
                 status=DeviceStatus.OFFLINE,
-                alias=info.alias,
-                model=info.model,
+                alias=cfg.alias,
+                model=cfg.model,
                 children=tuple(
                     ChildState(id=o.outlet_id, alias=o.alias, is_on=False)
                     for o in outlets
-                ) if info.is_strip else None,
+                ) if cfg.is_strip else None,
             )
 
             backend = spec.backend()
-            backend.ip = info.last_known_ip
-            if info.account_id:
-                backend.configure(accounts.get(info.account_id))
+            backend.ip = cfg.last_known_ip
+            if cfg.account_id:
+                backend.configure(accounts.get(cfg.account_id))
 
-            self._devices[info.id] = Device(info=info, backend=backend, state=initial_state)
+            outlet_labels = {o.outlet_id: o.alias for o in outlets if o.alias}
+            self._devices[cfg.id] = Device(
+                config=cfg, backend=backend, state=initial_state,
+                outlet_labels=outlet_labels,
+            )
 
         for type_name, spec in PROTOCOLS.items():
-            type_devices = {
-                info.mac: info for info in infos if info.type == type_name
-            }
+            type_devices = {cfg.mac: cfg for cfg in configs if cfg.type == type_name}
             if not type_devices:
                 continue
 
@@ -135,21 +141,21 @@ class DeviceManager:
             raise ValueError(f"Device {device_id} not found")
 
         if device.backend.ip:
-            logger.info(f"Refreshing {device.info.name} at cached IP {device.backend.ip}")
-            state = await device.backend.fetch_state(device.info, device.backend.ip)
+            logger.info(f"Refreshing {device.config.name} at cached IP {device.backend.ip}")
+            state = await device.backend.fetch_state(device.config, device.backend.ip)
             if state:
                 await self._update_state(device_id, state, update_db_cache=True)
                 return state
 
-        logger.info(f"Cached IP unreachable for {device.info.name}, rediscovering...")
-        new_ip = await device.backend.find_ip(device.info)
+        logger.info(f"Cached IP unreachable for {device.config.name}, rediscovering...")
+        new_ip = await device.backend.find_ip(device.config)
         if new_ip:
-            state = await device.backend.fetch_state(device.info, new_ip)
+            state = await device.backend.fetch_state(device.config, new_ip)
             if state:
                 await self._update_state(device_id, state, update_db_cache=True)
                 return state
 
-        logger.warning(f"Could not reach {device.info.name} during refresh")
+        logger.warning(f"Could not reach {device.config.name} during refresh")
         state = make_offline_state(device_id, device.state)
         await self._update_state(device_id, state)
         return state
@@ -165,43 +171,51 @@ class DeviceManager:
 
     # ── Admin operations ─────────────────────────────────────────────────────
 
-    async def add_device(self, info: DeviceInfo) -> Device:
-        """Persist to DB, add to runtime cache as OFFLINE, then probe in background."""
-        if info.id in self._devices:
-            raise ValueError(f"Device {info.id} already exists")
+    async def add_device(self, body: AddDeviceRequest) -> Device:
+        """Validate, persist to DB, add to RAM as OFFLINE, then probe in background."""
+        mac = normalize_mac(body.mac)
+        device_id = mac_to_id(mac)
 
-        spec = PROTOCOLS.get(info.type)
+        if device_id in self._devices:
+            raise ValueError(f"Device with MAC '{body.mac}' already exists")
+
+        spec = PROTOCOLS.get(body.type)
         if not spec:
-            raise ValueError(f"Unsupported device type: {info.type}")
+            raise ValueError(f"Unsupported device type: {body.type}")
 
-        await self._db.add_device(info)
+        info = DeviceInfo(
+            id=device_id, mac=mac, name=body.name, type=body.type,
+            broadcast=body.broadcast, group_name=body.group_name,
+            account_id=body.account_id, token=body.token, miio_id=body.miio_id,
+        )
+        cfg = await self._db.add_device(info)
 
         backend = spec.backend()
-        backend.ip = info.last_known_ip
-        if info.account_id:
+        backend.ip = cfg.last_known_ip
+        if cfg.account_id:
             accounts = {a.id: a for a in await self._db.get_all_accounts() if a.id is not None}
-            backend.configure(accounts.get(info.account_id))
+            backend.configure(accounts.get(cfg.account_id))
 
-        device = Device(info=info, backend=backend, state=DeviceState(
-            id=info.id, status=DeviceStatus.OFFLINE
+        device = Device(config=cfg, backend=backend, state=DeviceState(
+            id=cfg.id, status=DeviceStatus.OFFLINE,
         ))
-        self._devices[info.id] = device
+        self._devices[cfg.id] = device
         self._broadcast()
 
-        asyncio.create_task(self._probe_new_device(device, info))
+        asyncio.create_task(self._probe_new_device(device))
         return device
 
-    async def _probe_new_device(self, device: Device, info: DeviceInfo) -> None:
+    async def _probe_new_device(self, device: Device) -> None:
         """Background probe after add_device — updates state and DB cache on success."""
         try:
-            ip = await device.backend.find_ip(info)
+            ip = await device.backend.find_ip(device.config)
             if not ip:
                 return
-            state = await device.backend.fetch_state(info, ip)
+            state = await device.backend.fetch_state(device.config, ip)
             if state:
-                await self._update_state(info.id, state, update_db_cache=True)
+                await self._update_state(device.config.id, state, update_db_cache=True)
         except Exception as e:
-            logger.warning(f"Initial probe failed for new device {info.name}: {e}")
+            logger.warning(f"Initial probe failed for new device {device.config.name}: {e}")
 
     async def remove_device(self, device_id: str) -> None:
         """Close backend, cancel its queue processor, remove from cache and DB."""
@@ -222,13 +236,13 @@ class DeviceManager:
         self._broadcast()
 
     async def rename_device(self, device_id: str, new_name: str) -> None:
-        """Push new name to hardware (if supported), then persist to DB and runtime cache."""
+        """Persist to DB and RAM first, then push to hardware (best-effort)."""
         device = self._devices.get(device_id)
         if not device:
             raise ValueError(f"Device {device_id} not found")
-        await device.backend.rename_device(device.info, new_name)
-        device.info.name = new_name
         await self._db.update_device_name(device_id, new_name)
+        device.config = dataclasses.replace(device.config, name=new_name)
+        await device.backend.rename_device(device.config, new_name)
         self._broadcast()
 
     async def rename_outlet(self, device_id: str, outlet_id: str, new_name: str) -> None:
@@ -237,8 +251,9 @@ class DeviceManager:
         if not device:
             raise ValueError(f"Device {device_id} not found")
 
-        await device.backend.rename_outlet(device.info, outlet_id, new_name)
+        await device.backend.rename_outlet(device.config, outlet_id, new_name)
         await self._db.upsert_outlet(Outlet(device_id=device_id, outlet_id=outlet_id, alias=new_name))
+        device.outlet_labels[outlet_id] = new_name
 
         if device.state.children:
             new_children = tuple(
@@ -255,6 +270,12 @@ class DeviceManager:
         return await self._db.add_account(row)
 
     async def remove_account(self, account_id: int) -> None:
+        affected = [d for d in self._devices.values() if d.config.account_id == account_id]
+        if affected:
+            names = ', '.join(d.config.name for d in affected)
+            raise ValueError(
+                f"Cannot delete: {len(affected)} device(s) still use this account ({names})"
+            )
         await self._db.remove_account(account_id)
 
     # ── SSE ──────────────────────────────────────────────────────────────────
@@ -269,14 +290,12 @@ class DeviceManager:
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
-    async def _apply_outlets(self, device_id: str, state: DeviceState) -> DeviceState:
-        """Overlay DB outlet labels onto state children."""
-        if not state.children:
+    def _apply_outlets(self, device: Device, state: DeviceState) -> DeviceState:
+        """Overlay user outlet labels (RAM cache) onto state children."""
+        if not state.children or not device.outlet_labels:
             return state
-        outlets = await self._db.get_outlets(device_id)
-        label_map = {o.outlet_id: o.alias for o in outlets if o.alias}
         new_children = tuple(
-            dataclasses.replace(c, alias=label_map.get(c.id, c.alias))
+            dataclasses.replace(c, alias=device.outlet_labels.get(c.id, c.alias))
             for c in state.children
         )
         return dataclasses.replace(state, children=new_children)
@@ -287,12 +306,12 @@ class DeviceManager:
         new_state: DeviceState,
         update_db_cache: bool = False,
     ) -> None:
-        """Single write point for the state cache. Applies outlet labels and broadcasts."""
+        """Single write point for the state cache."""
         device = self._devices[device_id]
         previous = device.state
-        labeled = await self._apply_outlets(device_id, new_state)
+        labeled = self._apply_outlets(device, new_state)
         device.state = labeled
-        self._log_status_change(device.info.name, previous, labeled)
+        self._log_status_change(device.config.name, previous, labeled)
         self._broadcast()
 
         if update_db_cache and labeled.status == DeviceStatus.ONLINE:
@@ -303,16 +322,22 @@ class DeviceManager:
                 is_strip=labeled.is_strip,
                 ip=device.backend.ip,
             )
-            # Mirror DB cache fields onto the in-memory info so admin list reads fresh values
-            device.info.alias = labeled.alias
-            device.info.model = labeled.model
-            device.info.is_strip = labeled.is_strip
-            device.info.last_known_ip = device.backend.ip
+            device.config = dataclasses.replace(
+                device.config,
+                alias=labeled.alias,
+                model=labeled.model,
+                is_strip=labeled.is_strip,
+                last_known_ip=device.backend.ip,
+            )
             if labeled.children:
                 await self._db.upsert_outlets([
                     Outlet(device_id=device_id, outlet_id=c.id, alias=c.alias)
                     for c in labeled.children
                 ])
+                # Register hardware aliases for outlets that have no user label yet
+                for c in labeled.children:
+                    if c.id not in device.outlet_labels and c.alias:
+                        device.outlet_labels[c.id] = c.alias
 
     def _broadcast(self) -> None:
         for q in self._subscribers:
@@ -331,32 +356,35 @@ class DeviceManager:
             else:
                 logger.info(f"{name} is now offline")
 
+    async def _poll_one(self, device_id: str, device: Device) -> None:
+        """Poll a single device."""
+        if self._queue and self._queue.has_active_processor(device_id):
+            logger.debug(f"Polling skipping {device.config.name} — processor active")
+            return
+        if not device.backend.ip:
+            logger.debug(f"Polling skipping {device.config.name} — no known IP")
+            return
+        try:
+            state = await device.backend.fetch_state(device.config, device.backend.ip)
+            await self._update_state(
+                device_id,
+                state or make_offline_state(device_id, device.state),
+                update_db_cache=state is not None,
+            )
+        except (DeviceOfflineError, DeviceOperationError, asyncio.TimeoutError, OSError) as e:
+            logger.warning(f"Polling probe failed for {device.config.name}: {e}")
+            await self._update_state(device_id, make_offline_state(device_id, device.state))
+        except Exception:
+            logger.exception(f"Unexpected error polling {device.config.name}")
+            await self._update_state(device_id, make_offline_state(device_id, device.state))
+
     async def _polling_loop(self) -> None:
         logger.debug(f"Polling started (interval={POLL_INTERVAL}s)")
         while True:
             await asyncio.sleep(POLL_INTERVAL)
             logger.debug("Polling cycle starting")
-
-            for device_id, device in list(self._devices.items()):
-                if self._queue and self._queue.has_active_processor(device_id):
-                    logger.debug(f"Polling skipping {device.info.name} — processor active")
-                    continue
-                if not device.backend.ip:
-                    logger.debug(f"Polling skipping {device.info.name} — no known IP")
-                    continue
-
-                try:
-                    state = await device.backend.fetch_state(device.info, device.backend.ip)
-                    await self._update_state(
-                        device_id,
-                        state or make_offline_state(device_id, device.state),
-                        update_db_cache=state is not None,
-                    )
-                except (DeviceOfflineError, DeviceOperationError, asyncio.TimeoutError, OSError) as e:
-                    logger.warning(f"Polling probe failed for {device.info.name}: {e}")
-                    await self._update_state(device_id, make_offline_state(device_id, device.state))
-                except Exception:
-                    logger.exception(f"Unexpected error polling {device.info.name}")
-                    await self._update_state(device_id, make_offline_state(device_id, device.state))
-
+            await asyncio.gather(
+                *[self._poll_one(did, dev) for did, dev in list(self._devices.items())],
+                return_exceptions=True,
+            )
             logger.debug("Polling cycle complete")

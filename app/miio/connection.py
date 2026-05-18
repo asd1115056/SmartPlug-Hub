@@ -12,7 +12,7 @@ from miio.protocol import Message
 
 from ..core.exceptions import DeviceOfflineError
 from ..core.models import ChildState, DeviceState, DeviceStatus, make_offline_state
-from ..db import DeviceInfo
+from ..core.config import DeviceConfig
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,10 @@ def _udp_discover_sync(broadcast: str, timeout: float) -> dict[str, str]:
 
 
 async def discover_all(
-    whitelist: dict[str, DeviceInfo], timeout: float = 3.0
+    whitelist: dict[str, DeviceConfig], timeout: float = 3.0
 ) -> dict[str, str]:
     """Broadcast UDP discover per unique broadcast address; return MAC→IP map."""
-    by_broadcast: dict[str, list[DeviceInfo]] = {}
+    by_broadcast: dict[str, list[DeviceConfig]] = {}
     for cfg in whitelist.values():
         by_broadcast.setdefault(cfg.broadcast, []).append(cfg)
 
@@ -91,7 +91,7 @@ def _build_get_props(miio_id: str) -> list[dict]:
     return props
 
 
-def _fetch_status_sync(ip: str, cfg: DeviceInfo) -> DeviceState:
+def _fetch_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
     """Synchronous status fetch; raises DeviceOfflineError on connection failure."""
     from miio import DeviceException, MiotDevice  # lazy: avoid hard dep at import time
 
@@ -127,7 +127,7 @@ def _fetch_status_sync(ip: str, cfg: DeviceInfo) -> DeviceState:
     )
 
 
-async def get_status(ip: str, cfg: DeviceInfo) -> DeviceState:
+async def get_status(ip: str, cfg: DeviceConfig) -> DeviceState:
     """Return current device state. Invalid token → offline state (not raised)."""
     if not cfg.token or not TOKEN_RE.match(cfg.token):
         logger.warning(f"{cfg.name}: token is not a valid 32-char hex string; returning offline")
@@ -144,7 +144,7 @@ async def get_status(ip: str, cfg: DeviceInfo) -> DeviceState:
 
 
 def _set_power_sync(
-    ip: str, cfg: DeviceInfo, is_on: bool, child_id: str | None
+    ip: str, cfg: DeviceConfig, is_on: bool, child_id: str | None
 ) -> None:
     """Synchronous power set; raises DeviceOfflineError on failure."""
     from miio import DeviceException, MiotDevice  # lazy import
@@ -169,7 +169,7 @@ def _set_power_sync(
 
 
 async def set_power(
-    ip: str, cfg: DeviceInfo, is_on: bool, child_id: str | None
+    ip: str, cfg: DeviceConfig, is_on: bool, child_id: str | None
 ) -> None:
     """Set outlet power state. Invalid token or failure → DeviceOfflineError."""
     if not cfg.token or not TOKEN_RE.match(cfg.token):
