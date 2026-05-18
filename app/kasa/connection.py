@@ -8,7 +8,7 @@ from kasa import Credentials, Device, DeviceConfig, Discover
 from kasa.exceptions import AuthenticationError
 
 from ..core.models import ChildState, DeviceState, DeviceStatus
-from .config import KasaDeviceConfig
+from ..db import DeviceInfo
 from ..core.utils import normalize_mac
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ async def connect_device(
     return None, last_error
 
 
-async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
+async def discover_device_ip(device_info: DeviceInfo) -> str | None:
     """Discover a single device's current IP via broadcast."""
     target_mac = device_info.mac
     found_ip: str | None = None
@@ -98,11 +98,11 @@ async def discover_device_ip(device_info: KasaDeviceConfig) -> str | None:
     return found_ip
 
 
-async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, str]:
+async def discover_all(known_devices: dict[str, DeviceInfo]) -> dict[str, str]:
     """Discover known devices on the network. Returns MAC -> IP."""
     logger.info("Starting Kasa device discovery...")
 
-    targets: dict[str, list[KasaDeviceConfig]] = {}
+    targets: dict[str, list[DeviceInfo]] = {}
     for info in known_devices.values():
         targets.setdefault(info.broadcast, []).append(info)
 
@@ -133,7 +133,7 @@ async def discover_all(known_devices: dict[str, KasaDeviceConfig]) -> dict[str, 
     return result
 
 
-def build_device_state(device_info: KasaDeviceConfig, kasa_device: Device) -> DeviceState:
+def build_device_state(device_info: DeviceInfo, kasa_device: Device) -> DeviceState:
     """Build an online DeviceState from a connected Kasa Device object."""
     children: tuple[ChildState, ...] | None = None
     if hasattr(kasa_device, "children") and kasa_device.children:
