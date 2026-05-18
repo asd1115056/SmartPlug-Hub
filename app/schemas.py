@@ -64,7 +64,6 @@ class ErrorDetail(BaseModel):
 
 class AddAccountRequest(BaseModel):
     type: str  # "kasa" | "miio"
-    label: str
     username: str
     password: str
 
@@ -72,8 +71,7 @@ class AddAccountRequest(BaseModel):
 class AccountResponse(BaseModel):
     id: int
     type: str
-    label: str
-    username: str  # shown in admin, but password is not exposed
+    username: str
 
 
 class AddDeviceRequest(BaseModel):

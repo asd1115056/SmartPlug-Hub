@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 class Account(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     type: str  # "kasa" | "miio"
-    label: str
     username: str
     password: str
 

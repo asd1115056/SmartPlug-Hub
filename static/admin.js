@@ -151,7 +151,6 @@ function renderAccounts() {
     <tr>
       <td class="text-muted">${a.id}</td>
       <td><span class="badge bg-secondary">${a.type}</span></td>
-      <td>${esc(a.label)}</td>
       <td class="font-monospace">${esc(a.username)}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})">
@@ -165,7 +164,7 @@ function populateAccountSelect() {
   const sel = document.getElementById('accountSelect')
   const current = sel.value
   sel.innerHTML = '<option value="">— none —</option>' +
-    accountsCache.map(a => `<option value="${a.id}" data-type="${a.type}">${esc(a.label)}</option>`).join('')
+    accountsCache.map(a => `<option value="${a.id}" data-type="${a.type}">${esc(a.username)}</option>`).join('')
   sel.value = current
   syncTypeFromAccount()
 }
@@ -181,7 +180,7 @@ async function addAccount(e) {
   const form = e.target
   try {
     await api('POST', '/api/v1/admin/accounts', {
-      type: form.type.value, label: form.label.value,
+      type: form.type.value,
       username: form.username.value, password: form.password.value,
     })
     bootstrap.Modal.getInstance(document.getElementById('addAccountModal')).hide()
