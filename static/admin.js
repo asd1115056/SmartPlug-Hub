@@ -165,8 +165,22 @@ function populateAccountSelect() {
   const sel = document.getElementById('accountSelect')
   const current = sel.value
   sel.innerHTML = '<option value="">— none —</option>' +
-    accountsCache.map(a => `<option value="${a.id}">${esc(a.label)} (${a.type})</option>`).join('')
+    accountsCache.map(a => `<option value="${a.id}" data-type="${a.type}">${esc(a.label)} (${a.type})</option>`).join('')
   sel.value = current
+  syncTypeFromAccount()
+}
+
+function syncTypeFromAccount() {
+  const accountSel = document.getElementById('accountSelect')
+  const typeSel = document.getElementById('deviceTypeSelect')
+  const accountType = accountSel.options[accountSel.selectedIndex]?.dataset.type
+  if (accountType) {
+    typeSel.value = accountType
+    typeSel.disabled = true
+  } else {
+    typeSel.disabled = false
+  }
+  onTypeChange(typeSel.value)
 }
 
 async function addAccount(e) {
@@ -293,6 +307,7 @@ async function addDevice(e) {
     })
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     form.reset()
+    document.getElementById('deviceTypeSelect').disabled = false
     onTypeChange('kasa')
     flash(`Device added (id: ${result.id})`, true)
     await loadDevices()

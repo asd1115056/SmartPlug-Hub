@@ -184,7 +184,8 @@
             </div>
             <div class="col-sm-6">
               <label class="form-label fw-semibold">Account</label>
-              <select name="account_id" id="accountSelect" class="form-select">
+              <select name="account_id" id="accountSelect" class="form-select"
+                      onchange="syncTypeFromAccount()">
                 <option value="">— none —</option>
               </select>
             </div>
