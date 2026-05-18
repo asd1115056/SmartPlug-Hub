@@ -219,10 +219,11 @@ class DeviceManager:
         self._broadcast()
 
     async def rename_device(self, device_id: str, new_name: str) -> None:
-        """Update device display name in DB and runtime cache."""
+        """Push new name to hardware (if supported), then persist to DB and runtime cache."""
         device = self._devices.get(device_id)
         if not device:
             raise ValueError(f"Device {device_id} not found")
+        await device.backend.rename_device(device.info, new_name)
         device.info.name = new_name
         await self._db.update_device_name(device_id, new_name)
         self._broadcast()

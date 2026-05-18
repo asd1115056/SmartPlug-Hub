@@ -128,6 +128,17 @@ class KasaBackend(DeviceBackend[DeviceInfo]):
         finally:
             await self._safe_disconnect(device)
 
+    async def rename_device(self, cfg: DeviceInfo, new_name: str) -> None:
+        if not self.ip:
+            raise DeviceOfflineError(f"{cfg.name}: IP unknown, cannot rename device")
+        device, error = await connect_device(self.ip, self._credentials(cfg))
+        if not device:
+            raise DeviceOfflineError(f"{cfg.name}: cannot connect to rename device: {error}")
+        try:
+            await device.set_alias(new_name)
+        finally:
+            await self._safe_disconnect(device)
+
     async def close(self) -> None:
         """Cancel the idle timer and close the TCP connection immediately."""
         if self._close_task and not self._close_task.done():

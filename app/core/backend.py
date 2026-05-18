@@ -78,6 +78,10 @@ class DeviceBackend(ABC, Generic[_Cfg]):
     async def rename_outlet(self, cfg: _Cfg, outlet_id: str, new_name: str) -> None:
         """Rename an outlet. Protocols that support hardware rename implement it; others no-op."""
 
+    @abstractmethod
+    async def rename_device(self, cfg: _Cfg, new_name: str) -> None:
+        """Rename the device itself. Protocols that support hardware rename implement it; others no-op."""
+
     def configure(self, account: object) -> None:
         """Configure backend with account-level credentials. Default no-op."""
 

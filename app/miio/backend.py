@@ -44,3 +44,6 @@ class MiioBackend(DeviceBackend[DeviceInfo]):
 
     async def rename_outlet(self, cfg: DeviceInfo, outlet_id: str, new_name: str) -> None:
         pass  # MiIO does not support hardware alias; label is stored in DB only
+
+    async def rename_device(self, cfg: DeviceInfo, new_name: str) -> None:
+        pass  # MiIO does not support hardware rename
