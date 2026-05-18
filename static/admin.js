@@ -322,28 +322,44 @@ async function deleteDevice(id) {
   }
 }
 
+async function renameWithFeedback(input, btn, apiCall) {
+  const originalHTML = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
+  input.classList.remove('is-valid', 'is-invalid')
+
+  try {
+    await apiCall()
+    input.classList.add('is-valid')
+    setTimeout(() => input.classList.remove('is-valid'), 1500)
+  } catch (err) {
+    input.classList.add('is-invalid')
+    setTimeout(() => input.classList.remove('is-invalid'), 2000)
+    if (err.message !== 'Unauthorized') flash(`Rename failed: ${err.message}`, false)
+  } finally {
+    btn.innerHTML = originalHTML
+    btn.disabled = false
+  }
+}
+
 async function renameDevice(id) {
   const input = document.getElementById(`name-${id}`)
-  if (!input) return
-  try {
-    await api('PATCH', `/api/v1/admin/devices/${id}/name`, { new_name: input.value })
-    flash('Device name updated', true)
-  } catch (err) {
-    if (err.message !== 'Unauthorized') flash(`Rename failed: ${err.message}`, false)
-  }
+  const btn = input?.nextElementSibling
+  if (!input || !btn) return
+  await renameWithFeedback(input, btn, () =>
+    api('PATCH', `/api/v1/admin/devices/${id}/name`, { new_name: input.value })
+  )
 }
 
 async function renameOutlet(deviceId, outletId) {
   const input = document.getElementById(`ol-${deviceId}-${outletId}`)
-  if (!input) return
-  try {
-    await api('PATCH', `/api/v1/admin/devices/${deviceId}/outlets/${outletId}/label`, {
+  const btn = input?.nextElementSibling
+  if (!input || !btn) return
+  await renameWithFeedback(input, btn, () =>
+    api('PATCH', `/api/v1/admin/devices/${deviceId}/outlets/${outletId}/label`, {
       new_name: input.value,
     })
-    flash('Outlet label updated', true)
-  } catch (err) {
-    if (err.message !== 'Unauthorized') flash(`Rename failed: ${err.message}`, false)
-  }
+  )
 }
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
