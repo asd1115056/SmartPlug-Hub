@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..core.exceptions import DeviceOfflineError
 from ..core.utils import mac_to_id, normalize_mac
 from ..db import Account, DeviceInfo
 from ..device_manager import DeviceManager
@@ -110,6 +111,8 @@ async def rename_device(
         await dm.rename_device(device_id, body.new_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DeviceOfflineError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.patch("/devices/{device_id}/outlets/{outlet_id}/label", status_code=204)
@@ -120,3 +123,5 @@ async def rename_outlet(
         await dm.rename_outlet(device_id, outlet_id, body.new_name)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DeviceOfflineError as e:
+        raise HTTPException(status_code=503, detail=str(e))
