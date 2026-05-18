@@ -12,3 +12,6 @@ wheels/
 # Config (real settings, not examples)
 config/devices.json
 config/settings.toml
+
+# Runtime data
+data/smartplug.db
