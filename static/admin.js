@@ -265,9 +265,9 @@ async function openOutletsModal(deviceId, deviceName) {
       bodyEl.innerHTML = '<p class="text-muted mb-0">No outlets found.</p>'
       return
     }
-    bodyEl.innerHTML = device.children.map(c => `
+    bodyEl.innerHTML = device.children.map((c, i) => `
       <div class="outlet-row">
-        <span class="outlet-id">${esc(c.id)}</span>
+        <span class="outlet-id">${i}</span>
         <input id="ol-${deviceId}-${c.id}" class="form-control flex-grow-1" value="${esc(c.alias || c.id)}">
         <button class="btn btn-sm btn-outline-secondary" onclick="renameOutlet('${deviceId}','${c.id}')">
           <i class="bi bi-check-lg"></i>
