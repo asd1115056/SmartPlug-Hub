@@ -104,6 +104,10 @@ class Database:
         async with AsyncSession(self._engine) as session:
             return list((await session.exec(select(Device))).all())
 
+    async def get_device(self, device_id: str) -> Device | None:
+        async with AsyncSession(self._engine) as session:
+            return await session.get(Device, device_id)
+
     async def add_device(self, device: Device) -> Device:
         async with AsyncSession(self._engine) as session:
             dup = await session.exec(select(Device).where(Device.mac == device.mac))
