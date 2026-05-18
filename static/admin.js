@@ -232,6 +232,8 @@ function renderDevices(devices) {
       <tr>
         <td>
           <div class="d-flex gap-1 align-items-center">
+            <i class="bi bi-circle-fill ${d.status === 'online' ? 'text-success' : 'text-secondary'}"
+               style="font-size:.55rem;flex-shrink:0" title="${d.status}"></i>
             <input id="name-${d.id}" class="form-control inline-input" value="${esc(d.name)}">
             <button class="btn btn-sm btn-outline-secondary" onclick="renameDevice('${d.id}')">
               <i class="bi bi-check-lg"></i>

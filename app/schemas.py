@@ -94,6 +94,7 @@ class AdminDeviceDetail(BaseModel):
     mac: str
     name: str
     type: str
+    status: str
     broadcast: str
     group_name: str | None
     account_id: int | None

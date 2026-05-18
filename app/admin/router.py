@@ -58,6 +58,7 @@ async def list_devices_admin(dm: DeviceManager = Depends(_get_dm)):
             mac=d.info.mac,
             name=d.info.name,
             type=d.info.type,
+            status=d.state.status.value,
             broadcast=d.info.broadcast,
             group_name=d.info.group_name,
             account_id=d.info.account_id,
