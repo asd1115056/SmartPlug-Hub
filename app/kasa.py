@@ -39,14 +39,13 @@ class KasaBackend(DeviceBackend):
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         device = await self._get_device(cfg)
         await device.update()
-        target: Device = device
         if outlet_id:
-            target = next(
-                (c for c in (device.children or []) if c.device_id == outlet_id), None
-            )
-            if target is None:
+            child = next((c for c in (device.children or []) if c.device_id == outlet_id), None)
+            if child is None:
                 raise ValueError(f"Outlet {outlet_id} not found on {cfg.mac}")
-        await (target.turn_on() if on else target.turn_off())
+            await (child.turn_on() if on else child.turn_off())
+        else:
+            await (device.turn_on() if on else device.turn_off())
 
     async def rename_outlet(self, cfg: DeviceConfig, outlet_id: str, name: str) -> None:
         device = await self._get_device(cfg)
