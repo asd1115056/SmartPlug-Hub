@@ -7,12 +7,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import ClassVar, Generic, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 
-from .models import DeviceInfo, DeviceState
+from .models import DeviceState
 
+if TYPE_CHECKING:
+    from ..db import DeviceInfo
 
-_Cfg = TypeVar("_Cfg", bound=DeviceInfo)
+_Cfg = TypeVar("_Cfg")
 
 
 class CommandStatus(Enum):
@@ -71,6 +73,10 @@ class DeviceBackend(ABC, Generic[_Cfg]):
     @abstractmethod
     async def find_ip(self, cfg: _Cfg) -> str | None:
         """Broadcast to locate this device's current IP. Returns IP or None."""
+
+    @abstractmethod
+    async def rename_outlet(self, cfg: _Cfg, outlet_id: str, new_name: str) -> None:
+        """Rename an outlet. Protocols that support hardware rename implement it; others no-op."""
 
     async def close(self) -> None:
         """Close any open connections on application shutdown."""
