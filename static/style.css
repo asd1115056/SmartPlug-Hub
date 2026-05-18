@@ -1,0 +1,12 @@
+/* === Admin === */
+#loginView {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-card { width: 360px; }
+#adminView  { display: none; }
+.inline-input { width: 160px; }
+.outlet-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; }
+.outlet-id  { color: #6c757d; min-width: 2.5rem; font-family: monospace; }
