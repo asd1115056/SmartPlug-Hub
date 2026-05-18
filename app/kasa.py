@@ -8,14 +8,8 @@ from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
 from kasa.exceptions import AuthenticationError
 
-from .core import (
-    ChildState,
-    DeviceBackend,
-    DeviceConfig,
-    DeviceOfflineError,
-    DeviceState,
-    normalize_mac,
-)
+from .core import ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState
+from .utils import normalize_mac
 
 logger = logging.getLogger(__name__)
 
