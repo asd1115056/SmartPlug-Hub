@@ -1,44 +1,99 @@
 'use strict'
 
-// ── Token management ─────────────────────────────────────────────────────────
+// ── Auth / view switching ────────────────────────────────────────────────────
 
 function getToken() {
   return sessionStorage.getItem('adminToken') || ''
 }
 
-function saveToken() {
-  const val = document.getElementById('tokenInput').value.trim()
-  sessionStorage.setItem('adminToken', val)
-  setStatus('Token saved', true)
+function showLogin(errMsg) {
+  document.getElementById('adminView').style.display = 'none'
+  document.getElementById('loginView').style.display = 'flex'
+  document.getElementById('loginErr').textContent = errMsg || ''
+  document.getElementById('loginBtn').disabled = false
+}
+
+function showAdmin() {
+  document.getElementById('loginView').style.display = 'none'
+  document.getElementById('adminView').style.display = 'block'
   loadAll()
 }
 
-function clearToken() {
+async function doLogin() {
+  const input = document.getElementById('tokenInput')
+  const token = input.value.trim()
+  if (!token) return
+
+  document.getElementById('loginBtn').disabled = true
+  document.getElementById('loginErr').textContent = ''
+
+  sessionStorage.setItem('adminToken', token)
+  const ok = await verifyToken()
+  if (ok) {
+    showAdmin()
+  } else {
+    sessionStorage.removeItem('adminToken')
+    showLogin('Invalid token.')
+  }
+}
+
+function doLogout() {
   sessionStorage.removeItem('adminToken')
   document.getElementById('tokenInput').value = ''
-  setStatus('Token cleared', false)
+  showLogin('')
 }
+
+async function verifyToken() {
+  try {
+    const res = await fetch('/api/v1/admin/accounts', { headers: authHeaders() })
+    return res.ok
+  } catch (_) {
+    return false
+  }
+}
+
+// ── Init: check existing token on page load ───────────────────────────────────
+
+;(async () => {
+  if (getToken()) {
+    const ok = await verifyToken()
+    if (ok) { showAdmin(); return }
+  }
+  showLogin('')
+})()
+
+// Pressing Enter in the token input triggers login
+document.getElementById('tokenInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin()
+})
+
+// ── API helpers ──────────────────────────────────────────────────────────────
 
 function authHeaders() {
   return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }
 }
 
-function setStatus(msg, ok) {
-  const el = document.getElementById('status')
-  el.textContent = msg
-  el.className = ok ? 'status-ok' : 'status-err'
-}
-
-// ── API helpers ──────────────────────────────────────────────────────────────
-
 async function api(method, path, body) {
   const opts = { method, headers: authHeaders() }
   if (body !== undefined) opts.body = JSON.stringify(body)
   const res = await fetch(path, opts)
+  if (res.status === 401) { showLogin('Session expired. Please sign in again.'); throw new Error('Unauthorized') }
   if (res.status === 204) return null
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
   return data
+}
+
+// ── Flash notifications ──────────────────────────────────────────────────────
+
+let _flashTimer = null
+
+function flash(msg, ok) {
+  const el = document.getElementById('flashMsg')
+  el.textContent = msg
+  el.className = `show ${ok ? 'ok' : 'err'}`
+  clearTimeout(_flashTimer)
+  _flashTimer = setTimeout(() => { el.className = '' }, 2800)
 }
 
 // ── Accounts ─────────────────────────────────────────────────────────────────
@@ -51,12 +106,16 @@ async function loadAccounts() {
     renderAccounts()
     populateAccountSelect()
   } catch (e) {
-    setStatus(`Failed to load accounts: ${e.message}`, false)
+    if (e.message !== 'Unauthorized') flash(`Failed to load accounts: ${e.message}`, false)
   }
 }
 
 function renderAccounts() {
   const tbody = document.querySelector('#accountsTable tbody')
+  if (!accountsCache.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No accounts yet.</td></tr>'
+    return
+  }
   tbody.innerHTML = accountsCache.map(a => `
     <tr>
       <td>${a.id}</td>
@@ -79,19 +138,18 @@ function populateAccountSelect() {
 async function addAccount(e) {
   e.preventDefault()
   const form = e.target
-  const body = {
-    type: form.type.value,
-    label: form.label.value,
-    username: form.username.value,
-    password: form.password.value,
-  }
   try {
-    await api('POST', '/api/v1/admin/accounts', body)
-    setStatus('Account added', true)
+    await api('POST', '/api/v1/admin/accounts', {
+      type: form.type.value,
+      label: form.label.value,
+      username: form.username.value,
+      password: form.password.value,
+    })
+    flash('Account added', true)
     form.reset()
     await loadAccounts()
   } catch (err) {
-    setStatus(`Failed to add account: ${err.message}`, false)
+    if (err.message !== 'Unauthorized') flash(`Failed to add account: ${err.message}`, false)
   }
 }
 
@@ -99,10 +157,10 @@ async function deleteAccount(id) {
   if (!confirm(`Delete account ${id}?`)) return
   try {
     await api('DELETE', `/api/v1/admin/accounts/${id}`)
-    setStatus('Account deleted', true)
+    flash('Account deleted', true)
     await loadAccounts()
   } catch (err) {
-    setStatus(`Delete failed: ${err.message}`, false)
+    if (err.message !== 'Unauthorized') flash(`Delete failed: ${err.message}`, false)
   }
 }
 
@@ -113,31 +171,35 @@ async function loadDevices() {
     const devices = await api('GET', '/api/v1/admin/devices')
     renderDevices(devices)
   } catch (e) {
-    setStatus(`Failed to load devices: ${e.message}`, false)
+    if (e.message !== 'Unauthorized') flash(`Failed to load devices: ${e.message}`, false)
   }
 }
 
 function renderDevices(devices) {
   const tbody = document.querySelector('#devicesTable tbody')
+  if (!devices.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No devices yet.</td></tr>'
+    return
+  }
   tbody.innerHTML = devices.map(d => {
-    const outletHtml = d.is_strip
-      ? `<details><summary>Outlets</summary>
-          <div class="outlet-list" id="outlets-${d.id}">Loading…</div>
+    const outletCell = d.is_strip
+      ? `<details><summary>Show outlets</summary>
+           <div class="outlet-list" id="outlets-${d.id}">Loading…</div>
          </details>`
       : '—'
     return `
       <tr>
         <td>
           <div class="inline-edit">
-            <input id="name-${d.id}" value="${esc(d.name)}" style="width:120px">
-            <button class="btn btn-sm" onclick="renameDevice('${d.id}')">Rename</button>
+            <input id="name-${d.id}" value="${esc(d.name)}">
+            <button class="btn btn-ghost btn-sm" onclick="renameDevice('${d.id}')">Save</button>
           </div>
         </td>
         <td>${d.type}</td>
-        <td style="font-size:0.8rem;font-family:monospace">${d.mac}</td>
-        <td>${esc(d.group_name || '')}</td>
-        <td style="font-size:0.8rem">${esc(d.last_known_ip || '—')}</td>
-        <td>${outletHtml}</td>
+        <td style="font-family:monospace;font-size:0.8rem">${d.mac}</td>
+        <td>${esc(d.group_name || '—')}</td>
+        <td style="font-size:0.8rem;color:#718096">${esc(d.last_known_ip || '—')}</td>
+        <td>${outletCell}</td>
         <td><button class="btn btn-danger btn-sm" onclick="deleteDevice('${d.id}')">Delete</button></td>
       </tr>
     `
@@ -148,16 +210,14 @@ function renderDevices(devices) {
 
 async function loadOutlets(deviceId) {
   try {
-    const res = await fetch(`/api/v1/devices/${deviceId}`, { headers: authHeaders() })
-    if (!res.ok) return
-    const device = await res.json()
+    const device = await api('GET', `/api/v1/devices/${deviceId}`)
     const el = document.getElementById(`outlets-${deviceId}`)
     if (!el || !device.children) return
     el.innerHTML = device.children.map(c => `
       <div class="outlet-row">
-        <span>${c.id}</span>
+        <span class="outlet-id">${c.id}</span>
         <input id="ol-${deviceId}-${c.id}" value="${esc(c.alias || c.id)}" style="width:120px">
-        <button class="btn btn-sm" onclick="renameOutlet('${deviceId}', '${c.id}')">Rename</button>
+        <button class="btn btn-ghost btn-sm" onclick="renameOutlet('${deviceId}','${c.id}')">Save</button>
       </div>
     `).join('')
   } catch (_) {}
@@ -167,24 +227,23 @@ async function addDevice(e) {
   e.preventDefault()
   const form = e.target
   const accountVal = form.account_id.value
-  const body = {
-    mac: form.mac.value,
-    name: form.name.value,
-    type: form.type.value,
-    broadcast: form.broadcast.value,
-    group_name: form.group_name.value || null,
-    account_id: accountVal ? parseInt(accountVal) : null,
-    token: form.token?.value || null,
-    miio_id: form.miio_id?.value || null,
-  }
   try {
-    const result = await api('POST', '/api/v1/admin/devices', body)
-    setStatus(`Device added (id: ${result.id})`, true)
+    const result = await api('POST', '/api/v1/admin/devices', {
+      mac: form.mac.value,
+      name: form.name.value,
+      type: form.type.value,
+      broadcast: form.broadcast.value,
+      group_name: form.group_name.value || null,
+      account_id: accountVal ? parseInt(accountVal) : null,
+      token: form.token?.value || null,
+      miio_id: form.miio_id?.value || null,
+    })
+    flash(`Device added (id: ${result.id})`, true)
     form.reset()
     onTypeChange('kasa')
     await loadDevices()
   } catch (err) {
-    setStatus(`Failed to add device: ${err.message}`, false)
+    if (err.message !== 'Unauthorized') flash(`Failed to add device: ${err.message}`, false)
   }
 }
 
@@ -192,10 +251,10 @@ async function deleteDevice(id) {
   if (!confirm(`Delete device ${id}?`)) return
   try {
     await api('DELETE', `/api/v1/admin/devices/${id}`)
-    setStatus('Device deleted', true)
+    flash('Device deleted', true)
     await loadDevices()
   } catch (err) {
-    setStatus(`Delete failed: ${err.message}`, false)
+    if (err.message !== 'Unauthorized') flash(`Delete failed: ${err.message}`, false)
   }
 }
 
@@ -204,9 +263,9 @@ async function renameDevice(id) {
   if (!input) return
   try {
     await api('PATCH', `/api/v1/admin/devices/${id}/name`, { new_name: input.value })
-    setStatus('Device name updated', true)
+    flash('Device name updated', true)
   } catch (err) {
-    setStatus(`Rename failed: ${err.message}`, false)
+    if (err.message !== 'Unauthorized') flash(`Rename failed: ${err.message}`, false)
   }
 }
 
@@ -217,21 +276,16 @@ async function renameOutlet(deviceId, outletId) {
     await api('PATCH', `/api/v1/admin/devices/${deviceId}/outlets/${outletId}/label`, {
       new_name: input.value,
     })
-    setStatus('Outlet label updated', true)
+    flash('Outlet label updated', true)
   } catch (err) {
-    setStatus(`Rename failed: ${err.message}`, false)
+    if (err.message !== 'Unauthorized') flash(`Rename failed: ${err.message}`, false)
   }
 }
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
 
 function onTypeChange(type) {
-  const miioFields = document.getElementById('miioFields')
-  if (type === 'miio') {
-    miioFields.removeAttribute('data-hide')
-  } else {
-    miioFields.setAttribute('data-hide', '')
-  }
+  document.getElementById('miioFields').hidden = type !== 'miio'
 }
 
 function esc(str) {
@@ -243,10 +297,3 @@ async function loadAll() {
   await loadAccounts()
   await loadDevices()
 }
-
-// ── Init ─────────────────────────────────────────────────────────────────────
-
-const stored = getToken()
-if (stored) document.getElementById('tokenInput').value = stored
-
-loadAll()

@@ -4,145 +4,238 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartPlug Hub — Admin</title>
-  <link rel="stylesheet" href="/static/style.css">
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 1rem 1.5rem; }
-    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-    h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
-    .token-bar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
-    .token-bar input { flex: 1; padding: 0.4rem 0.6rem; font-size: 0.9rem; border: 1px solid #ccc; border-radius: 4px; }
-    .token-bar button { padding: 0.4rem 0.8rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 1rem; }
-    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; }
-    th { background: #f5f5f5; font-weight: 600; }
-    .btn { padding: 0.3rem 0.7rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; }
-    .btn-danger { background: #e53e3e; color: white; }
-    .btn-primary { background: #3182ce; color: white; }
-    .btn-sm { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
-    form.add-form { display: grid; gap: 0.5rem; background: #f9f9f9; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
-    form.add-form label { font-size: 0.85rem; font-weight: 600; }
-    form.add-form input, form.add-form select { padding: 0.35rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
-    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .inline-edit { display: flex; gap: 0.3rem; align-items: center; }
-    .inline-edit input { padding: 0.2rem 0.4rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; flex: 1; }
-    .status-ok { color: #276749; font-weight: 600; }
-    .status-err { color: #9b2c2c; }
-    #status { margin: 0.5rem 0; font-size: 0.85rem; min-height: 1.2em; }
-    .outlet-list { font-size: 0.85rem; }
-    .outlet-row { display: flex; gap: 0.4rem; align-items: center; margin: 0.2rem 0; }
-    .outlet-row span { min-width: 3rem; color: #666; }
-    details > summary { cursor: pointer; font-size: 0.85rem; color: #3182ce; }
-    [data-hide] { display: none !important; }
-    nav a { margin-right: 1rem; font-size: 0.9rem; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f0f2f5; min-height: 100vh; }
+
+    /* ── Login ── */
+    #loginView {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh;
+    }
+    .login-card {
+      background: white; border-radius: 10px; padding: 2.5rem 2rem;
+      width: 340px; box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    }
+    .login-card h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
+    .login-card p { font-size: 0.85rem; color: #666; margin: 0 0 1.5rem; }
+    .login-card label { font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.3rem; }
+    .login-card input {
+      width: 100%; padding: 0.5rem 0.7rem; border: 1px solid #ccc; border-radius: 6px;
+      font-size: 0.95rem; margin-bottom: 1rem;
+    }
+    .login-card input:focus { outline: 2px solid #3182ce; border-color: #3182ce; }
+    .login-err { color: #c53030; font-size: 0.83rem; margin-bottom: 0.75rem; min-height: 1.2em; }
+    .btn-login {
+      width: 100%; padding: 0.6rem; background: #3182ce; color: white;
+      border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; font-weight: 600;
+    }
+    .btn-login:hover { background: #2b6cb0; }
+    .btn-login:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    /* ── Admin layout ── */
+    #adminView { display: none; }
+    .topbar {
+      background: white; border-bottom: 1px solid #e2e8f0;
+      padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem;
+    }
+    .topbar h1 { font-size: 1.1rem; margin: 0; flex: 1; }
+    .topbar a { font-size: 0.85rem; color: #3182ce; text-decoration: none; }
+    .btn-logout {
+      padding: 0.3rem 0.8rem; background: none; border: 1px solid #e2e8f0;
+      border-radius: 5px; font-size: 0.83rem; cursor: pointer; color: #555;
+    }
+    .btn-logout:hover { background: #f7fafc; }
+
+    .main { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+
+    .section-title {
+      font-size: 1rem; font-weight: 700; margin: 1.5rem 0 0.75rem;
+      padding-bottom: 0.35rem; border-bottom: 1px solid #e2e8f0;
+    }
+
+    /* ── Flash status ── */
+    #flashMsg {
+      position: fixed; top: 1rem; right: 1rem; padding: 0.6rem 1rem;
+      border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+      opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100;
+    }
+    #flashMsg.show { opacity: 1; }
+    #flashMsg.ok { background: #c6f6d5; color: #276749; }
+    #flashMsg.err { background: #fed7d7; color: #9b2c2c; }
+
+    /* ── Add forms ── */
+    .add-form {
+      background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 1rem 1.25rem; margin-bottom: 1rem; display: grid; gap: 0.6rem;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-group label { font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.2rem; color: #4a5568; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #cbd5e0;
+      border-radius: 5px; font-size: 0.88rem;
+    }
+    .form-group input:focus, .form-group select:focus { outline: 2px solid #3182ce; border-color: #3182ce; }
+
+    /* ── Tables ── */
+    .table-wrap { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 1.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: #f7fafc; padding: 0.5rem 0.75rem; text-align: left; font-size: 0.8rem; font-weight: 600; color: #4a5568; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .empty-row td { color: #a0aec0; text-align: center; padding: 1.5rem; }
+
+    /* ── Buttons ── */
+    .btn { padding: 0.3rem 0.7rem; border: none; border-radius: 5px; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
+    .btn-primary { background: #3182ce; color: white; padding: 0.45rem 1rem; }
+    .btn-primary:hover { background: #2b6cb0; }
+    .btn-danger { background: #fed7d7; color: #c53030; }
+    .btn-danger:hover { background: #feb2b2; }
+    .btn-sm { padding: 0.2rem 0.5rem; }
+    .btn-ghost { background: #edf2f7; color: #4a5568; }
+    .btn-ghost:hover { background: #e2e8f0; }
+
+    /* ── Inline rename ── */
+    .inline-edit { display: flex; gap: 0.35rem; align-items: center; }
+    .inline-edit input { padding: 0.25rem 0.4rem; border: 1px solid #cbd5e0; border-radius: 4px; font-size: 0.85rem; width: 130px; }
+
+    /* ── Outlet list inside expand ── */
+    details > summary { cursor: pointer; color: #3182ce; font-size: 0.82rem; }
+    .outlet-list { padding: 0.4rem 0; }
+    .outlet-row { display: flex; gap: 0.35rem; align-items: center; margin: 0.2rem 0; font-size: 0.83rem; }
+    .outlet-id { min-width: 2.5rem; color: #718096; }
+
+    /* ── MiIO extra fields ── */
+    #miioFields[hidden] { display: none; }
   </style>
 </head>
 <body>
-  <nav><a href="/">← Dashboard</a></nav>
-  <h1>SmartPlug Hub — Admin</h1>
 
-  <div class="token-bar">
-    <input type="password" id="tokenInput" placeholder="Admin token" autocomplete="off">
-    <button class="btn btn-primary" onclick="saveToken()">Apply</button>
-    <button class="btn" onclick="clearToken()" style="background:#eee">Clear</button>
+<!-- ══ Login view ══ -->
+<div id="loginView">
+  <div class="login-card">
+    <h1>SmartPlug Hub</h1>
+    <p>Admin panel — enter your token to continue.</p>
+    <label for="tokenInput">Admin Token</label>
+    <input id="tokenInput" type="password" placeholder="••••••••" autocomplete="current-password">
+    <div class="login-err" id="loginErr"></div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign in</button>
   </div>
-  <div id="status"></div>
+</div>
 
-  <!-- ── Accounts ── -->
-  <h2>Accounts</h2>
+<!-- ══ Admin view ══ -->
+<div id="adminView">
+  <div class="topbar">
+    <h1>SmartPlug Hub — Admin</h1>
+    <a href="/">← Dashboard</a>
+    <button class="btn-logout" onclick="doLogout()">Sign out</button>
+  </div>
 
-  <form class="add-form" onsubmit="addAccount(event)">
-    <div class="field-row">
-      <div>
-        <label>Type</label>
-        <select name="type" required>
-          <option value="kasa">Kasa (TP-Link)</option>
-          <option value="miio">MiIO (Xiaomi)</option>
-        </select>
-      </div>
-      <div>
-        <label>Label</label>
-        <input name="label" placeholder="Home Kasa account" required>
-      </div>
-    </div>
-    <div class="field-row">
-      <div>
-        <label>Username</label>
-        <input name="username" type="email" placeholder="user@example.com" required>
-      </div>
-      <div>
-        <label>Password</label>
-        <input name="password" type="password" required>
-      </div>
-    </div>
-    <div><button class="btn btn-primary" type="submit">Add Account</button></div>
-  </form>
+  <div class="main">
 
-  <table id="accountsTable">
-    <thead><tr><th>ID</th><th>Type</th><th>Label</th><th>Username</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
+    <!-- Accounts -->
+    <div class="section-title">Accounts</div>
 
-  <!-- ── Devices ── -->
-  <h2>Devices</h2>
+    <form class="add-form" onsubmit="addAccount(event)">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type</label>
+          <select name="type" required>
+            <option value="kasa">Kasa (TP-Link)</option>
+            <option value="miio">MiIO (Xiaomi)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Label</label>
+          <input name="label" placeholder="Home Kasa account" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Username</label>
+          <input name="username" type="email" placeholder="user@example.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input name="password" type="password" required>
+        </div>
+      </div>
+      <div><button class="btn btn-primary" type="submit">Add Account</button></div>
+    </form>
 
-  <form class="add-form" onsubmit="addDevice(event)">
-    <div class="field-row">
-      <div>
-        <label>Type</label>
-        <select name="type" id="deviceTypeSelect" onchange="onTypeChange(this.value)" required>
-          <option value="kasa">Kasa</option>
-          <option value="miio">MiIO</option>
-        </select>
-      </div>
-      <div>
-        <label>MAC address</label>
-        <input name="mac" placeholder="AA:BB:CC:DD:EE:FF" required>
-      </div>
+    <div class="table-wrap">
+      <table id="accountsTable">
+        <thead><tr><th>ID</th><th>Type</th><th>Label</th><th>Username</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
-    <div class="field-row">
-      <div>
-        <label>Name</label>
-        <input name="name" placeholder="Living room strip" required>
+
+    <!-- Devices -->
+    <div class="section-title">Devices</div>
+
+    <form class="add-form" onsubmit="addDevice(event)">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type</label>
+          <select name="type" id="deviceTypeSelect" onchange="onTypeChange(this.value)" required>
+            <option value="kasa">Kasa</option>
+            <option value="miio">MiIO</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>MAC address</label>
+          <input name="mac" placeholder="AA:BB:CC:DD:EE:FF" required>
+        </div>
       </div>
-      <div>
-        <label>Broadcast address</label>
-        <input name="broadcast" placeholder="192.168.1.255" required>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input name="name" placeholder="Living room strip" required>
+        </div>
+        <div class="form-group">
+          <label>Broadcast address</label>
+          <input name="broadcast" placeholder="192.168.1.255" required>
+        </div>
       </div>
-    </div>
-    <div class="field-row">
-      <div>
-        <label>Group (optional)</label>
-        <input name="group_name" placeholder="Living room">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Group (optional)</label>
+          <input name="group_name" placeholder="Living room">
+        </div>
+        <div class="form-group">
+          <label>Account (optional)</label>
+          <select name="account_id" id="accountSelect">
+            <option value="">— No account —</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label>Account (optional)</label>
-        <select name="account_id" id="accountSelect">
-          <option value="">— No account —</option>
-        </select>
-      </div>
-    </div>
-    <div id="miioFields" data-hide>
-      <div class="field-row">
-        <div>
+      <div class="form-row" id="miioFields" hidden>
+        <div class="form-group">
           <label>MiIO Token</label>
           <input name="token" placeholder="32-char hex">
         </div>
-        <div>
+        <div class="form-group">
           <label>MiIO Device ID</label>
           <input name="miio_id" placeholder="123456789">
         </div>
       </div>
+      <div><button class="btn btn-primary" type="submit">Add Device</button></div>
+    </form>
+
+    <div class="table-wrap">
+      <table id="devicesTable">
+        <thead>
+          <tr><th>Name</th><th>Type</th><th>MAC</th><th>Group</th><th>Last IP</th><th>Outlets</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
-    <div><button class="btn btn-primary" type="submit">Add Device</button></div>
-  </form>
 
-  <table id="devicesTable">
-    <thead>
-      <tr><th>Name</th><th>Type</th><th>MAC</th><th>Group</th><th>Last IP</th><th>Outlets</th><th></th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  </div><!-- /main -->
+</div><!-- /adminView -->
 
-  <script src="/static/admin.js"></script>
+<div id="flashMsg"></div>
+
+<script src="/static/admin.js"></script>
 </body>
 </html>
