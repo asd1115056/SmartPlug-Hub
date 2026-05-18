@@ -166,7 +166,7 @@ class DeviceManager:
     # ── Admin operations ─────────────────────────────────────────────────────
 
     async def add_device(self, info: DeviceInfo) -> Device:
-        """Persist a new device to DB, discover, probe, and add to runtime cache."""
+        """Persist to DB, add to runtime cache as OFFLINE, then probe in background."""
         if info.id in self._devices:
             raise ValueError(f"Device {info.id} already exists")
 
@@ -186,19 +186,22 @@ class DeviceManager:
             id=info.id, status=DeviceStatus.OFFLINE
         ))
         self._devices[info.id] = device
-
-        ip = await backend.find_ip(info)
-        if ip:
-            try:
-                state = await backend.fetch_state(info, ip)
-                if state:
-                    await self._update_state(info.id, state, update_db_cache=True)
-                    return device
-            except Exception as e:
-                logger.warning(f"Initial probe failed for new device {info.name}: {e}")
-
         self._broadcast()
+
+        asyncio.create_task(self._probe_new_device(device, info))
         return device
+
+    async def _probe_new_device(self, device: Device, info: DeviceInfo) -> None:
+        """Background probe after add_device — updates state and DB cache on success."""
+        try:
+            ip = await device.backend.find_ip(info)
+            if not ip:
+                return
+            state = await device.backend.fetch_state(info, ip)
+            if state:
+                await self._update_state(info.id, state, update_db_cache=True)
+        except Exception as e:
+            logger.warning(f"Initial probe failed for new device {info.name}: {e}")
 
     async def remove_device(self, device_id: str) -> None:
         """Close backend, cancel its queue processor, remove from cache and DB."""
@@ -300,6 +303,11 @@ class DeviceManager:
                 is_strip=labeled.is_strip,
                 ip=device.backend.ip,
             )
+            # Mirror DB cache fields onto the in-memory info so admin list reads fresh values
+            device.info.alias = labeled.alias
+            device.info.model = labeled.model
+            device.info.is_strip = labeled.is_strip
+            device.info.last_known_ip = device.backend.ip
             if labeled.children:
                 await self._db.upsert_outlets([
                     Outlet(device_id=device_id, outlet_id=c.id, alias=c.alias)

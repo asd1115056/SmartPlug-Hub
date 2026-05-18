@@ -304,7 +304,7 @@ async function addDevice(e) {
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     form.reset()
     onTypeChange('kasa')
-    flash(`Device added (id: ${result.id})`, true)
+    flash('Device added — probing in background…', true)
     await loadDevices()
   } catch (err) {
     if (err.message !== 'Unauthorized') flash(`Failed to add device: ${err.message}`, false)
@@ -360,4 +360,11 @@ function esc(str) {
 async function loadAll() {
   await loadAccounts()
   await loadDevices()
+  connectSSE()
+}
+
+function connectSSE() {
+  const es = new EventSource('/api/v1/events')
+  es.onmessage = () => loadDevices()
+  es.onerror = () => {}
 }
