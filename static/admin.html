@@ -175,18 +175,10 @@
         <div class="modal-body">
           <div class="row g-3">
             <div class="col-sm-6">
-              <label class="form-label fw-semibold">Type</label>
-              <select name="type" id="deviceTypeSelect" class="form-select"
-                      onchange="onTypeChange(this.value)" required>
-                <option value="kasa">Kasa</option>
-                <option value="miio">MiIO</option>
-              </select>
-            </div>
-            <div class="col-sm-6">
               <label class="form-label fw-semibold">Account</label>
               <select name="account_id" id="accountSelect" class="form-select"
-                      onchange="syncTypeFromAccount()">
-                <option value="">— none —</option>
+                      onchange="syncTypeFromAccount()" required>
+                <option value="">— select an account —</option>
               </select>
             </div>
             <div class="col-sm-6">

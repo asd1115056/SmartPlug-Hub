@@ -172,15 +172,8 @@ function populateAccountSelect() {
 
 function syncTypeFromAccount() {
   const accountSel = document.getElementById('accountSelect')
-  const typeSel = document.getElementById('deviceTypeSelect')
   const accountType = accountSel.options[accountSel.selectedIndex]?.dataset.type
-  if (accountType) {
-    typeSel.value = accountType
-    typeSel.disabled = true
-  } else {
-    typeSel.disabled = false
-  }
-  onTypeChange(typeSel.value)
+  onTypeChange(accountType || 'kasa')
 }
 
 async function addAccount(e) {
@@ -297,8 +290,10 @@ async function addDevice(e) {
   const form = e.target
   const accountVal = form.account_id.value
   try {
+    const accountSel = document.getElementById('accountSelect')
+    const type = accountSel.options[accountSel.selectedIndex]?.dataset.type || 'kasa'
     const result = await api('POST', '/api/v1/admin/devices', {
-      mac: form.mac.value, name: form.name.value, type: form.type.value,
+      mac: form.mac.value, name: form.name.value, type,
       broadcast: form.broadcast.value,
       group_name: form.group_name.value || null,
       account_id: accountVal ? parseInt(accountVal) : null,
@@ -307,7 +302,6 @@ async function addDevice(e) {
     })
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     form.reset()
-    document.getElementById('deviceTypeSelect').disabled = false
     onTypeChange('kasa')
     flash(`Device added (id: ${result.id})`, true)
     await loadDevices()
