@@ -84,7 +84,10 @@ def _build_outlets(entry: DeviceEntry) -> list[OutletOut]:
         return []
     result = []
     for child in entry.state.children:
-        name = entry.outlet_names.get(child.outlet_id) or child.hw_alias or child.outlet_id
+        if entry.backend.can_rename_outlet:
+            name = child.hw_alias or child.outlet_id
+        else:
+            name = entry.outlet_names.get(child.outlet_id) or child.hw_alias or child.outlet_id
         result.append(OutletOut(outlet_id=child.outlet_id, name=name, is_on=child.is_on))
     return result
 

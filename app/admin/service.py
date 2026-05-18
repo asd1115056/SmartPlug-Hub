@@ -44,8 +44,12 @@ async def set_device_name(device_id: str, name: str, db: Database, svc: DeviceSe
 async def set_outlet_name(
     device_id: str, outlet_id: str, name: str, db: Database, svc: DeviceService
 ) -> None:
-    await db.set_outlet_name(device_id, outlet_id, name)
-    svc.set_outlet_name(device_id, outlet_id, name)
+    entry = svc.get_device(device_id)
+    if entry.backend.can_rename_outlet:
+        await entry.backend.rename_outlet(entry.config, outlet_id, name)
+    else:
+        await db.set_outlet_name(device_id, outlet_id, name)
+        svc.set_outlet_name(device_id, outlet_id, name)
 
 
 async def add_account(account_type: str, username: str, password: str, db: Database) -> Account:
