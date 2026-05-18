@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..core.utils import mac_to_id, normalize_mac
 from ..db import Account, DeviceInfo
 from ..device_manager import DeviceManager
 from ..schemas import (
@@ -71,8 +72,10 @@ async def list_devices_admin(dm: DeviceManager = Depends(_get_dm)):
 @router.post("/devices", status_code=201)
 async def add_device(body: AddDeviceRequest, dm: DeviceManager = Depends(_get_dm)):
     try:
+        mac = normalize_mac(body.mac)
         info = DeviceInfo(
-            mac=body.mac,
+            id=mac_to_id(mac),
+            mac=mac,
             name=body.name,
             type=body.type,
             broadcast=body.broadcast,

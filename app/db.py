@@ -4,8 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-from pydantic import model_validator
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import Field, SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -42,13 +41,6 @@ class DeviceInfo(SQLModel, table=True):
     # ── MiIO only ─────────────────────────────────────
     token: str | None = None
     miio_id: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _compute_id(cls, data: object) -> object:
-        if isinstance(data, dict) and not data.get("id"):
-            data["id"] = mac_to_id(normalize_mac(data["mac"]))
-        return data
 
 
 class Outlet(SQLModel, table=True):
@@ -259,6 +251,7 @@ class Database:
                     account_id = account_cache[key]
 
                 device = DeviceInfo(
+                    id=mac_to_id(mac),
                     mac=mac,
                     name=name,
                     type=device_type,
