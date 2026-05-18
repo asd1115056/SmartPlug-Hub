@@ -351,10 +351,10 @@ async function handleToggle(deviceId, action, childId) {
         currentDevices[deviceId] = result
         updateCardFromState(deviceId, result)
         const deviceName = result.name || deviceId
-        let msg = `${deviceName}: turned ${action}`
+        let msg = `Turned ${action}: ${deviceName}`
         if (childId && result.children) {
             const child = result.children.find(c => c.id === childId)
-            if (child) msg = `${deviceName} / ${child.alias}: turned ${action}`
+            if (child) msg = `Turned ${action}: ${deviceName} / ${child.alias}`
         }
         showToast(msg, 'success')
     } catch (error) {
@@ -368,7 +368,7 @@ async function handleToggle(deviceId, action, childId) {
                 if (child) target = `${deviceName} / ${child.alias}`
             }
         }
-        showToast(`${target}: ${error.message}`)
+        showToast(`${error.message}: ${target}`)
     } finally {
         if (card) card.classList.remove('loading')
     }
@@ -384,9 +384,9 @@ async function handleRefresh(deviceId) {
 
         const deviceName = result.name || deviceId
         if (result.status === 'online') {
-            showToast(`${deviceName}: reconnected`, 'success')
+            showToast(`Reconnected: ${deviceName}`, 'success')
         } else {
-            showToast(`${deviceName}: still offline`, 'warning')
+            showToast(`Still offline: ${deviceName}`, 'warning')
         }
 
         updateCardFromState(deviceId, result)
@@ -454,9 +454,9 @@ function detectStatusChanges(newDevices) {
 
         if (prev.status !== device.status) {
             if (device.status === 'online') {
-                showToast(`${device.name}: back online`, 'success')
+                showToast(`Back online: ${device.name}`, 'success')
             } else {
-                showToast(`${device.name}: went offline`, 'warning')
+                showToast(`Went offline: ${device.name}`, 'warning')
             }
             continue
         }
@@ -468,12 +468,12 @@ function detectStatusChanges(newDevices) {
                 const prevChild = prev.children?.find(c => c.id === child.id)
                 if (prevChild && prevChild.is_on !== child.is_on) {
                     const action = child.is_on ? 'on' : 'off'
-                    showToast(`${device.name} / ${child.alias}: turned ${action}`, 'info')
+                    showToast(`Turned ${action}: ${device.name} / ${child.alias}`, 'info')
                 }
             }
         } else if (prev.is_on !== undefined && prev.is_on !== device.is_on) {
             const action = device.is_on ? 'on' : 'off'
-            showToast(`${device.name}: turned ${action}`, 'info')
+            showToast(`Turned ${action}: ${device.name}`, 'info')
         }
     }
 }
