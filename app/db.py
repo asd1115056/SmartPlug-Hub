@@ -86,6 +86,11 @@ class Database:
 
     async def add_account(self, row: Account) -> Account:
         async with AsyncSession(self._engine) as session:
+            existing = await session.execute(
+                select(Account).where(Account.username == row.username, Account.type == row.type)
+            )
+            if existing.scalars().first():
+                raise ValueError(f"Account '{row.username}' ({row.type}) already exists")
             session.add(row)
             await session.commit()
             await session.refresh(row)
@@ -108,6 +113,9 @@ class Database:
 
     async def add_device(self, row: DeviceInfo) -> None:
         async with AsyncSession(self._engine) as session:
+            existing = await session.execute(select(DeviceInfo).where(DeviceInfo.mac == row.mac))
+            if existing.scalars().first():
+                raise ValueError(f"Device with MAC '{row.mac}' already exists")
             session.add(row)
             await session.commit()
 

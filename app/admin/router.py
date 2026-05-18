@@ -35,9 +35,12 @@ async def list_accounts(dm: DeviceManager = Depends(_get_dm)):
 
 @router.post("/accounts", response_model=AccountResponse, status_code=201)
 async def create_account(body: AddAccountRequest, dm: DeviceManager = Depends(_get_dm)):
-    row = Account(type=body.type, username=body.username, password=body.password)
-    saved = await dm.add_account(row)
-    return AccountResponse(id=saved.id, type=saved.type, username=saved.username)
+    try:
+        row = Account(type=body.type, username=body.username, password=body.password)
+        saved = await dm.add_account(row)
+        return AccountResponse(id=saved.id, type=saved.type, username=saved.username)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.delete("/accounts/{account_id}", status_code=204)
