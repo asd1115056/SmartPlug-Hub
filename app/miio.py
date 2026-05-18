@@ -111,6 +111,8 @@ def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
 
     values = {r["siid"]: bool(r["value"]) for r in results if r.get("code") == 0}
 
+    # TODO: device already tells us which siids exist (code==0 in results); build children
+    #       from values.keys() so outlet count is dynamic instead of hardcoded via [:6].
     children = [
         ChildState(outlet_id=oid, hw_alias=f"Outlet {oid}", is_on=values.get(siid, False))
         for oid, siid in zip(_OUTLET_IDS[:6], _OUTLET_SIIDS)
@@ -135,6 +137,7 @@ async def _get_status(ip: str, cfg: DeviceConfig) -> DeviceState:
 def _set_power_sync(ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None) -> None:
     if outlet_id is None:
         siid = _MAIN_SIID
+    # TODO: replace parallel-list lookup with a dict {outlet_id: siid} (same refactor as _get_status_sync).
     elif outlet_id in _OUTLET_IDS[:6]:
         siid = _OUTLET_SIIDS[_OUTLET_IDS.index(outlet_id)]
     elif outlet_id == "usb":
