@@ -28,14 +28,14 @@ class AccountInUseError(AccountError):
 @dataclass
 class ChildState:
     outlet_id: str      # Kasa: child.device_id / MiIO: str(index)
-    hw_alias: str
+    hw_alias: str | None
     is_on: bool
 
 
 @dataclass
 class DeviceState:
-    hw_alias: str
-    hw_model: str
+    hw_alias: str | None
+    hw_model: str | None
     hw_is_strip: bool
     is_on: bool
     children: list[ChildState] = field(default_factory=list)
