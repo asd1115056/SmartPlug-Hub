@@ -61,6 +61,7 @@ class DeviceConfig:
 class DeviceBackend(ABC):
     can_rename_outlet: bool = False
     can_rename_device: bool = False
+    ip: str | None = None               # current known IP, updated after successful connect
 
     @abstractmethod
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
@@ -75,3 +76,6 @@ class DeviceBackend(ABC):
 
     async def rename_device(self, cfg: DeviceConfig, name: str) -> None:
         raise NotImplementedError
+
+    async def close(self) -> None:
+        """Release any persistent connection. No-op by default."""
