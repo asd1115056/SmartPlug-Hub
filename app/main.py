@@ -14,6 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .admin.router import router as admin_router
 from .db import Database
 from .device_manager import DeviceManager
 from .core.exceptions import DeviceOfflineError, DeviceOperationError
@@ -159,6 +160,8 @@ async def device_events(dm: DeviceManager = Depends(get_device_manager)):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
+
+app.include_router(admin_router)
 
 # === Static Files & Root ===
 app.mount("/static", StaticFiles(directory=PROJECT_ROOT / "static"), name="static")
