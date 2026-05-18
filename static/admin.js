@@ -165,7 +165,7 @@ function populateAccountSelect() {
   const sel = document.getElementById('accountSelect')
   const current = sel.value
   sel.innerHTML = '<option value="">— none —</option>' +
-    accountsCache.map(a => `<option value="${a.id}" data-type="${a.type}">${esc(a.label)} (${a.type})</option>`).join('')
+    accountsCache.map(a => `<option value="${a.id}" data-type="${a.type}">${esc(a.label)}</option>`).join('')
   sel.value = current
   syncTypeFromAccount()
 }
