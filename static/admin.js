@@ -97,6 +97,36 @@ function flash(msg, ok) {
   div.addEventListener('hidden.bs.toast', () => div.remove())
 }
 
+// ── Delete confirmation modal ─────────────────────────────────────────────────
+
+function confirmDelete(message) {
+  return new Promise(resolve => {
+    const modalEl = document.getElementById('deleteModal')
+    const btn = document.getElementById('deleteConfirmBtn')
+    document.getElementById('deleteModalBody').textContent = message
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl)
+
+    function onConfirm() {
+      cleanup()
+      resolve(true)
+    }
+    function onDismiss() {
+      cleanup()
+      resolve(false)
+    }
+    function cleanup() {
+      btn.removeEventListener('click', onConfirm)
+      modalEl.removeEventListener('hidden.bs.modal', onDismiss)
+      modal.hide()
+    }
+
+    btn.addEventListener('click', onConfirm, { once: true })
+    modalEl.addEventListener('hidden.bs.modal', onDismiss, { once: true })
+    modal.show()
+  })
+}
+
 // ── Accounts ─────────────────────────────────────────────────────────────────
 
 let accountsCache = []
@@ -114,7 +144,7 @@ async function loadAccounts() {
 function renderAccounts() {
   const tbody = document.querySelector('#accountsTable tbody')
   if (!accountsCache.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No accounts yet.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No accounts yet.</td></tr>'
     return
   }
   tbody.innerHTML = accountsCache.map(a => `
@@ -122,7 +152,7 @@ function renderAccounts() {
       <td class="text-muted">${a.id}</td>
       <td><span class="badge bg-secondary">${a.type}</span></td>
       <td>${esc(a.label)}</td>
-      <td class="font-monospace small">${esc(a.username)}</td>
+      <td class="font-monospace">${esc(a.username)}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})">
           <i class="bi bi-trash"></i>
@@ -147,8 +177,9 @@ async function addAccount(e) {
       type: form.type.value, label: form.label.value,
       username: form.username.value, password: form.password.value,
     })
-    flash('Account added', true)
+    bootstrap.Modal.getInstance(document.getElementById('addAccountModal')).hide()
     form.reset()
+    flash('Account added', true)
     await loadAccounts()
   } catch (err) {
     if (err.message !== 'Unauthorized') flash(`Failed to add account: ${err.message}`, false)
@@ -156,7 +187,7 @@ async function addAccount(e) {
 }
 
 async function deleteAccount(id) {
-  if (!confirm(`Delete account ${id}?`)) return
+  if (!await confirmDelete(`Delete account ${id}? Devices using it will lose their credentials.`)) return
   try {
     await api('DELETE', `/api/v1/admin/accounts/${id}`)
     flash('Account deleted', true)
@@ -180,7 +211,7 @@ async function loadDevices() {
 function renderDevices(devices) {
   const tbody = document.querySelector('#devicesTable tbody')
   if (!devices.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No devices yet.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No devices yet.</td></tr>'
     return
   }
   tbody.innerHTML = devices.map(d => {
@@ -191,7 +222,7 @@ function renderDevices(devices) {
          </button>
          <div class="collapse mt-1" id="outlets-${d.id}">
            <div class="outlet-list" id="outlet-list-${d.id}">
-             <span class="text-muted small">Loading…</span>
+             <span class="text-muted">Loading…</span>
            </div>
          </div>`
       : '<span class="text-muted">—</span>'
@@ -199,16 +230,16 @@ function renderDevices(devices) {
       <tr>
         <td>
           <div class="d-flex gap-1 align-items-center">
-            <input id="name-${d.id}" class="form-control form-control-sm inline-input" value="${esc(d.name)}">
+            <input id="name-${d.id}" class="form-control inline-input" value="${esc(d.name)}">
             <button class="btn btn-sm btn-outline-secondary" onclick="renameDevice('${d.id}')">
               <i class="bi bi-check-lg"></i>
             </button>
           </div>
         </td>
         <td><span class="badge bg-secondary">${d.type}</span></td>
-        <td class="font-monospace small text-muted">${d.mac}</td>
-        <td class="small">${esc(d.group_name || '—')}</td>
-        <td class="small text-muted">${esc(d.last_known_ip || '—')}</td>
+        <td class="font-monospace text-muted">${d.mac}</td>
+        <td>${esc(d.group_name || '—')}</td>
+        <td class="text-muted">${esc(d.last_known_ip || '—')}</td>
         <td>${outletCell}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice('${d.id}')">
@@ -218,7 +249,6 @@ function renderDevices(devices) {
       </tr>`
   }).join('')
 
-  // Load outlets after render, triggered on first expand
   devices.filter(d => d.is_strip).forEach(d => {
     const collapseEl = document.getElementById(`outlets-${d.id}`)
     if (!collapseEl) return
@@ -234,7 +264,7 @@ async function loadOutlets(deviceId) {
     el.innerHTML = device.children.map(c => `
       <div class="outlet-row">
         <span class="outlet-id">${c.id}</span>
-        <input id="ol-${deviceId}-${c.id}" class="form-control form-control-sm" style="width:140px" value="${esc(c.alias || c.id)}">
+        <input id="ol-${deviceId}-${c.id}" class="form-control" style="width:140px" value="${esc(c.alias || c.id)}">
         <button class="btn btn-sm btn-outline-secondary" onclick="renameOutlet('${deviceId}','${c.id}')">
           <i class="bi bi-check-lg"></i>
         </button>
@@ -255,9 +285,10 @@ async function addDevice(e) {
       token: form.token?.value || null,
       miio_id: form.miio_id?.value || null,
     })
-    flash(`Device added (id: ${result.id})`, true)
+    bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     form.reset()
     onTypeChange('kasa')
+    flash(`Device added (id: ${result.id})`, true)
     await loadDevices()
   } catch (err) {
     if (err.message !== 'Unauthorized') flash(`Failed to add device: ${err.message}`, false)
@@ -265,7 +296,7 @@ async function addDevice(e) {
 }
 
 async function deleteDevice(id) {
-  if (!confirm(`Delete device ${id}?`)) return
+  if (!await confirmDelete(`Delete this device? This cannot be undone.`)) return
   try {
     await api('DELETE', `/api/v1/admin/devices/${id}`)
     flash('Device deleted', true)
