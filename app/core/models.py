@@ -1,4 +1,4 @@
-"""Domain entities for devices and their state."""
+"""Domain entities for device runtime state."""
 
 from __future__ import annotations
 
@@ -7,30 +7,14 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from .utils import mac_to_id
-
 if TYPE_CHECKING:
     from .backend import DeviceBackend
+    from ..db import DeviceInfo
 
 
 class DeviceStatus(Enum):
     ONLINE = "online"
     OFFLINE = "offline"
-
-
-@dataclass
-class DeviceInfo:
-    """Base class for all device configurations. Protocol-agnostic fields only."""
-
-    mac: str
-    name: str
-    type: str  # "kasa" | "miio"
-    id: str = ""
-    group: str | None = None
-
-    def __post_init__(self) -> None:
-        if not self.id:
-            self.id = mac_to_id(self.mac)
 
 
 @dataclass(frozen=True)
