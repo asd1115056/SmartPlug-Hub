@@ -17,6 +17,7 @@ class OutletOut(BaseModel):
 class DeviceOut(BaseModel):
     id: str
     name: str
+    group_name: str | None
     type: str
     model: str | None
     is_strip: bool
@@ -93,6 +94,7 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
     return DeviceOut(
         id=entry.config.id,
         name=entry.name or (state.hw_alias if state else None) or entry.config.mac,
+        group_name=entry.group_name,
         type=entry.config.type,
         model=state.hw_model if state else None,
         is_strip=state.hw_is_strip if state else False,

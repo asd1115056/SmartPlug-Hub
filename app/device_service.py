@@ -23,6 +23,7 @@ class DeviceEntry:
     backend: DeviceBackend
     queue: DeviceQueue
     name: str | None                # user-set name; None = fall back to state.hw_alias
+    group_name: str | None
     state: DeviceState | None       # None until first successful poll
     is_online: bool
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
@@ -224,6 +225,7 @@ def _make_entry(row: DeviceRow, account: Account | None, outlet_names: dict[str,
         backend=backend,
         queue=DeviceQueue(row.id, backend, config),
         name=row.name,
+        group_name=row.group_name,
         state=None,
         is_online=False,
         outlet_names=outlet_names,
