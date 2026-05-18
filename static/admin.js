@@ -28,8 +28,7 @@ async function doLogin() {
   document.getElementById('loginErr').textContent = ''
 
   sessionStorage.setItem('adminToken', token)
-  const ok = await verifyToken()
-  if (ok) {
+  if (await verifyToken()) {
     showAdmin()
   } else {
     sessionStorage.removeItem('adminToken')
@@ -52,17 +51,13 @@ async function verifyToken() {
   }
 }
 
-// ── Init: check existing token on page load ───────────────────────────────────
+// ── Init ─────────────────────────────────────────────────────────────────────
 
 ;(async () => {
-  if (getToken()) {
-    const ok = await verifyToken()
-    if (ok) { showAdmin(); return }
-  }
+  if (getToken() && await verifyToken()) { showAdmin(); return }
   showLogin('')
 })()
 
-// Pressing Enter in the token input triggers login
 document.getElementById('tokenInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') doLogin()
 })
@@ -84,16 +79,22 @@ async function api(method, path, body) {
   return data
 }
 
-// ── Flash notifications ──────────────────────────────────────────────────────
-
-let _flashTimer = null
+// ── Bootstrap Toast notifications ────────────────────────────────────────────
 
 function flash(msg, ok) {
-  const el = document.getElementById('flashMsg')
-  el.textContent = msg
-  el.className = `show ${ok ? 'ok' : 'err'}`
-  clearTimeout(_flashTimer)
-  _flashTimer = setTimeout(() => { el.className = '' }, 2800)
+  const container = document.getElementById('toastContainer')
+  const div = document.createElement('div')
+  div.className = `toast align-items-center text-bg-${ok ? 'success' : 'danger'} border-0`
+  div.setAttribute('role', 'alert')
+  div.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">${esc(msg)}</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>`
+  container.appendChild(div)
+  const toast = new bootstrap.Toast(div, { delay: 3000 })
+  toast.show()
+  div.addEventListener('hidden.bs.toast', () => div.remove())
 }
 
 // ── Accounts ─────────────────────────────────────────────────────────────────
@@ -113,24 +114,27 @@ async function loadAccounts() {
 function renderAccounts() {
   const tbody = document.querySelector('#accountsTable tbody')
   if (!accountsCache.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No accounts yet.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No accounts yet.</td></tr>'
     return
   }
   tbody.innerHTML = accountsCache.map(a => `
     <tr>
-      <td>${a.id}</td>
-      <td>${a.type}</td>
+      <td class="text-muted">${a.id}</td>
+      <td><span class="badge bg-secondary">${a.type}</span></td>
       <td>${esc(a.label)}</td>
-      <td>${esc(a.username)}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteAccount(${a.id})">Delete</button></td>
-    </tr>
-  `).join('')
+      <td class="font-monospace small">${esc(a.username)}</td>
+      <td class="text-end">
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteAccount(${a.id})">
+          <i class="bi bi-trash"></i>
+        </button>
+      </td>
+    </tr>`).join('')
 }
 
 function populateAccountSelect() {
   const sel = document.getElementById('accountSelect')
   const current = sel.value
-  sel.innerHTML = '<option value="">— No account —</option>' +
+  sel.innerHTML = '<option value="">— none —</option>' +
     accountsCache.map(a => `<option value="${a.id}">${esc(a.label)} (${a.type})</option>`).join('')
   sel.value = current
 }
@@ -140,10 +144,8 @@ async function addAccount(e) {
   const form = e.target
   try {
     await api('POST', '/api/v1/admin/accounts', {
-      type: form.type.value,
-      label: form.label.value,
-      username: form.username.value,
-      password: form.password.value,
+      type: form.type.value, label: form.label.value,
+      username: form.username.value, password: form.password.value,
     })
     flash('Account added', true)
     form.reset()
@@ -178,48 +180,65 @@ async function loadDevices() {
 function renderDevices(devices) {
   const tbody = document.querySelector('#devicesTable tbody')
   if (!devices.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No devices yet.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No devices yet.</td></tr>'
     return
   }
   tbody.innerHTML = devices.map(d => {
     const outletCell = d.is_strip
-      ? `<details><summary>Show outlets</summary>
-           <div class="outlet-list" id="outlets-${d.id}">Loading…</div>
-         </details>`
-      : '—'
+      ? `<button class="btn btn-sm btn-outline-secondary" type="button"
+           data-bs-toggle="collapse" data-bs-target="#outlets-${d.id}">
+           <i class="bi bi-diagram-3"></i>
+         </button>
+         <div class="collapse mt-1" id="outlets-${d.id}">
+           <div class="outlet-list" id="outlet-list-${d.id}">
+             <span class="text-muted small">Loading…</span>
+           </div>
+         </div>`
+      : '<span class="text-muted">—</span>'
     return `
       <tr>
         <td>
-          <div class="inline-edit">
-            <input id="name-${d.id}" value="${esc(d.name)}">
-            <button class="btn btn-ghost btn-sm" onclick="renameDevice('${d.id}')">Save</button>
+          <div class="d-flex gap-1 align-items-center">
+            <input id="name-${d.id}" class="form-control form-control-sm inline-input" value="${esc(d.name)}">
+            <button class="btn btn-sm btn-outline-secondary" onclick="renameDevice('${d.id}')">
+              <i class="bi bi-check-lg"></i>
+            </button>
           </div>
         </td>
-        <td>${d.type}</td>
-        <td style="font-family:monospace;font-size:0.8rem">${d.mac}</td>
-        <td>${esc(d.group_name || '—')}</td>
-        <td style="font-size:0.8rem;color:#718096">${esc(d.last_known_ip || '—')}</td>
+        <td><span class="badge bg-secondary">${d.type}</span></td>
+        <td class="font-monospace small text-muted">${d.mac}</td>
+        <td class="small">${esc(d.group_name || '—')}</td>
+        <td class="small text-muted">${esc(d.last_known_ip || '—')}</td>
         <td>${outletCell}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="deleteDevice('${d.id}')">Delete</button></td>
-      </tr>
-    `
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice('${d.id}')">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      </tr>`
   }).join('')
 
-  devices.filter(d => d.is_strip).forEach(d => loadOutlets(d.id))
+  // Load outlets after render, triggered on first expand
+  devices.filter(d => d.is_strip).forEach(d => {
+    const collapseEl = document.getElementById(`outlets-${d.id}`)
+    if (!collapseEl) return
+    collapseEl.addEventListener('show.bs.collapse', () => loadOutlets(d.id), { once: true })
+  })
 }
 
 async function loadOutlets(deviceId) {
   try {
     const device = await api('GET', `/api/v1/devices/${deviceId}`)
-    const el = document.getElementById(`outlets-${deviceId}`)
+    const el = document.getElementById(`outlet-list-${deviceId}`)
     if (!el || !device.children) return
     el.innerHTML = device.children.map(c => `
       <div class="outlet-row">
         <span class="outlet-id">${c.id}</span>
-        <input id="ol-${deviceId}-${c.id}" value="${esc(c.alias || c.id)}" style="width:120px">
-        <button class="btn btn-ghost btn-sm" onclick="renameOutlet('${deviceId}','${c.id}')">Save</button>
-      </div>
-    `).join('')
+        <input id="ol-${deviceId}-${c.id}" class="form-control form-control-sm" style="width:140px" value="${esc(c.alias || c.id)}">
+        <button class="btn btn-sm btn-outline-secondary" onclick="renameOutlet('${deviceId}','${c.id}')">
+          <i class="bi bi-check-lg"></i>
+        </button>
+      </div>`).join('')
   } catch (_) {}
 }
 
@@ -229,9 +248,7 @@ async function addDevice(e) {
   const accountVal = form.account_id.value
   try {
     const result = await api('POST', '/api/v1/admin/devices', {
-      mac: form.mac.value,
-      name: form.name.value,
-      type: form.type.value,
+      mac: form.mac.value, name: form.name.value, type: form.type.value,
       broadcast: form.broadcast.value,
       group_name: form.group_name.value || null,
       account_id: accountVal ? parseInt(accountVal) : null,
