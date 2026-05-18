@@ -17,6 +17,8 @@ let searchQuery = ''
 const notificationHistory = []
 let unreadCount = 0
 
+const pendingToggles = new Set()
+
 
 async function fetchDevices() {
     const response = await fetch(`${API_BASE}/devices`)
@@ -343,6 +345,7 @@ async function loadDevices() {
 }
 
 async function handleToggle(deviceId, action, childId) {
+    pendingToggles.add(deviceId)
     const card = document.querySelector(`[data-id="${deviceId}"]`)
     if (card) card.classList.add('loading')
 
@@ -370,6 +373,7 @@ async function handleToggle(deviceId, action, childId) {
         }
         showToast(`${error.message}: ${target}`)
     } finally {
+        pendingToggles.delete(deviceId)
         if (card) card.classList.remove('loading')
     }
 }
@@ -462,6 +466,7 @@ function detectStatusChanges(newDevices) {
         }
 
         if (device.status !== 'online') continue
+        if (pendingToggles.has(device.id)) continue
 
         if (device.children?.length) {
             for (const child of device.children) {
