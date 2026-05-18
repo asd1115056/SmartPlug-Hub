@@ -4,17 +4,20 @@ function esc(str) {
   return d.innerHTML
 }
 
-export function renderTabs(devices, activeGroup, onSelect) {
+export function renderTabs(devices, activeGroup, searchQuery, onSelect) {
   const container = document.getElementById('tabs-nav')
   const groups = [...new Set(devices.filter(d => d.group_name).map(d => d.group_name))]
   if (!groups.length) { container.innerHTML = ''; return }
 
-  const tabs = [{ id: 'all', label: 'All', count: devices.length },
-    ...groups.map(g => ({ id: g, label: g, count: devices.filter(d => d.group_name === g).length }))]
+  const effectiveActive = searchQuery ? 'all' : activeGroup
+  const tabs = [
+    { id: 'all', label: 'All', count: devices.length },
+    ...groups.map(g => ({ id: g, label: g, count: devices.filter(d => d.group_name === g).length })),
+  ]
 
   container.innerHTML = `<ul class="nav nav-tabs">${tabs.map(t => `
     <li class="nav-item">
-      <button class="nav-link ${activeGroup === t.id ? 'active' : ''}" data-group="${esc(t.id)}">
+      <button class="nav-link ${effectiveActive === t.id ? 'active' : ''}" data-group="${esc(t.id)}">
         ${esc(t.label)} <span class="badge text-bg-secondary ms-1">${t.count}</span>
       </button>
     </li>`).join('')}</ul>`
@@ -24,10 +27,18 @@ export function renderTabs(devices, activeGroup, onSelect) {
   )
 }
 
-export function renderDevices(devices, searchQuery, activeGroup, onToggle, onRefresh) {
+export function renderDevices(devices, searchQuery, activeGroup) {
   const container = document.getElementById('devices-container')
-  let filtered = devices
 
+  if (!devices.length) {
+    container.innerHTML = `
+      <div class="alert alert-info">
+        <strong>No devices.</strong> Add devices from the <a href="/admin">Admin panel</a>.
+      </div>`
+    return
+  }
+
+  let filtered = devices
   if (searchQuery) {
     const q = searchQuery.toLowerCase()
     filtered = devices.filter(d =>
@@ -39,81 +50,61 @@ export function renderDevices(devices, searchQuery, activeGroup, onToggle, onRef
   }
 
   if (!filtered.length) {
-    container.innerHTML = '<p class="text-muted text-center py-5">No devices found.</p>'
+    container.innerHTML = '<p class="text-muted py-3">No matching devices.</p>'
     return
   }
 
-  container.innerHTML = filtered.map(d => _deviceCard(d)).join('')
-
-  filtered.forEach(d => {
-    const card = container.querySelector(`[data-device-id="${d.id}"]`)
-    if (!card) return
-
-    // whole-device toggle (non-strip)
-    const mainToggle = card.querySelector('.main-toggle')
-    mainToggle?.addEventListener('click', () => onToggle(d.id, null, !d.is_on))
-
-    // per-outlet toggles
-    card.querySelectorAll('[data-outlet-id]').forEach(btn => {
-      const outlet = d.outlets.find(o => o.outlet_id === btn.dataset.outletId)
-      btn.addEventListener('click', () => onToggle(d.id, btn.dataset.outletId, !outlet?.is_on))
-    })
-
-    // refresh
-    card.querySelector('.refresh-btn')?.addEventListener('click', () => onRefresh(d.id))
-  })
+  container.innerHTML = `<div class="row g-3">${filtered.map(d => `
+    <div class="col-lg-4 col-md-6">
+      ${_deviceCard(d)}
+    </div>`).join('')}</div>`
 }
 
 function _deviceCard(d) {
-  const statusBadge = d.is_online
-    ? '<span class="badge text-bg-success">Online</span>'
-    : '<span class="badge text-bg-secondary">Offline</span>'
-
+  const stateClass = d.is_online ? 'state-online' : 'state-offline'
+  const body = d.is_strip ? _outletList(d.id, d.outlets, d.is_online) : _mainToggle(d.id, d.is_on, d.is_online)
   const refreshBtn = !d.is_online
-    ? `<button class="btn btn-sm btn-outline-secondary refresh-btn" title="Refresh">
+    ? `<button class="btn btn-sm refresh-btn" data-device-id="${d.id}" title="Refresh">
          <i class="bi bi-arrow-clockwise"></i>
        </button>`
     : ''
 
-  const body = d.is_strip
-    ? _outletList(d.outlets, d.is_online)
-    : _mainToggle(d.is_on, d.is_online)
-
   return `
-    <div class="card mb-3" data-device-id="${d.id}">
+    <div class="card device-card h-100 ${stateClass}" data-device-id="${d.id}">
       <div class="card-header d-flex justify-content-between align-items-center">
         <div>
           <div class="fw-semibold">${esc(d.name)}</div>
-          ${d.model ? `<div class="text-muted small">${esc(d.model)}</div>` : ''}
+          ${d.model ? `<div class="device-model">${esc(d.model)}</div>` : ''}
         </div>
-        <div class="d-flex align-items-center gap-2">
-          ${statusBadge}
-          ${refreshBtn}
-        </div>
+        ${refreshBtn}
       </div>
       <div class="card-body p-0">${body}</div>
     </div>`
 }
 
-function _mainToggle(isOn, isOnline) {
+function _mainToggle(deviceId, isOn, isOnline) {
+  const onClass      = isOn ? 'is-on' : ''
+  const action       = isOn ? 'off' : 'on'
+  const disabledAttr = isOnline ? '' : 'disabled'
   return `
-    <div class="d-flex align-items-center justify-content-center p-3">
-      <div class="form-check form-switch fs-4 mb-0">
-        <input class="form-check-input main-toggle" type="checkbox" role="switch"
-          ${isOn ? 'checked' : ''} ${!isOnline ? 'disabled' : ''}>
-      </div>
+    <div class="single-device-control">
+      <button class="toggle-switch ${onClass}"
+        data-device-id="${deviceId}" data-action="${action}" ${disabledAttr}></button>
     </div>`
 }
 
-function _outletList(outlets, isOnline) {
+function _outletList(deviceId, outlets, isOnline) {
   if (!outlets.length) return '<p class="text-muted text-center p-3 mb-0">No outlets</p>'
-  return outlets.map(o => `
-    <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
-      <span>${esc(o.name)}</span>
-      <div class="form-check form-switch mb-0">
-        <input class="form-check-input" type="checkbox" role="switch"
-          data-outlet-id="${esc(o.outlet_id)}"
-          ${o.is_on ? 'checked' : ''} ${!isOnline ? 'disabled' : ''}>
-      </div>
-    </div>`).join('')
+  const disabledAttr = isOnline ? '' : 'disabled'
+  return outlets.map(o => {
+    const onClass = o.is_on ? 'is-on' : ''
+    const action  = o.is_on ? 'off' : 'on'
+    return `
+      <div class="child-outlet ${onClass}">
+        <span class="outlet-name">${esc(o.name)}</span>
+        <button class="toggle-switch ${onClass}"
+          data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
+          data-action="${action}" ${disabledAttr}></button>
+      </div>`
+  }).join('')
 }
