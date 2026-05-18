@@ -17,6 +17,8 @@ let searchQuery = ''
 const notificationHistory = []
 let unreadCount = 0
 
+const pendingToggles = new Set()
+
 
 async function fetchDevices() {
     const response = await fetch(`${API_BASE}/devices`)
@@ -343,6 +345,7 @@ async function loadDevices() {
 }
 
 async function handleToggle(deviceId, action, childId) {
+    pendingToggles.add(deviceId)
     const card = document.querySelector(`[data-id="${deviceId}"]`)
     if (card) card.classList.add('loading')
 
@@ -351,10 +354,10 @@ async function handleToggle(deviceId, action, childId) {
         currentDevices[deviceId] = result
         updateCardFromState(deviceId, result)
         const deviceName = result.name || deviceId
-        let msg = `${deviceName}: turned ${action}`
+        let msg = `Turned ${action}: ${deviceName}`
         if (childId && result.children) {
             const child = result.children.find(c => c.id === childId)
-            if (child) msg = `${deviceName} / ${child.alias}: turned ${action}`
+            if (child) msg = `Turned ${action}: ${deviceName} / ${child.alias}`
         }
         showToast(msg, 'success')
     } catch (error) {
@@ -368,8 +371,9 @@ async function handleToggle(deviceId, action, childId) {
                 if (child) target = `${deviceName} / ${child.alias}`
             }
         }
-        showToast(`${target}: ${error.message}`)
+        showToast(`${error.message}: ${target}`)
     } finally {
+        pendingToggles.delete(deviceId)
         if (card) card.classList.remove('loading')
     }
 }
@@ -384,9 +388,9 @@ async function handleRefresh(deviceId) {
 
         const deviceName = result.name || deviceId
         if (result.status === 'online') {
-            showToast(`${deviceName}: reconnected`, 'success')
+            showToast(`Reconnected: ${deviceName}`, 'success')
         } else {
-            showToast(`${deviceName}: still offline`, 'warning')
+            showToast(`Still offline: ${deviceName}`, 'warning')
         }
 
         updateCardFromState(deviceId, result)
@@ -450,11 +454,31 @@ function setServerOffline(offline) {
 function detectStatusChanges(newDevices) {
     for (const device of newDevices) {
         const prev = currentDevices[device.id]
-        if (!prev || prev.status === device.status) continue
-        if (device.status === 'online') {
-            showToast(`${device.name}: back online`, 'success')
-        } else {
-            showToast(`${device.name}: went offline`, 'warning')
+        if (!prev) continue
+
+        if (prev.status !== device.status) {
+            if (device.status === 'online') {
+                showToast(`Back online: ${device.name}`, 'success')
+            } else {
+                showToast(`Went offline: ${device.name}`, 'warning')
+            }
+            continue
+        }
+
+        if (device.status !== 'online') continue
+        if (pendingToggles.has(device.id)) continue
+
+        if (device.children?.length) {
+            for (const child of device.children) {
+                const prevChild = prev.children?.find(c => c.id === child.id)
+                if (prevChild && prevChild.is_on !== child.is_on) {
+                    const action = child.is_on ? 'on' : 'off'
+                    showToast(`Turned ${action}: ${device.name} / ${child.alias}`, 'info')
+                }
+            }
+        } else if (prev.is_on !== undefined && prev.is_on !== device.is_on) {
+            const action = device.is_on ? 'on' : 'off'
+            showToast(`Turned ${action}: ${device.name}`, 'info')
         }
     }
 }
