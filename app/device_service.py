@@ -4,6 +4,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+from .command_queue import DeviceQueue
 from .core import DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceState
 from .db import Account, Database, Device as DeviceRow
 from .kasa import KasaBackend
@@ -20,8 +21,8 @@ POLL_INTERVAL: float = 60.0
 class DeviceEntry:
     config: DeviceConfig
     backend: DeviceBackend
-    lock: asyncio.Lock
-    name: str | None           # user-set name; None = fall back to state.hw_alias
+    queue: DeviceQueue
+    name: str | None                # user-set name; None = fall back to state.hw_alias
     state: DeviceState | None       # None until first successful poll
     is_online: bool
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
@@ -46,15 +47,7 @@ class DeviceService:
 
         for row in rows:
             account = accounts.get(row.account_id) if row.account_id else None
-            self._devices[row.id] = DeviceEntry(
-                config=_make_config(row, account),
-                backend=_make_backend(row.type),
-                lock=asyncio.Lock(),
-                name=row.name,
-                state=None,
-                is_online=False,
-                outlet_names=outlet_names.get(row.id, {}),
-            )
+            self._devices[row.id] = _make_entry(row, account, outlet_names.get(row.id, {}))
 
         self._poll_task = asyncio.create_task(self._poll_loop())
         logger.info(f"DeviceService started with {len(self._devices)} devices")
@@ -67,7 +60,7 @@ class DeviceService:
             except asyncio.CancelledError:
                 pass
         for entry in self._devices.values():
-            await entry.backend.close()
+            await entry.queue.close()
         logger.info("DeviceService stopped")
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -83,26 +76,23 @@ class DeviceService:
 
     async def set_power(self, device_id: str, outlet_id: str | None, on: bool) -> DeviceState:
         entry = self._get_entry(device_id)
-        async with entry.lock:
-            try:
-                await entry.backend.set_power(entry.config, outlet_id, on)
-                state = await entry.backend.probe(entry.config)
-            except DeviceOfflineError:
-                self._mark_offline(device_id, entry)
-                raise
+        try:
+            state = await entry.queue.submit(outlet_id, on)
+        except DeviceOfflineError:
+            self._mark_offline(device_id, entry)
+            raise
         self._update_state(device_id, entry, state)
         return state
 
     async def refresh(self, device_id: str) -> DeviceState:
         """Force-close and re-probe. Useful for recovering an offline device."""
         entry = self._get_entry(device_id)
-        async with entry.lock:
-            await entry.backend.close()
-            try:
-                state = await entry.backend.probe(entry.config)
-            except DeviceOfflineError:
-                self._mark_offline(device_id, entry)
-                raise
+        await entry.queue.close()
+        try:
+            state = await entry.backend.probe(entry.config)
+        except DeviceOfflineError:
+            self._mark_offline(device_id, entry)
+            raise
         self._update_state(device_id, entry, state)
         return state
 
@@ -119,15 +109,7 @@ class DeviceService:
     # ── Admin helpers (called after DB writes are committed) ──────────────────
 
     def add_entry(self, row: DeviceRow, account: Account | None, outlet_names: dict[str, str]) -> None:
-        entry = DeviceEntry(
-            config=_make_config(row, account),
-            backend=_make_backend(row.type),
-            lock=asyncio.Lock(),
-            name=row.name,
-            state=None,
-            is_online=False,
-            outlet_names=outlet_names,
-        )
+        entry = _make_entry(row, account, outlet_names)
         self._devices[row.id] = entry
         asyncio.create_task(self._probe_one(row.id, entry))
         self._broadcast()
@@ -135,7 +117,7 @@ class DeviceService:
     async def remove_entry(self, device_id: str) -> None:
         entry = self._devices.pop(device_id, None)
         if entry:
-            await entry.backend.close()
+            await entry.queue.close()
         self._broadcast()
 
     def set_name(self, device_id: str, name: str) -> None:
@@ -188,16 +170,17 @@ class DeviceService:
                 pass
 
     async def _probe_one(self, device_id: str, entry: DeviceEntry) -> None:
-        async with entry.lock:
-            try:
-                state = await entry.backend.probe(entry.config)
-            except DeviceOfflineError:
-                self._mark_offline(device_id, entry)
-                return
-            except Exception:
-                logger.exception(f"Unexpected error probing {device_id}")
-                self._mark_offline(device_id, entry)
-                return
+        if entry.queue.is_active():
+            return  # backend is busy with a command; it will probe after set_power
+        try:
+            state = await entry.backend.probe(entry.config)
+        except DeviceOfflineError:
+            self._mark_offline(device_id, entry)
+            return
+        except Exception:
+            logger.exception(f"Unexpected error probing {device_id}")
+            self._mark_offline(device_id, entry)
+            return
         self._update_state(device_id, entry, state)
 
     async def _poll_loop(self) -> None:
@@ -231,3 +214,17 @@ def _make_backend(device_type: str) -> DeviceBackend:
     if device_type == "miio":
         return MiioBackend()
     raise ValueError(f"Unknown device type: {device_type!r}")
+
+
+def _make_entry(row: DeviceRow, account: Account | None, outlet_names: dict[str, str]) -> DeviceEntry:
+    config = _make_config(row, account)
+    backend = _make_backend(row.type)
+    return DeviceEntry(
+        config=config,
+        backend=backend,
+        queue=DeviceQueue(row.id, backend, config),
+        name=row.name,
+        state=None,
+        is_online=False,
+        outlet_names=outlet_names,
+    )

@@ -21,6 +21,8 @@ _RETRY_DELAY = 0.5
 class KasaBackend(DeviceBackend):
     can_rename_outlet = True
     can_rename_device = True
+    session_timeout = 60.0
+    command_interval = 0.5
 
     def __init__(self) -> None:
         self.ip: str | None = None

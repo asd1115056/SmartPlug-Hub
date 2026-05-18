@@ -62,6 +62,8 @@ class DeviceBackend(ABC):
     can_rename_outlet: bool = False
     can_rename_device: bool = False
     ip: str | None = None               # current known IP, updated after successful connect
+    session_timeout: float = 0.0        # 0 = stateless (MiIO); >0 = keep TCP alive this long
+    command_interval: float = 0.0       # minimum seconds between consecutive commands
 
     @abstractmethod
     async def probe(self, cfg: DeviceConfig) -> DeviceState:

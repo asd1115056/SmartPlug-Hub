@@ -36,6 +36,8 @@ class MiioBackend(DeviceBackend):
     # MiIO does not support hardware rename — labels live in DB only
     can_rename_outlet = False
     can_rename_device = False
+    session_timeout = 0.0
+    command_interval = 0.0
 
     def __init__(self) -> None:
         self.ip: str | None = None
