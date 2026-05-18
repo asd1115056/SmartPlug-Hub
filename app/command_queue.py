@@ -39,6 +39,7 @@ class DeviceQueue:
         cmd = Command(outlet_id=outlet_id, on=on, future=future)
         self._pending.append(cmd)
         self._queue.put_nowait(cmd)
+        logger.debug("[%s] command queued outlet=%s on=%s", self._device_id, outlet_id, on)
 
         if self._processor is None or self._processor.done():
             self._processor = asyncio.create_task(self._run())
@@ -90,6 +91,7 @@ class DeviceQueue:
             try:
                 return await asyncio.wait_for(self._queue.get(), timeout=timeout)
             except asyncio.TimeoutError:
+                logger.debug("[%s] session idle — closing", self._device_id)
                 return None
         else:
             # Stateless (MiIO): drain queue immediately then exit

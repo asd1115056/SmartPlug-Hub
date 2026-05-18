@@ -1,5 +1,6 @@
-"""Shared abstractions — exceptions, runtime models, device config, backend interface."""
+"""Shared abstractions — exceptions, runtime models, device config, backend interface, utilities."""
 
+import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -81,3 +82,15 @@ class DeviceBackend(ABC):
 
     async def close(self) -> None:
         """Release any persistent connection. No-op by default."""
+
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+
+def normalize_mac(mac: str) -> str:
+    """Normalize MAC to uppercase hex with no separators: 'AA:BB:CC' → 'AABBCC'."""
+    return mac.replace(":", "").replace("-", "").upper()
+
+
+def mac_to_id(mac: str) -> str:
+    """Derive a stable 8-char device ID from a MAC address."""
+    return hashlib.sha256(normalize_mac(mac).encode()).hexdigest()[:8]

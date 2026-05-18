@@ -8,8 +8,7 @@ from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
 from kasa.exceptions import AuthenticationError
 
-from .core import ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState
-from .utils import normalize_mac
+from .core import ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState, normalize_mac
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +28,7 @@ class KasaBackend(DeviceBackend):
         self._device: Device | None = None
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
+        logger.debug("Probing %s at %s", cfg.id, self.ip or cfg.last_known_ip or cfg.broadcast)
         device = await self._get_device(cfg)
         try:
             await device.update()

@@ -76,6 +76,7 @@ class DeviceService:
         return entry
 
     async def set_power(self, device_id: str, outlet_id: str | None, on: bool) -> DeviceState:
+        logger.debug("set_power %s outlet=%s on=%s", device_id, outlet_id, on)
         entry = self._get_entry(device_id)
         try:
             state = await entry.queue.submit(outlet_id, on)
@@ -172,7 +173,8 @@ class DeviceService:
 
     async def _probe_one(self, device_id: str, entry: DeviceEntry) -> None:
         if entry.queue.is_active():
-            return  # backend is busy with a command; it will probe after set_power
+            logger.debug("Skipping %s — command in progress", device_id)
+            return
         try:
             state = await entry.backend.probe(entry.config)
         except DeviceOfflineError:
@@ -186,6 +188,7 @@ class DeviceService:
 
     async def _poll_loop(self) -> None:
         while True:
+            logger.debug("Polling %d devices", len(self._devices))
             await asyncio.gather(*[
                 self._probe_one(did, entry)
                 for did, entry in list(self._devices.items())

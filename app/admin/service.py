@@ -1,9 +1,8 @@
 """Admin CRUD operations — pure functions called after route validation."""
 
-from ..core import AccountInUseError
+from ..core import AccountInUseError, mac_to_id, normalize_mac
 from ..db import Account, Database, Device as DeviceRow
 from ..device_service import DeviceService
-from ..utils import mac_to_id, normalize_mac
 
 
 async def add_device(
