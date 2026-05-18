@@ -40,28 +40,44 @@ class KasaBackend(DeviceBackend):
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         device = await self._get_device(cfg)
-        await device.update()
-        if outlet_id:
-            child = next((c for c in (device.children or []) if c.device_id == outlet_id), None)
-            if child is None:
-                raise ValueError(f"Outlet {outlet_id} not found on {cfg.mac}")
-            await (child.turn_on() if on else child.turn_off())
-        else:
-            await (device.turn_on() if on else device.turn_off())
+        try:
+            await device.update()
+            if outlet_id:
+                child = next((c for c in (device.children or []) if c.device_id == outlet_id), None)
+                if child is None:
+                    raise ValueError(f"Outlet {outlet_id} not found on {cfg.mac}")
+                await (child.turn_on() if on else child.turn_off())
+            else:
+                await (device.turn_on() if on else device.turn_off())
+        except ValueError:
+            raise
+        except Exception:
+            await self._drop()
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
 
     async def rename_outlet(self, cfg: DeviceConfig, outlet_id: str, name: str) -> None:
         device = await self._get_device(cfg)
-        await device.update()
-        target = next(
-            (c for c in (device.children or []) if c.device_id == outlet_id), None
-        )
-        if target is None:
-            raise ValueError(f"Outlet {outlet_id} not found on {cfg.mac}")
-        await target.set_alias(name)
+        try:
+            await device.update()
+            target = next(
+                (c for c in (device.children or []) if c.device_id == outlet_id), None
+            )
+            if target is None:
+                raise ValueError(f"Outlet {outlet_id} not found on {cfg.mac}")
+            await target.set_alias(name)
+        except ValueError:
+            raise
+        except Exception:
+            await self._drop()
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
 
     async def rename_device(self, cfg: DeviceConfig, name: str) -> None:
         device = await self._get_device(cfg)
-        await device.set_alias(name)
+        try:
+            await device.set_alias(name)
+        except Exception:
+            await self._drop()
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
 
     async def close(self) -> None:
         await self._drop()
