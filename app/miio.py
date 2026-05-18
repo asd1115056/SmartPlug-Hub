@@ -7,6 +7,8 @@ import socket
 import time
 from functools import partial
 
+from miio.exceptions import DeviceException
+from miio.miot_device import MiotDevice
 from miio.protocol import Message
 
 from .core import (
@@ -94,8 +96,6 @@ async def _discover(cfg: DeviceConfig) -> str | None:
 # ── Status / control ──────────────────────────────────────────────────────────
 
 def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
-    from miio import DeviceException, MiotDevice  # lazy import
-
     device = MiotDevice(ip=ip, token=cfg.miio_token)
     props = [{"did": cfg.miio_id, "siid": s, "piid": 1}
              for s in _OUTLET_SIIDS + [_USB_SIID]]
@@ -128,8 +128,6 @@ async def _get_status(ip: str, cfg: DeviceConfig) -> DeviceState:
 
 
 def _set_power_sync(ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None) -> None:
-    from miio import DeviceException, MiotDevice  # lazy import
-
     if outlet_id is None:
         siid = _MAIN_SIID
     elif outlet_id in _OUTLET_IDS[:6]:
