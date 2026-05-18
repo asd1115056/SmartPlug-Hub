@@ -118,6 +118,7 @@ class Database:
                 raise ValueError(f"Device with MAC '{row.mac}' already exists")
             session.add(row)
             await session.commit()
+            await session.refresh(row)
 
     async def remove_device(self, device_id: str) -> None:
         async with AsyncSession(self._engine) as session:
