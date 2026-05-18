@@ -216,15 +216,10 @@ function renderDevices(devices) {
   }
   tbody.innerHTML = devices.map(d => {
     const outletCell = d.is_strip
-      ? `<button class="btn btn-sm btn-outline-secondary" type="button"
-           data-bs-toggle="collapse" data-bs-target="#outlets-${d.id}">
+      ? `<button class="btn btn-sm btn-outline-secondary"
+           onclick="openOutletsModal('${d.id}', ${JSON.stringify(d.name)})">
            <i class="bi bi-diagram-3"></i>
-         </button>
-         <div class="collapse mt-1" id="outlets-${d.id}">
-           <div class="outlet-list" id="outlet-list-${d.id}">
-             <span class="text-muted">Loading…</span>
-           </div>
-         </div>`
+         </button>`
       : '<span class="text-muted">—</span>'
     return `
       <tr>
@@ -249,27 +244,37 @@ function renderDevices(devices) {
       </tr>`
   }).join('')
 
-  devices.filter(d => d.is_strip).forEach(d => {
-    const collapseEl = document.getElementById(`outlets-${d.id}`)
-    if (!collapseEl) return
-    collapseEl.addEventListener('show.bs.collapse', () => loadOutlets(d.id), { once: true })
-  })
 }
 
-async function loadOutlets(deviceId) {
+async function openOutletsModal(deviceId, deviceName) {
+  const modalEl = document.getElementById('outletsModal')
+  const bodyEl = document.getElementById('outletsModalBody')
+  document.getElementById('outletsModalTitle').innerHTML =
+    `<i class="bi bi-diagram-3 me-2"></i>Outlets — ${esc(deviceName)}`
+  bodyEl.innerHTML = `
+    <div class="text-center py-3">
+      <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+    </div>`
+
+  bootstrap.Modal.getOrCreateInstance(modalEl).show()
+
   try {
     const device = await api('GET', `/api/v1/devices/${deviceId}`)
-    const el = document.getElementById(`outlet-list-${deviceId}`)
-    if (!el || !device.children) return
-    el.innerHTML = device.children.map(c => `
+    if (!device.children?.length) {
+      bodyEl.innerHTML = '<p class="text-muted mb-0">No outlets found.</p>'
+      return
+    }
+    bodyEl.innerHTML = device.children.map(c => `
       <div class="outlet-row">
-        <span class="outlet-id">${c.id}</span>
-        <input id="ol-${deviceId}-${c.id}" class="form-control" style="width:140px" value="${esc(c.alias || c.id)}">
+        <span class="outlet-id">${esc(c.id)}</span>
+        <input id="ol-${deviceId}-${c.id}" class="form-control flex-grow-1" value="${esc(c.alias || c.id)}">
         <button class="btn btn-sm btn-outline-secondary" onclick="renameOutlet('${deviceId}','${c.id}')">
           <i class="bi bi-check-lg"></i>
         </button>
       </div>`).join('')
-  } catch (_) {}
+  } catch (e) {
+    bodyEl.innerHTML = `<p class="text-danger mb-0">Failed to load outlets: ${esc(e.message)}</p>`
+  }
 }
 
 async function addDevice(e) {
