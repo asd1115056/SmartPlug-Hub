@@ -6,16 +6,22 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from .db import Database
 from .device_manager import DeviceManager
 from .core.exceptions import DeviceOfflineError, DeviceOperationError
 from .core.models import DeviceStatus
 from .schemas import ControlRequest, DeviceListResponse, DeviceResponse, ErrorDetail
 
 PROJECT_ROOT = Path(__file__).parent.parent
+DEVICES_JSON = PROJECT_ROOT / "config" / "devices.json"
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -23,6 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+db = Database(PROJECT_ROOT / "data" / "smartplug.db")
 device_manager: DeviceManager | None = None
 
 
@@ -46,7 +53,9 @@ async def lifespan(app: FastAPI):
     global device_manager
 
     logger.info("Starting SmartPlug Hub...")
-    device_manager = DeviceManager()
+    await db.initialize(DEVICES_JSON)
+
+    device_manager = DeviceManager(db=db)
     await device_manager.initialize()
 
     yield
@@ -54,6 +63,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down SmartPlug Hub...")
     if device_manager:
         await device_manager.shutdown()
+    await db.close()
 
 
 # === App ===
@@ -118,7 +128,7 @@ async def refresh_device(
         raise HTTPException(status_code=404, detail=_err("not_found", str(e)))
 
 
-_SSE_HEARTBEAT = 30.0  # keepalive interval when no state changes occur
+_SSE_HEARTBEAT = 30.0
 
 
 @app.get("/api/v1/events")
@@ -152,6 +162,11 @@ async def device_events(dm: DeviceManager = Depends(get_device_manager)):
 
 # === Static Files & Root ===
 app.mount("/static", StaticFiles(directory=PROJECT_ROOT / "static"), name="static")
+
+
+@app.get("/admin")
+async def admin_page():
+    return FileResponse(PROJECT_ROOT / "static/admin.html")
 
 
 @app.get("/")
