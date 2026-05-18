@@ -59,8 +59,9 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 |-------|----------|-------------|
 | `mac` | Yes | Device MAC address (formats: `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABBCCDDEEFF`) |
 | `name` | No | Display name (defaults to device ID if omitted) |
-| `type` | Yes | Protocol: `"kasa"` |
+| `type` | Yes | Protocol: `"kasa"` or `"miio"` |
 | `broadcast` | Yes | Broadcast address for discovery (e.g., `192.168.1.255`) |
+| `group` | No | Tab group name in the web UI. Devices without a group appear only in All. |
 
 #### Kasa-specific fields
 
@@ -68,13 +69,43 @@ Copy `config/devices.example.json` to `config/devices.json` and add your devices
 |-------|----------|-------------|
 | `username` | No | TP-Link account email (for newer devices requiring authentication) |
 | `password` | No | TP-Link account password |
-| `group` | No | Tab group name in the web UI (e.g., `"Living Room"`). Devices without a group appear only in All. |
 
 **Connection strategy:** The system first attempts to connect without credentials. If authentication is required, it retries with the provided credentials.
 
 **Finding your Kasa device MAC address:**
 ```bash
 uv run kasa discover
+```
+
+#### MiIO-specific fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `token` | Yes | 32-character hex token |
+| `miio_id` | Yes | Device ID (DID) — decimal integer as a string |
+
+**Finding your MiIO device token and ID:**
+```bash
+# Discover devices on the network
+python tests/miio/test_discover.py 192.168.1.255
+
+# Verify connectivity and check outlet states
+python tests/miio/test_device.py <ip> <token> <miio_id>
+```
+
+The hello-response token is only visible in plaintext on unprovisioned devices. For provisioned devices (token shows as `ffffffffffffffffffffffffffffffff`), use [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) to retrieve the token.
+
+**Example MiIO entry:**
+```json
+{
+  "mac": "34:FA:1C:DC:F2:F7",
+  "name": "WP12",
+  "type": "miio",
+  "broadcast": "192.168.1.255",
+  "token": "914199af8752d7ff070f90e84e095852",
+  "miio_id": "2055379229",
+  "group": "Office"
+}
 ```
 
 ## Architecture
@@ -84,8 +115,10 @@ uv run kasa discover
 ```
 app/
 ├── core/
+│   ├── backend.py       # DeviceBackend ABC, BackendPolicy, Command types
 │   ├── config.py        # Whitelist loading and ID resolution
-│   ├── models.py        # Shared types, exceptions, DeviceBackend ABC
+│   ├── exceptions.py    # Domain exceptions (DeviceOfflineError, etc.)
+│   ├── models.py        # Shared types (DeviceState, DeviceStatus, etc.)
 │   ├── registry.py      # Protocol registration
 │   └── utils.py         # Shared utilities (e.g. MAC normalisation)
 ├── kasa/
@@ -93,6 +126,11 @@ app/
 │   ├── backend.py       # KasaBackend: persistent TCP connection pool
 │   ├── config.py        # KasaDeviceConfig dataclass
 │   └── connection.py    # Stateless Kasa network functions
+├── miio/
+│   ├── __init__.py      # Exports MiioBackend, discover_all
+│   ├── backend.py       # MiioBackend: stateless UDP
+│   ├── config.py        # MiioDeviceConfig dataclass
+│   └── connection.py    # Stateless MiIO network functions
 ├── __main__.py          # Entry point (uv run smartplug-hub)
 ├── command_queue.py     # Protocol-agnostic per-device command queue
 ├── device_manager.py    # Facade: lifecycle, state cache, polling, SSE broadcast
@@ -108,6 +146,13 @@ Kasa devices can't handle frequent TCP connections, but long-lived connections g
 - The command queue processor connects on the first command (not at startup)
 - Consecutive commands to the same device reuse the connection
 - After 60 seconds of idle, the connection is automatically closed
+- On failure: retry with cached IP → mark offline (use `POST /refresh` to trigger rediscovery)
+
+### Connection Strategy (MiIO)
+
+MiIO devices use **stateless UDP** — each command is an independent encrypted packet. `MiioBackend` holds no persistent connection:
+
+- Every command opens a UDP socket, sends the request, and closes immediately
 - On failure: retry with cached IP → mark offline (use `POST /refresh` to trigger rediscovery)
 
 ### Backend ABC
@@ -230,6 +275,11 @@ smartplug-hub/
 │   │   ├── backend.py          # KasaBackend
 │   │   ├── config.py           # KasaDeviceConfig
 │   │   └── connection.py       # Stateless Kasa network functions
+│   ├── miio/
+│   │   ├── __init__.py
+│   │   ├── backend.py          # MiioBackend
+│   │   ├── config.py           # MiioDeviceConfig
+│   │   └── connection.py       # Stateless MiIO network functions
 │   ├── __main__.py             # Entry point
 │   ├── command_queue.py        # Protocol-agnostic command queue
 │   ├── device_manager.py       # Facade combining all modules
