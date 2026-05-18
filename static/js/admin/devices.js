@@ -7,6 +7,10 @@ function esc(str) {
   return d.innerHTML
 }
 
+function fmtMac(mac) {
+  return (mac ?? '').replace(/(.{2})(?=.)/g, '$1:')
+}
+
 export async function loadDevices(onUnauth) {
   try {
     const devices = await api.getDevices()
@@ -24,24 +28,25 @@ function renderDevices(devices) {
   }
   tbody.innerHTML = devices.map(d => {
     const statusDot = `<i class="bi bi-circle-fill ${d.is_online ? 'text-success' : 'text-secondary'}"
-      style="font-size:.55rem" title="${d.is_online ? 'online' : 'offline'}"></i>`
+      style="font-size:.7rem;flex-shrink:0" title="${d.is_online ? 'online' : 'offline'}"></i>`
     const outletBtn = d.hw_is_strip
       ? `<button class="btn btn-sm btn-outline-secondary js-outlets" data-id="${d.id}" data-name="${esc(d.name ?? d.hw_alias ?? d.mac)}">
            <i class="bi bi-diagram-3"></i>
          </button>`
       : '<span class="text-muted">—</span>'
     return `<tr>
+      <td class="text-center">${statusDot}</td>
       <td>
-        <div class="d-flex gap-1 align-items-center">
-          ${statusDot}
-          <input id="name-${d.id}" class="form-control inline-input" value="${esc(d.name ?? '')}">
+        <div class="d-flex gap-2 align-items-center">
+          <input id="name-${d.id}" class="form-control inline-input" value="${esc(d.name ?? '')}"
+            placeholder="${esc(d.hw_alias ?? d.mac)}">
           <button class="btn btn-sm btn-outline-secondary js-rename" data-id="${d.id}">
             <i class="bi bi-check-lg"></i>
           </button>
         </div>
       </td>
       <td><span class="badge bg-secondary">${d.type}</span></td>
-      <td class="font-monospace text-muted">${esc(d.mac)}</td>
+      <td class="font-monospace text-muted">${fmtMac(d.mac)}</td>
       <td>${esc(d.group_name ?? '—')}</td>
       <td class="text-muted">${esc(d.last_known_ip ?? '—')}</td>
       <td>${outletBtn}</td>
@@ -70,9 +75,9 @@ export async function openOutletsModal(deviceId, deviceName) {
       bodyEl.innerHTML = '<p class="text-muted mb-0">No outlets found.</p>'
       return
     }
-    bodyEl.innerHTML = device.outlets.map(o => `
+    bodyEl.innerHTML = device.outlets.map((o, i) => `
       <div class="outlet-row">
-        <span class="outlet-id">${esc(o.outlet_id)}</span>
+        <span class="outlet-id">${i}</span>
         <input id="ol-${deviceId}-${o.outlet_id}" class="form-control flex-grow-1" value="${esc(o.name)}">
         <button class="btn btn-sm btn-outline-secondary js-rename-outlet"
           data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}">
