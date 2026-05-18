@@ -9,6 +9,9 @@ dependencies = [
     "python-miio>=0.6.0.dev0",
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
+    "sqlmodel>=0.0.21",
+    "aiosqlite>=0.20.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.scripts]
