@@ -1,10 +1,13 @@
 """Admin API — device and account management."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
+from pydantic import BaseModel
 
 from ..core import AccountInUseError
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
+from ..miio_cloud import REGIONS, fetch_captcha_image, solve_captcha, start_login
 from ..schemas import (
     AccountOut,
     AddAccountRequest,
@@ -40,6 +43,59 @@ async def _require_device(device_id: str, db: Database) -> DeviceRow:
 async def login() -> dict:
     """Token validation endpoint — 200 means the token is valid."""
     return {"ok": True}
+
+
+# ── MiIO Cloud ────────────────────────────────────────────────────────────────
+
+class MiioLoginRequest(BaseModel):
+    mac: str
+    region: str
+
+
+class MiioSolveRequest(BaseModel):
+    solution: str
+
+
+@router.post("/accounts/{account_id}/miio-login")
+async def miio_login_start(
+    account_id: int,
+    body: MiioLoginRequest,
+    db: Database = Depends(_db),
+) -> dict:
+    """Start Xiaomi cloud login. Returns {token, did} or {session_id, captcha_url}."""
+    if body.region not in REGIONS:
+        raise HTTPException(status_code=422, detail=f"Invalid region. Valid: {', '.join(REGIONS)}")
+    accounts = {a.id: a for a in await db.get_accounts() if a.id is not None}
+    account = accounts.get(account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    try:
+        return await start_login(account.username, account.password, body.region, body.mac)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/miio-sessions/{session_id}/captcha")
+async def miio_solve_captcha(session_id: str, body: MiioSolveRequest) -> dict:
+    """Submit captcha solution. Returns {token, did}."""
+    try:
+        return await solve_captcha(session_id, body.solution)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/miio-sessions/{session_id}/captcha-image")
+async def miio_captcha_image(session_id: str) -> Response:
+    """Proxy the captcha image from the extractor's local HTTP server."""
+    try:
+        image_bytes = await fetch_captcha_image(session_id)
+        return Response(content=image_bytes, media_type="image/jpeg")
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 # ── Accounts ──────────────────────────────────────────────────────────────────

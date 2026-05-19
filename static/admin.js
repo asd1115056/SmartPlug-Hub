@@ -1,4 +1,4 @@
-import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
+import { getToken, setToken, clearToken, verifyToken, authFetchBlob } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
 import { loadAccounts, getCache as getAccounts, populateAccountSelect } from './js/admin/accounts.js'
 import { loadDevices, openOutletsModal, renameDevice, renameOutlet, confirmDelete } from './js/admin/devices.js'
@@ -97,6 +97,76 @@ const accountSel = document.getElementById('accountSelect')
 accountSel.addEventListener('change', () => {
   const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
   document.getElementById('miioFields').hidden = type !== 'miio'
+})
+
+let _miioSessionId = null
+
+async function _applyMiioResult(result) {
+  if (result.session_id) {
+    _miioSessionId = result.session_id
+    const isCaptcha = result.challenge === 'captcha'
+    const img = document.getElementById('miioCaptchaImg')
+    img.hidden = !isCaptcha
+    if (isCaptcha) {
+      const blobUrl = await authFetchBlob(adminApi.miioCaptchaImageUrl(result.session_id))
+      img.src = blobUrl
+    }
+    const input = document.getElementById('miioCaptchaInput')
+    input.placeholder = isCaptcha ? 'Enter captcha (case-sensitive)' : 'Enter 2FA code from email'
+    document.getElementById('miioCaptchaBlock').hidden = false
+    input.value = ''
+    input.focus()
+  } else {
+    _miioSessionId = null
+    document.getElementById('miioCaptchaBlock').hidden = true
+    document.getElementById('miioToken').value = result.token
+    document.getElementById('miioDeviceId').value = result.did
+    flash('Token and Device ID fetched')
+  }
+}
+
+document.getElementById('miioFetchBtn').addEventListener('click', async () => {
+  const accountId = accountSel.value
+  const mac = document.querySelector('[name="mac"]').value.trim()
+  const region = document.getElementById('miioRegion').value
+  if (!accountId) { flash('Select a MiIO account first', false); return }
+  if (!mac) { flash('Enter a MAC address first', false); return }
+  const btn = document.getElementById('miioFetchBtn')
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
+  try {
+    const result = await adminApi.miioLoginStart(parseInt(accountId), mac, region)
+    await _applyMiioResult(result)
+  } catch (err) {
+    flash(err.message, false)
+  } finally {
+    btn.innerHTML = orig
+    btn.disabled = false
+  }
+})
+
+document.getElementById('miioCaptchaSubmitBtn').addEventListener('click', async () => {
+  if (!_miioSessionId) return
+  const solution = document.getElementById('miioCaptchaInput').value.trim()
+  if (!solution) { flash('Enter captcha code', false); return }
+  const btn = document.getElementById('miioCaptchaSubmitBtn')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
+  try {
+    const result = await adminApi.miioSolveCaptcha(_miioSessionId, solution)
+    await _applyMiioResult(result)
+  } catch (err) {
+    flash(err.message, false)
+    // Session is dead — auto-retry to get a fresh captcha
+    if (err.message.includes('captcha') || err.message.includes('Invalid')) {
+      document.getElementById('miioCaptchaBlock').hidden = true
+      document.getElementById('miioFetchBtn').click()
+    }
+  } finally {
+    btn.innerHTML = 'Submit'
+    btn.disabled = false
+  }
 })
 
 document.getElementById('addDeviceForm').addEventListener('submit', async e => {

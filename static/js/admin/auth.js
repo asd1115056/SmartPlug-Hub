@@ -33,3 +33,10 @@ export async function authFetch(method, path, body) {
   if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
   return data
 }
+
+export async function authFetchBlob(path) {
+  const res = await fetch(path, { headers: { Authorization: `Bearer ${getToken()}` } })
+  if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return URL.createObjectURL(await res.blob())
+}
