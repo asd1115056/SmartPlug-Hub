@@ -56,7 +56,8 @@ async function handleToggle(deviceId, outletId, action) {
     const updated = await setPower(deviceId, outletId, action === 'on')
     devices = devices.map(d => d.id === updated.id ? updated : d)
   } catch (e) {
-    showToast(e.message, 'danger')
+    const name = devices.find(d => d.id === deviceId)?.name ?? deviceId
+    showToast(`${e.message}: ${name}`, 'danger')
   } finally {
     pending.delete(deviceId)
     render()
@@ -73,7 +74,8 @@ async function handleRefresh(deviceId) {
     )
     devices = devices.map(d => d.id === updated.id ? updated : d)
   } catch (e) {
-    showToast(e.message, 'danger')
+    const name = devices.find(d => d.id === deviceId)?.name ?? deviceId
+    showToast(`${e.message}: ${name}`, 'danger')
   } finally {
     render()
   }
