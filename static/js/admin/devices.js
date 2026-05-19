@@ -4,7 +4,7 @@ import { refreshDevice } from '../api.js'
 function esc(str) {
   const d = document.createElement('div')
   d.textContent = str ?? ''
-  return d.innerHTML
+  return d.innerHTML.replaceAll('"', '&quot;')
 }
 
 function fmtMac(mac) {
@@ -38,8 +38,8 @@ function renderDevices(devices) {
       <td class="text-center">${statusDot}</td>
       <td>
         <div class="d-flex gap-2 align-items-center">
-          <input id="name-${d.id}" class="form-control inline-input" value="${esc(d.name ?? '')}"
-            placeholder="${esc(d.hw_alias ?? d.mac)}">
+          <input id="name-${d.id}" class="form-control form-control-sm" value="${esc(d.name ?? '')}"
+            placeholder="${esc(d.hw_alias ?? d.mac)}" style="width:160px">
           <button class="btn btn-sm btn-outline-secondary js-rename" data-id="${d.id}">
             <i class="bi bi-check-lg"></i>
           </button>
@@ -47,7 +47,15 @@ function renderDevices(devices) {
       </td>
       <td><span class="badge bg-secondary">${d.type}</span></td>
       <td class="font-monospace text-muted">${fmtMac(d.mac)}</td>
-      <td>${esc(d.group_name ?? '—')}</td>
+      <td>
+        <div class="d-flex gap-2 align-items-center">
+          <input id="group-${d.id}" class="form-control form-control-sm" value="${esc(d.group_name ?? '')}"
+            placeholder="—" style="width:110px">
+          <button class="btn btn-sm btn-outline-secondary js-regroup" data-id="${d.id}">
+            <i class="bi bi-check-lg"></i>
+          </button>
+        </div>
+      </td>
       <td class="text-muted">${esc(d.last_known_ip ?? '—')}</td>
       <td>${outletBtn}</td>
       <td class="text-end">
@@ -94,6 +102,13 @@ export async function renameDevice(id, flash) {
   const btn = input?.nextElementSibling
   if (!input || !btn) return
   await _renameWithFeedback(input, btn, () => api.setDeviceName(id, input.value), flash)
+}
+
+export async function regroupDevice(id, flash) {
+  const input = document.getElementById(`group-${id}`)
+  const btn = input?.nextElementSibling
+  if (!input || !btn) return
+  await _renameWithFeedback(input, btn, () => api.setDeviceGroup(id, input.value), flash)
 }
 
 export async function renameOutlet(deviceId, outletId, flash) {

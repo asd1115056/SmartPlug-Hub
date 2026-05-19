@@ -10,6 +10,7 @@ export const getDevices = () => authFetch('GET', `${BASE}/devices`)
 export const addDevice = data => authFetch('POST', `${BASE}/devices`, data)
 export const deleteDevice = id => authFetch('DELETE', `${BASE}/devices/${id}`)
 export const setDeviceName = (id, name) => authFetch('PATCH', `${BASE}/devices/${id}/name`, { name })
+export const setDeviceGroup = (id, group_name) => authFetch('PATCH', `${BASE}/devices/${id}/group`, { group_name })
 export const setOutletName = (deviceId, outletId, name) =>
   authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
 

@@ -135,6 +135,12 @@ class DeviceService:
             entry.name = name
             self._broadcast()
 
+    def set_group_name(self, device_id: str, group_name: str | None) -> None:
+        entry = self._devices.get(device_id)
+        if entry:
+            entry.group_name = group_name
+            self._broadcast()
+
     def set_outlet_name(self, device_id: str, outlet_id: str, name: str) -> None:
         entry = self._devices.get(device_id)
         if entry:

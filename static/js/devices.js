@@ -1,7 +1,7 @@
 function esc(str) {
   const d = document.createElement('div')
   d.textContent = str ?? ''
-  return d.innerHTML
+  return d.innerHTML.replaceAll('"', '&quot;')
 }
 
 export function renderTabs(devices, activeGroup, searchQuery, onSelect) {
@@ -75,7 +75,7 @@ function _deviceCard(d) {
         <div>
           <div class="fw-semibold">${esc(d.name)}</div>
           ${d.model ? `<div class="device-model">${esc(d.model)}</div>` : ''}
-          ${d.last_updated ? `<div class="device-model">Last updated: ${_fmtTime(d.last_updated)}</div>` : ''}
+          ${_lastUpdatedHtml(d)}
         </div>
         ${refreshBtn}
       </div>
@@ -94,6 +94,26 @@ function _mainToggle(deviceId, isOn, isOnline) {
     </div>`
 }
 
+function _lastUpdatedHtml(d) {
+  if (!d.last_updated) return ''
+  const abs = _fmtTime(d.last_updated)
+  if (!d.is_online) return `
+    <div class="device-model"><span class="js-offline-ago" data-ts="${d.last_updated}" title="${abs}">Last seen ${_fmtAgo(d.last_updated)}</span></div>`
+  return `<div class="device-model"><span class="js-last-updated" data-ts="${d.last_updated}" title="${abs}">Last updated ${_fmtAgo(d.last_updated)}</span></div>`
+}
+
+function _fmtAgo(iso) {
+  try {
+    const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
+    if (secs < 60) return `${secs}s ago`
+    const mins = Math.floor(secs / 60)
+    if (mins < 60) return `${mins} min ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs} hr ago`
+    return `${Math.floor(hrs / 24)} days ago`
+  } catch { return '' }
+}
+
 function _fmtTime(iso) {
   try {
     const date = new Date(iso)
@@ -106,6 +126,15 @@ function _fmtTime(iso) {
     return `${date.toLocaleTimeString(undefined, { hour12: true })} UTC${sign}${offset}`
   } catch { return '' }
 }
+
+setInterval(() => {
+  document.querySelectorAll('.js-offline-ago').forEach(el => {
+    el.textContent = `Last seen ${_fmtAgo(el.dataset.ts)}`
+  })
+  document.querySelectorAll('.js-last-updated').forEach(el => {
+    el.textContent = `Last updated ${_fmtAgo(el.dataset.ts)}`
+  })
+}, 10000)
 
 function _outletList(deviceId, outlets, isOnline) {
   if (!outlets.length) return '<p class="text-muted text-center p-3 mb-0">No outlets</p>'

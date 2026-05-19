@@ -138,6 +138,14 @@ class Database:
                 session.add(device)
                 await session.commit()
 
+    async def set_device_group_name(self, device_id: str, group_name: str | None) -> None:
+        async with AsyncSession(self._engine) as session:
+            device = await session.get(Device, device_id)
+            if device:
+                device.group_name = group_name
+                session.add(device)
+                await session.commit()
+
     async def update_device_hw(
         self,
         device_id: str,

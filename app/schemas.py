@@ -81,6 +81,10 @@ class SetNameRequest(BaseModel):
     name: str
 
 
+class SetGroupRequest(BaseModel):
+    group_name: str | None = None
+
+
 # ── Serialization helpers ─────────────────────────────────────────────────────
 
 def _build_outlets(entry: DeviceEntry) -> list[OutletOut]:

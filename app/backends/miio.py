@@ -29,7 +29,13 @@ _TOKEN_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 _MAIN_SIID = 2
 _OUTLET_SIIDS = [3, 4, 5, 6, 7, 8]    # physical outlets 1–6
 _USB_SIID = 9
-_OUTLET_IDS = ["1", "2", "3", "4", "5", "6", "usb"]
+
+# siid → (outlet_id, display name); drives both status parsing and power control
+_SIID_MAP: dict[int, tuple[str, str]] = {
+    **{siid: (str(i + 1), f"Outlet {i + 1}") for i, siid in enumerate(_OUTLET_SIIDS)},
+    _USB_SIID: ("usb", "USB"),
+}
+_OUTLET_ID_TO_SIID: dict[str, int] = {oid: siid for siid, (oid, _) in _SIID_MAP.items()}
 
 
 class MiioBackend(DeviceBackend):
@@ -119,14 +125,11 @@ def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
 
     values = {r["siid"]: bool(r["value"]) for r in results if r.get("code") == 0}
 
-    # TODO: device already tells us which siids exist (code==0 in results); build children
-    #       from values.keys() so outlet count is dynamic instead of hardcoded via [:6].
     children = [
-        ChildState(outlet_id=oid, hw_alias=f"Outlet {oid}", is_on=values.get(siid, False))
-        for oid, siid in zip(_OUTLET_IDS[:6], _OUTLET_SIIDS)
+        ChildState(outlet_id=oid, hw_alias=alias, is_on=values[siid])
+        for siid, (oid, alias) in sorted(_SIID_MAP.items())
+        if siid in values
     ]
-    usb_on = values.get(_USB_SIID, False)
-    children.append(ChildState(outlet_id="usb", hw_alias="USB", is_on=usb_on))
 
     return DeviceState(
         hw_alias=cfg.mac,
@@ -145,11 +148,8 @@ async def _get_status(ip: str, cfg: DeviceConfig) -> DeviceState:
 def _set_power_sync(ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None) -> None:
     if outlet_id is None:
         siid = _MAIN_SIID
-    # TODO: replace parallel-list lookup with a dict {outlet_id: siid} (same refactor as _get_status_sync).
-    elif outlet_id in _OUTLET_IDS[:6]:
-        siid = _OUTLET_SIIDS[_OUTLET_IDS.index(outlet_id)]
-    elif outlet_id == "usb":
-        siid = _USB_SIID
+    elif outlet_id in _OUTLET_ID_TO_SIID:
+        siid = _OUTLET_ID_TO_SIID[outlet_id]
     else:
         raise DeviceOfflineError(f"Unknown outlet_id '{outlet_id}'")
 

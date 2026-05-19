@@ -1,7 +1,7 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
 import { loadAccounts, getCache as getAccounts, populateAccountSelect } from './js/admin/accounts.js'
-import { loadDevices, openOutletsModal, renameDevice, renameOutlet, confirmDelete } from './js/admin/devices.js'
+import { loadDevices, openOutletsModal, renameDevice, regroupDevice, renameOutlet, confirmDelete } from './js/admin/devices.js'
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 
@@ -208,6 +208,9 @@ document.getElementById('devicesTable').addEventListener('click', async e => {
 
   const rename = e.target.closest('.js-rename')
   if (rename) { await renameDevice(rename.dataset.id, flash); return }
+
+  const regroup = e.target.closest('.js-regroup')
+  if (regroup) { await regroupDevice(regroup.dataset.id, flash); return }
 
   const outlets = e.target.closest('.js-outlets')
   if (outlets) { await openOutletsModal(outlets.dataset.id, outlets.dataset.name) }

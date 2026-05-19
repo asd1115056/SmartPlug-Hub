@@ -12,6 +12,7 @@ from ..schemas import (
     AddAccountRequest,
     AddDeviceRequest,
     AdminDeviceOut,
+    SetGroupRequest,
     SetNameRequest,
     build_admin_device_out,
 )
@@ -162,6 +163,19 @@ async def delete_device(
     svc: DeviceService = Depends(_svc),
 ) -> None:
     await service.remove_device(device_id, db, svc)
+
+
+@router.patch("/devices/{device_id}/group", response_model=AdminDeviceOut)
+async def set_device_group(
+    device_id: str,
+    body: SetGroupRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    row = await _require_device(device_id, db)
+    await service.set_device_group_name(device_id, body.group_name or None, db, svc)
+    row.group_name = body.group_name or None
+    return build_admin_device_out(row, svc._devices.get(device_id))
 
 
 @router.patch("/devices/{device_id}/name", response_model=AdminDeviceOut)
