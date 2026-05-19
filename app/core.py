@@ -53,10 +53,12 @@ class DeviceConfig:
     type: str           # "kasa" | "miio"
     broadcast: str
     last_known_ip: str | None
-    username: str | None = None     # Kasa
-    password: str | None = None     # Kasa
+    username: str | None = None              # Kasa
+    password: str | None = None              # Kasa
     miio_token: str | None = None
     miio_id: str | None = None
+    kasa_encrypt_type: str | None = None
+    kasa_device_family: str | None = None
 
 
 # ── Backend interface ─────────────────────────────────────────────────────────

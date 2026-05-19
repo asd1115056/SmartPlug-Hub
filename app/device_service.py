@@ -97,8 +97,11 @@ class DeviceService:
         entry = self._get_entry(device_id)
         await entry.queue.close()
         entry.backend.ip = None
+        entry.backend.kasa_encrypt_type = None
+        entry.backend.kasa_device_family = None
         try:
-            state = await entry.backend.probe(replace(entry.config, last_known_ip=None))
+            state = await entry.backend.probe(replace(entry.config, last_known_ip=None,
+                                                      kasa_encrypt_type=None, kasa_device_family=None))
         except DeviceOfflineError:
             self._mark_offline(device_id, entry)
             raise
@@ -171,6 +174,8 @@ class DeviceService:
             hw_model=state.hw_model,
             hw_is_strip=state.hw_is_strip,
             last_known_ip=entry.backend.ip,
+            kasa_encrypt_type=getattr(entry.backend, "kasa_encrypt_type", None),
+            kasa_device_family=getattr(entry.backend, "kasa_device_family", None),
         ))
 
     def _mark_offline(self, device_id: str, entry: DeviceEntry) -> None:
@@ -227,6 +232,8 @@ def _make_config(row: DeviceRow, account: Account | None) -> DeviceConfig:
         password=account.password if account else None,
         miio_token=row.miio_token,
         miio_id=row.miio_id,
+        kasa_encrypt_type=row.kasa_encrypt_type,
+        kasa_device_family=row.kasa_device_family,
     )
 
 

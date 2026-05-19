@@ -25,3 +25,6 @@ package = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
+
+[tool.uv.sources]
+python-kasa = { git = "https://github.com/python-kasa/python-kasa", rev = "refs/pull/1592/head" }

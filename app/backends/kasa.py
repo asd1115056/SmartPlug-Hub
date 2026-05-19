@@ -3,9 +3,10 @@
 import asyncio
 import logging
 
-from kasa import Credentials, Device, Module
+from kasa import Credentials, Device, DeviceConnectionParameters, DeviceEncryptionType, Module
 from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
+from kasa.deviceconfig import DeviceFamily
 from kasa.exceptions import AuthenticationError
 
 from ..core import (
@@ -27,6 +28,8 @@ class KasaBackend(DeviceBackend):
 
     def __init__(self) -> None:
         self.ip: str | None = None
+        self.kasa_encrypt_type: str | None = None    # set after first successful connect
+        self.kasa_device_family: str | None = None
         self._device: Device | None = None
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
@@ -90,23 +93,25 @@ class KasaBackend(DeviceBackend):
         if self._device is not None:
             return self._device
 
+        encrypt_type = self.kasa_encrypt_type or cfg.kasa_encrypt_type
+        device_family = self.kasa_device_family or cfg.kasa_device_family
         logger.info("Probing %s at %s", cfg.id, self.ip or cfg.last_known_ip or cfg.broadcast)
         for ip in _unique(self.ip, cfg.last_known_ip):
-            device = await _connect(ip, _credentials(cfg))
+            device = await _connect(ip, _credentials(cfg), encrypt_type, device_family)
             if device is not None and _mac_ok(device, cfg.mac):
                 self._device = device
                 self.ip = device.host
+                self.kasa_encrypt_type, self.kasa_device_family = _extract_connection_info(device)
                 return device
             if device is not None:
                 await _safe_close(device)
 
-        ip = await _discover(cfg)
-        if ip:
-            device = await _connect(ip, _credentials(cfg))
-            if device is not None:
-                self._device = device
-                self.ip = device.host
-                return device
+        device = await _discover(cfg)
+        if device is not None:
+            self._device = device
+            self.ip = device.host
+            self.kasa_encrypt_type, self.kasa_device_family = _extract_connection_info(device)
+            return device
 
         raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
 
@@ -124,43 +129,108 @@ def _credentials(cfg: DeviceConfig) -> Credentials | None:
     return None
 
 
-async def _connect(ip: str, credentials: Credentials | None) -> Device | None:
-    """Try connecting without auth first, then with credentials if auth is required."""
-    for creds in ([None, credentials] if credentials else [None]):
-        for attempt in range(_RETRIES):
-            device = None
-            try:
-                device = await Device.connect(
-                    config=KasaConfig(host=ip, credentials=creds, timeout=_TIMEOUT)
+async def _connect(
+    ip: str,
+    credentials: Credentials | None,
+    encrypt_type: str | None,
+    device_family: str | None,
+) -> Device | None:
+    """Connect to a device at a known IP.
+
+    Uses stored encrypt_type + device_family to skip protocol negotiation.
+    Falls back to unicast discovery when unknown or when stored info fails.
+    """
+    if encrypt_type and device_family:
+        try:
+            conn_params = DeviceConnectionParameters(
+                device_family=DeviceFamily(device_family),
+                encryption_type=DeviceEncryptionType(encrypt_type),
+            )
+            device = await Device.connect(
+                config=KasaConfig(
+                    host=ip,
+                    credentials=credentials,
+                    timeout=_TIMEOUT,
+                    connection_type=conn_params,
                 )
-                await device.update()
-                return device
-            except AuthenticationError:
-                if device:
-                    await _safe_close(device)
-                break  # wrong creds — try next creds variant, not retry
-            except Exception as e:
-                if device:
-                    await _safe_close(device)
-                if attempt < _RETRIES - 1:
-                    await asyncio.sleep(_RETRY_DELAY)
-                else:
-                    logger.warning("Cannot connect to %s: %s", ip, e)
+            )
+            await device.update()
+            return device
+        except AuthenticationError:
+            return None
+        except Exception as e:
+            logger.warning("Cannot connect to %s with stored protocol: %s", ip, e)
+            # fall through to unicast discovery
+
+    # Protocol unknown or stored info failed — unicast-discover to auto-detect
+    return await _discover_at(ip, credentials)
+
+
+async def _discover_at(ip: str, credentials: Credentials | None) -> Device | None:
+    """Unicast-discover a specific IP to auto-detect its protocol."""
+    found: Device | None = None
+
+    async def on_found(device: Device) -> None:
+        nonlocal found
+        found = device
+
+    for attempt in range(_RETRIES):
+        found = None
+        try:
+            await Discover.discover(
+                target=ip,
+                credentials=credentials,
+                on_discovered=on_found,
+                timeout=_TIMEOUT,
+            )
+            if found is not None:
+                await found.update()
+                return found
+        except AuthenticationError:
+            if found:
+                await _safe_close(found)
+            return None
+        except Exception as e:
+            if found:
+                await _safe_close(found)
+                found = None
+            if attempt < _RETRIES - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+            else:
+                logger.warning("Cannot connect to %s: %s", ip, e)
     return None
 
 
-async def _discover(cfg: DeviceConfig) -> str | None:
-    found: str | None = None
+async def _discover(cfg: DeviceConfig) -> Device | None:
+    """Broadcast-discover by MAC; returns the connected Device or None."""
+    found: Device | None = None
+    creds = _credentials(cfg)
 
     async def on_found(device: Device) -> None:
         nonlocal found
         mac = getattr(device, "mac", None)
         if mac and normalize_mac(mac) == cfg.mac:
-            found = device.host
-        await _safe_close(device)
+            found = device
+        else:
+            await _safe_close(device)
 
-    await Discover.discover(target=cfg.broadcast, on_discovered=on_found)
+    await Discover.discover(target=cfg.broadcast, credentials=creds, on_discovered=on_found)
+    if found is not None:
+        try:
+            await found.update()
+        except Exception:
+            await _safe_close(found)
+            return None
     return found
+
+
+def _extract_connection_info(device: Device) -> tuple[str | None, str | None]:
+    """Return (encrypt_type, device_family) strings from a connected device."""
+    try:
+        ct = device.config.connection_type
+        return ct.encryption_type.value, ct.device_family.value
+    except Exception:
+        return None, None
 
 
 async def _safe_close(device: Device) -> None:

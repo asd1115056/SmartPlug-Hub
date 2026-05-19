@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import Field, SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -39,7 +39,9 @@ class Device(SQLModel, table=True):
     hw_alias: str | None = None
     hw_model: str | None = None
     hw_is_strip: bool = False
-    last_known_ip: str | None = None    # non-authoritative, speeds up reconnect
+    last_known_ip: str | None = None       # non-authoritative, speeds up reconnect
+    kasa_encrypt_type: str | None = None   # e.g. "KLAP", "AES", "XOR" — skip port-9999 probe
+    kasa_device_family: str | None = None  # e.g. "SMART.TAPOPLUG"
 
 
 class Outlet(SQLModel, table=True):
@@ -70,6 +72,11 @@ class Database:
     async def initialize(self) -> None:
         async with self._engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
+            for col in ("kasa_encrypt_type VARCHAR", "kasa_device_family VARCHAR"):
+                try:
+                    await conn.execute(text(f"ALTER TABLE device ADD COLUMN {col}"))
+                except Exception:
+                    pass
 
     async def close(self) -> None:
         await self._engine.dispose()
@@ -156,6 +163,8 @@ class Database:
         hw_model: str | None,
         hw_is_strip: bool,
         last_known_ip: str | None,
+        kasa_encrypt_type: str | None = None,
+        kasa_device_family: str | None = None,
     ) -> None:
         """Update the hardware snapshot after a successful poll."""
         async with AsyncSession(self._engine) as session:
@@ -165,6 +174,10 @@ class Database:
                 device.hw_model = hw_model
                 device.hw_is_strip = hw_is_strip
                 device.last_known_ip = last_known_ip
+                if kasa_encrypt_type is not None:
+                    device.kasa_encrypt_type = kasa_encrypt_type
+                if kasa_device_family is not None:
+                    device.kasa_device_family = kasa_device_family
                 session.add(device)
                 await session.commit()
 
