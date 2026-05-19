@@ -91,7 +91,16 @@ function _renderDropdown() {
 }
 
 function _formatTime(iso) {
-  try { return new Date(iso).toLocaleTimeString() } catch { return '' }
+  try {
+    const date = new Date(iso)
+    const offsetMin = -date.getTimezoneOffset()
+    const sign = offsetMin >= 0 ? '+' : '-'
+    const absMin = Math.abs(offsetMin)
+    const h = Math.floor(absMin / 60)
+    const m = absMin % 60
+    const offset = m ? `${h}:${String(m).padStart(2, '0')}` : `${h}`
+    return `${date.toLocaleTimeString(undefined, { hour12: true })} UTC${sign}${offset}`
+  } catch { return '' }
 }
 
 function esc(str) {
