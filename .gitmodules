@@ -1,3 +1,0 @@
-[submodule "vendor/xiaomi-extractor"]
-	path = vendor/xiaomi-extractor
-	url = https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor

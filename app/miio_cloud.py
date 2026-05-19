@@ -10,8 +10,7 @@ import random
 import re
 import time
 import uuid
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -20,17 +19,7 @@ from Crypto.Cipher import ARC4
 
 logger = logging.getLogger(__name__)
 
-_EXTRACTOR_SRC = Path(__file__).parent.parent / "vendor" / "xiaomi-extractor" / "token_extractor.py"
-
-
-def _load_regions() -> tuple[str, ...]:
-    m = re.search(r"^SERVERS\s*=\s*\[([^\]]+)\]", _EXTRACTOR_SRC.read_text(), re.MULTILINE)
-    if not m:
-        return ("cn", "de", "us", "ru", "tw", "sg", "in", "i2")
-    return tuple(s.strip().strip('"').strip("'") for s in m.group(1).split(",") if s.strip())
-
-
-REGIONS = _load_regions()
+REGIONS = ("cn", "de", "us", "ru", "tw", "sg", "in", "i2")
 
 
 # ── Session state ─────────────────────────────────────────────────────────────
