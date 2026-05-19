@@ -53,7 +53,11 @@ class DeviceService:
             self._devices[row.id] = _make_entry(row, account, outlet_names.get(row.id, {}))
 
         self._poll_task = asyncio.create_task(self._poll_loop())
-        logger.info(f"DeviceService started with {len(self._devices)} devices")
+        by_type = {}
+        for e in self._devices.values():
+            by_type[e.config.type] = by_type.get(e.config.type, 0) + 1
+        summary = ", ".join(f"{t}: {n}" for t, n in sorted(by_type.items()))
+        logger.info("DeviceService started — %s", summary or "no devices")
 
     async def stop(self) -> None:
         if self._poll_task:
