@@ -60,6 +60,10 @@ export function renderDevices(devices, searchQuery, activeGroup) {
     </div>`).join('')}</div>`
 }
 
+function _fmtWatts(w) {
+  return `${parseFloat(w.toFixed(3))} W`
+}
+
 function _headerWatts(d) {
   if (d.watts !== null && d.watts !== undefined) return d.watts
   if (d.outlets?.some(o => o.watts !== null && o.watts !== undefined))
@@ -77,7 +81,7 @@ function _deviceCard(d) {
     : ''
   const totalWatts = d.is_online ? _headerWatts(d) : null
   const wattsHtml = totalWatts !== null
-    ? `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${totalWatts} W</div>`
+    ? `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${_fmtWatts(totalWatts)}</div>`
     : ''
 
   return `
@@ -157,7 +161,7 @@ function _outletList(deviceId, outlets, isOnline) {
     const onClass   = o.is_on ? 'is-on' : ''
     const action    = o.is_on ? 'off' : 'on'
     const hasWatts  = o.watts !== null && o.watts !== undefined
-    const wattsText = hasWatts ? `${o.watts} W` : '—'
+    const wattsText = hasWatts ? _fmtWatts(o.watts) : '—'
     const wattsTip  = hasWatts ? '' : ' title="Power monitoring not supported for individual outlets"'
     return `
       <div class="child-outlet ${onClass}">
