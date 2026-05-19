@@ -27,7 +27,13 @@ import sys
 _MAIN_SIID = 2
 _OUTLET_SIIDS = [3, 4, 5, 6, 7, 8]   # outlets 1–6
 _USB_SIID = 9
-_CHILD_IDS = ["1", "2", "3", "4", "5", "6", "usb"]
+
+# siid → (outlet_id, display name)
+_SIID_MAP: dict[int, tuple[str, str]] = {
+    **{siid: (str(i + 1), f"Outlet {i + 1}") for i, siid in enumerate(_OUTLET_SIIDS)},
+    _USB_SIID: ("usb", "USB"),
+}
+_OUTLET_ID_TO_SIID: dict[str, int] = {oid: siid for siid, (oid, _) in _SIID_MAP.items()}
 
 
 def _make_get_props(miio_id: str) -> list[dict]:
@@ -56,12 +62,10 @@ def set_power(ip: str, token: str, miio_id: str, is_on: bool, child_id: str | No
 
     if child_id is None:
         siid = _MAIN_SIID
-    elif child_id in _CHILD_IDS[:6]:
-        siid = _OUTLET_SIIDS[_CHILD_IDS.index(child_id)]
-    elif child_id == "usb":
-        siid = _USB_SIID
+    elif child_id in _OUTLET_ID_TO_SIID:
+        siid = _OUTLET_ID_TO_SIID[child_id]
     else:
-        print(f"ERROR: unknown child_id '{child_id}'. Valid: 1-6, usb")
+        print(f"ERROR: unknown child_id '{child_id}'. Valid: {', '.join(_OUTLET_ID_TO_SIID)}")
         sys.exit(1)
 
     device = MiotDevice(ip=ip, token=token)
@@ -84,13 +88,9 @@ def print_status(values: dict) -> None:
     if main is not None:
         print(f"  Main switch:  {fmt(main)}")
     print()
-    for i, siid in enumerate(_OUTLET_SIIDS, 1):
-        v = values.get(siid)
-        state = fmt(v) if v is not None else "N/A"
-        print(f"  Outlet {i}:      {state}   (siid={siid})")
-    usb = values.get(_USB_SIID)
-    usb_state = fmt(usb) if usb is not None else "N/A"
-    print(f"  USB:          {usb_state}   (siid={_USB_SIID})")
+    for siid, (oid, label) in sorted(_SIID_MAP.items()):
+        if siid in values:
+            print(f"  {label:<14}{fmt(values[siid])}   (siid={siid})")
     print()
 
 
