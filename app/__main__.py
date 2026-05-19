@@ -18,6 +18,7 @@ def main() -> None:
         port=args.port,
         reload=False,
         log_config=build_log_config(args.debug),
+        timeout_graceful_shutdown=5,
     )
 
 

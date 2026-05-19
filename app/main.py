@@ -120,7 +120,7 @@ async def sse_stream(request: Request, svc: DeviceService = Depends(_svc)) -> St
             yield _payload()
             while True:
                 try:
-                    await asyncio.wait_for(q.get(), timeout=30.0)
+                    await asyncio.wait_for(q.get(), timeout=5.0)
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
                     continue
