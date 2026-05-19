@@ -12,3 +12,9 @@ export const deleteDevice = id => authFetch('DELETE', `${BASE}/devices/${id}`)
 export const setDeviceName = (id, name) => authFetch('PATCH', `${BASE}/devices/${id}/name`, { name })
 export const setOutletName = (deviceId, outletId, name) =>
   authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
+
+export const miioLoginStart = (accountId, mac, region) =>
+  authFetch('POST', `${BASE}/accounts/${accountId}/miio-login`, { mac, region })
+
+export const miioSolve = (sessionId, solution) =>
+  authFetch('POST', `${BASE}/miio-sessions/${sessionId}/solve`, { solution })

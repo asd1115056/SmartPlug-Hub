@@ -94,9 +94,82 @@ document.getElementById('accountsTable').addEventListener('click', async e => {
 // ── Devices ───────────────────────────────────────────────────────────────────
 
 const accountSel = document.getElementById('accountSelect')
+const miioToken = document.getElementById('miioToken')
+const miioDeviceId = document.getElementById('miioDeviceId')
+
 accountSel.addEventListener('change', () => {
   const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
-  document.getElementById('miioFields').hidden = type !== 'miio'
+  const isMiio = type === 'miio'
+  document.getElementById('miioFields').hidden = !isMiio
+  miioToken.required = isMiio
+  miioDeviceId.required = isMiio
+})
+
+let _miioSessionId = null
+
+async function _applyMiioResult(result) {
+  if (result.session_id) {
+    _miioSessionId = result.session_id
+    const isCaptcha = result.challenge === 'captcha'
+    const img = document.getElementById('miioCaptchaImg')
+    img.hidden = !isCaptcha
+    if (isCaptcha) img.src = 'data:image/jpeg;base64,' + result.captcha_b64
+    const input = document.getElementById('miioCaptchaInput')
+    input.placeholder = isCaptcha ? 'Enter captcha (case-sensitive)' : 'Enter 2FA code from email'
+    document.getElementById('miioCaptchaBlock').hidden = false
+    input.value = ''
+    input.focus()
+  } else {
+    _miioSessionId = null
+    document.getElementById('miioCaptchaBlock').hidden = true
+    document.getElementById('miioToken').value = result.token
+    document.getElementById('miioDeviceId').value = result.did
+    flash('Token and Device ID fetched')
+  }
+}
+
+document.getElementById('miioFetchBtn').addEventListener('click', async () => {
+  const accountId = accountSel.value
+  const mac = document.querySelector('[name="mac"]').value.trim()
+  const region = document.getElementById('miioRegion').value
+  if (!accountId) { flash('Select a MiIO account first', false); return }
+  if (!mac) { flash('Enter a MAC address first', false); return }
+  const btn = document.getElementById('miioFetchBtn')
+  const orig = btn.innerHTML
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
+  try {
+    const result = await adminApi.miioLoginStart(parseInt(accountId), mac, region)
+    await _applyMiioResult(result)
+  } catch (err) {
+    flash(err.message, false)
+  } finally {
+    btn.innerHTML = orig
+    btn.disabled = false
+  }
+})
+
+document.getElementById('miioCaptchaSubmitBtn').addEventListener('click', async () => {
+  if (!_miioSessionId) return
+  const solution = document.getElementById('miioCaptchaInput').value.trim()
+  if (!solution) { flash('Enter captcha code', false); return }
+  const btn = document.getElementById('miioCaptchaSubmitBtn')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
+  try {
+    const result = await adminApi.miioSolve(_miioSessionId, solution)
+    await _applyMiioResult(result)
+  } catch (err) {
+    flash(err.message, false)
+    // Session is dead — auto-retry to get a fresh captcha
+    if (err.message.includes('captcha') || err.message.includes('Invalid')) {
+      document.getElementById('miioCaptchaBlock').hidden = true
+      document.getElementById('miioFetchBtn').click()
+    }
+  } finally {
+    btn.innerHTML = 'Submit'
+    btn.disabled = false
+  }
 })
 
 document.getElementById('addDeviceForm').addEventListener('submit', async e => {
