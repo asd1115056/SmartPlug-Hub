@@ -28,7 +28,6 @@ class KasaBackend(DeviceBackend):
         self._device: Device | None = None
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
-        logger.debug("Probing %s at %s", cfg.id, self.ip or cfg.last_known_ip or cfg.broadcast)
         device = await self._get_device(cfg)
         try:
             await device.update()
@@ -92,6 +91,7 @@ class KasaBackend(DeviceBackend):
         if self._device is not None:
             return self._device
 
+        logger.info("Probing %s at %s", cfg.id, self.ip or cfg.last_known_ip or cfg.broadcast)
         for ip in _unique(self.ip, cfg.last_known_ip):
             device = await _connect(ip, _credentials(cfg))
             if device is not None and _mac_ok(device, cfg.mac):
@@ -146,7 +146,7 @@ async def _connect(ip: str, credentials: Credentials | None) -> Device | None:
                 if attempt < _RETRIES - 1:
                     await asyncio.sleep(_RETRY_DELAY)
                 else:
-                    logger.debug(f"Cannot connect to {ip}: {e}")
+                    logger.warning("Cannot connect to %s: %s", ip, e)
     return None
 
 

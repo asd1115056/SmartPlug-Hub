@@ -82,7 +82,7 @@ class DeviceService:
         return entry
 
     async def set_power(self, device_id: str, outlet_id: str | None, on: bool) -> DeviceState:
-        logger.debug("set_power %s outlet=%s on=%s", device_id, outlet_id, on)
+        logger.info("set_power %s outlet=%s on=%s", device_id, outlet_id, on)
         entry = self._get_entry(device_id)
         try:
             state = await entry.queue.submit(outlet_id, on)

@@ -45,13 +45,14 @@ class MiioBackend(DeviceBackend):
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_token(cfg)
         if not self.ip:
+            logger.info("Probing %s at %s", cfg.id, cfg.last_known_ip or cfg.broadcast)
             if cfg.last_known_ip:
                 try:
                     state = await _get_status(cfg.last_known_ip, cfg)
                     self.ip = cfg.last_known_ip
                     return state
                 except DeviceOfflineError:
-                    pass
+                    logger.warning("Cannot connect to %s, falling back to discover", cfg.last_known_ip)
             ip = await _discover(cfg)
             if not ip:
                 raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
