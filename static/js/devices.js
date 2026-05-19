@@ -7,7 +7,7 @@ function esc(str) {
 export function renderTabs(devices, activeGroup, searchQuery, onSelect) {
   const container = document.getElementById('tabs-nav')
   const groups = [...new Set(devices.filter(d => d.group_name).map(d => d.group_name))]
-  if (!groups.length) { container.innerHTML = ''; return }
+  if (!devices.length) { container.innerHTML = ''; return }
 
   const effectiveActive = searchQuery ? 'all' : activeGroup
   const tabs = [
@@ -75,6 +75,7 @@ function _deviceCard(d) {
         <div>
           <div class="fw-semibold">${esc(d.name)}</div>
           ${d.model ? `<div class="device-model">${esc(d.model)}</div>` : ''}
+          ${d.last_updated ? `<div class="device-model">Last updated: ${_fmtTime(d.last_updated)}</div>` : ''}
         </div>
         ${refreshBtn}
       </div>
@@ -91,6 +92,19 @@ function _mainToggle(deviceId, isOn, isOnline) {
       <button class="toggle-switch ${onClass}"
         data-device-id="${deviceId}" data-action="${action}" ${disabledAttr}></button>
     </div>`
+}
+
+function _fmtTime(iso) {
+  try {
+    const date = new Date(iso)
+    const offsetMin = -date.getTimezoneOffset()
+    const sign = offsetMin >= 0 ? '+' : '-'
+    const absMin = Math.abs(offsetMin)
+    const hours = Math.floor(absMin / 60)
+    const mins = absMin % 60
+    const offset = mins ? `${hours}:${String(mins).padStart(2, '0')}` : `${hours}`
+    return `${date.toLocaleTimeString(undefined, { hour12: true })} UTC${sign}${offset}`
+  } catch { return '' }
 }
 
 function _outletList(deviceId, outlets, isOnline) {

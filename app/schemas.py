@@ -1,5 +1,7 @@
 """Pydantic request/response models and DB+RAM serialization helpers."""
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from .db import Device as DeviceRow
@@ -23,6 +25,7 @@ class DeviceOut(BaseModel):
     is_strip: bool
     is_online: bool
     is_on: bool | None
+    last_updated: datetime | None
     outlets: list[OutletOut]
 
 
@@ -103,6 +106,7 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
         is_strip=state.hw_is_strip if state else False,
         is_online=entry.is_online,
         is_on=state.is_on if state else None,
+        last_updated=entry.last_updated,
         outlets=_build_outlets(entry),
     )
 

@@ -112,7 +112,7 @@ async def sse_stream(request: Request, svc: DeviceService = Depends(_svc)) -> St
     q = svc.subscribe()
 
     def _payload() -> str:
-        devices = [build_device_out(e).model_dump() for e in svc.get_devices()]
+        devices = [build_device_out(e).model_dump(mode='json') for e in svc.get_devices()]
         return f"data: {json.dumps(devices)}\n\n"
 
     async def generate():

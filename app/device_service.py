@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from .command_queue import DeviceQueue
 from .core import DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceState
@@ -26,6 +27,7 @@ class DeviceEntry:
     group_name: str | None
     state: DeviceState | None       # None until first successful poll
     is_online: bool
+    last_updated: datetime | None   # UTC timestamp of last successful state update
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
 
 
@@ -146,6 +148,7 @@ class DeviceService:
         was_online = entry.is_online
         entry.state = state
         entry.is_online = True
+        entry.last_updated = datetime.now(UTC)
         if not was_online:
             logger.info(f"Device {device_id} is now online")
         self._broadcast()
@@ -231,5 +234,6 @@ def _make_entry(row: DeviceRow, account: Account | None, outlet_names: dict[str,
         group_name=row.group_name,
         state=None,
         is_online=False,
+        last_updated=None,
         outlet_names=outlet_names,
     )
