@@ -60,6 +60,13 @@ export function renderDevices(devices, searchQuery, activeGroup) {
     </div>`).join('')}</div>`
 }
 
+function _headerWatts(d) {
+  if (d.watts !== null && d.watts !== undefined) return d.watts
+  if (d.outlets?.some(o => o.watts !== null && o.watts !== undefined))
+    return d.outlets.reduce((s, o) => s + (o.watts ?? 0), 0)
+  return null
+}
+
 function _deviceCard(d) {
   const stateClass = d.is_online ? 'state-online' : 'state-offline'
   const body = d.is_strip ? _outletList(d.id, d.outlets, d.is_online) : _mainToggle(d.id, d.is_on, d.is_online)
@@ -68,16 +75,23 @@ function _deviceCard(d) {
          <i class="bi bi-arrow-clockwise"></i>
        </button>`
     : ''
+  const totalWatts = d.is_online ? _headerWatts(d) : null
+  const wattsHtml = totalWatts !== null
+    ? `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${totalWatts} W</div>`
+    : ''
 
   return `
     <div class="card device-card h-100 ${stateClass}" data-device-id="${d.id}">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex justify-content-between align-items-end">
         <div>
           <div class="fw-semibold">${esc(d.name)}</div>
           ${d.model ? `<div class="device-model">${esc(d.model)}</div>` : ''}
           ${_lastUpdatedHtml(d)}
         </div>
-        ${refreshBtn}
+        <div class="d-flex flex-column align-items-end gap-1">
+          ${wattsHtml}
+          ${refreshBtn}
+        </div>
       </div>
       <div class="card-body p-0">${body}</div>
     </div>`
@@ -140,11 +154,16 @@ function _outletList(deviceId, outlets, isOnline) {
   if (!outlets.length) return '<p class="text-muted text-center p-3 mb-0">No outlets</p>'
   const disabledAttr = isOnline ? '' : 'disabled'
   return outlets.map(o => {
-    const onClass = o.is_on ? 'is-on' : ''
-    const action  = o.is_on ? 'off' : 'on'
+    const onClass   = o.is_on ? 'is-on' : ''
+    const action    = o.is_on ? 'off' : 'on'
+    const hasWatts  = o.watts !== null && o.watts !== undefined
+    const wattsText = hasWatts ? `${o.watts} W` : '—'
+    const wattsTip  = hasWatts ? '' : ' title="Power monitoring not supported for individual outlets"'
     return `
       <div class="child-outlet ${onClass}">
-        <span class="outlet-name">${esc(o.name)}</span>
+        <span class="outlet-name">
+          ${esc(o.name)}<span class="outlet-watts"${wattsTip}>${wattsText}</span>
+        </span>
         <button class="toggle-switch ${onClass}"
           data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
           data-action="${action}" ${disabledAttr}></button>
