@@ -16,8 +16,5 @@ export const setOutletName = (deviceId, outletId, name) =>
 export const miioLoginStart = (accountId, mac, region) =>
   authFetch('POST', `${BASE}/accounts/${accountId}/miio-login`, { mac, region })
 
-export const miioSolveCaptcha = (sessionId, solution) =>
-  authFetch('POST', `${BASE}/miio-sessions/${sessionId}/captcha`, { solution })
-
-export const miioCaptchaImageUrl = sessionId =>
-  `${BASE}/miio-sessions/${sessionId}/captcha-image`
+export const miioSolve = (sessionId, solution) =>
+  authFetch('POST', `${BASE}/miio-sessions/${sessionId}/solve`, { solution })

@@ -1,4 +1,4 @@
-import { getToken, setToken, clearToken, verifyToken, authFetchBlob } from './js/admin/auth.js'
+import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
 import { loadAccounts, getCache as getAccounts, populateAccountSelect } from './js/admin/accounts.js'
 import { loadDevices, openOutletsModal, renameDevice, renameOutlet, confirmDelete } from './js/admin/devices.js'
@@ -107,10 +107,7 @@ async function _applyMiioResult(result) {
     const isCaptcha = result.challenge === 'captcha'
     const img = document.getElementById('miioCaptchaImg')
     img.hidden = !isCaptcha
-    if (isCaptcha) {
-      const blobUrl = await authFetchBlob(adminApi.miioCaptchaImageUrl(result.session_id))
-      img.src = blobUrl
-    }
+    if (isCaptcha) img.src = 'data:image/jpeg;base64,' + result.captcha_b64
     const input = document.getElementById('miioCaptchaInput')
     input.placeholder = isCaptcha ? 'Enter captcha (case-sensitive)' : 'Enter 2FA code from email'
     document.getElementById('miioCaptchaBlock').hidden = false
@@ -154,7 +151,7 @@ document.getElementById('miioCaptchaSubmitBtn').addEventListener('click', async 
   btn.disabled = true
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
   try {
-    const result = await adminApi.miioSolveCaptcha(_miioSessionId, solution)
+    const result = await adminApi.miioSolve(_miioSessionId, solution)
     await _applyMiioResult(result)
   } catch (err) {
     flash(err.message, false)

@@ -1,13 +1,12 @@
 """Admin API — device and account management."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
 from pydantic import BaseModel
 
 from ..core import AccountInUseError
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
-from ..miio_cloud import REGIONS, fetch_captcha_image, solve_captcha, start_login
+from ..miio_cloud import REGIONS, solve_challenge, start_login
 from ..schemas import (
     AccountOut,
     AddAccountRequest,
@@ -77,23 +76,13 @@ async def miio_login_start(
         raise HTTPException(status_code=502, detail=str(e))
 
 
-@router.post("/miio-sessions/{session_id}/captcha")
-async def miio_solve_captcha(session_id: str, body: MiioSolveRequest) -> dict:
-    """Submit captcha solution. Returns {token, did}."""
+@router.post("/miio-sessions/{session_id}/solve")
+async def miio_solve(session_id: str, body: MiioSolveRequest) -> dict:
+    """Submit captcha or 2FA solution. Returns {token, did} or next challenge."""
     try:
-        return await solve_captcha(session_id, body.solution)
+        return await solve_challenge(session_id, body.solution)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@router.get("/miio-sessions/{session_id}/captcha-image")
-async def miio_captcha_image(session_id: str) -> Response:
-    """Proxy the captcha image from the extractor's local HTTP server."""
-    try:
-        image_bytes = await fetch_captcha_image(session_id)
-        return Response(content=image_bytes, media_type="image/jpeg")
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
