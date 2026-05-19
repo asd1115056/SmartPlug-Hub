@@ -38,8 +38,8 @@ function renderDevices(devices) {
       <td class="text-center">${statusDot}</td>
       <td>
         <div class="d-flex gap-2 align-items-center">
-          <input id="name-${d.id}" class="form-control inline-input" value="${esc(d.name ?? '')}"
-            placeholder="${esc(d.hw_alias ?? d.mac)}">
+          <input id="name-${d.id}" class="form-control form-control-sm" value="${esc(d.name ?? '')}"
+            placeholder="${esc(d.hw_alias ?? d.mac)}" style="width:160px">
           <button class="btn btn-sm btn-outline-secondary js-rename" data-id="${d.id}">
             <i class="bi bi-check-lg"></i>
           </button>
