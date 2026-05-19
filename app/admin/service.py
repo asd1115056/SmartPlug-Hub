@@ -50,6 +50,14 @@ async def set_device_name(device_id: str, name: str, db: Database, svc: DeviceSe
     logger.info("Device %s renamed to %r", device_id, name)
 
 
+async def set_device_group_name(
+    device_id: str, group_name: str | None, db: Database, svc: DeviceService
+) -> None:
+    await db.set_device_group_name(device_id, group_name)
+    svc.set_group_name(device_id, group_name)
+    logger.info("Device %s group set to %r", device_id, group_name)
+
+
 async def set_outlet_name(
     device_id: str, outlet_id: str, name: str, db: Database, svc: DeviceService
 ) -> None:
