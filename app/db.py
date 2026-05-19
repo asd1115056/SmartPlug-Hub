@@ -63,6 +63,8 @@ class Database:
         def _set_pragma(dbapi_conn, _record) -> None:
             cursor = dbapi_conn.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")   # concurrent reads during writes
+            cursor.execute("PRAGMA busy_timeout=5000")  # retry for 5s before raising
             cursor.close()
 
     async def initialize(self) -> None:
