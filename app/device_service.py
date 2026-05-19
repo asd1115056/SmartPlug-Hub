@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from .command_queue import DeviceQueue
 from .core import DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceState
 from .db import Account, Database, Device as DeviceRow
-from .kasa import KasaBackend
-from .miio import MiioBackend
+from .backends.kasa import KasaBackend
+from .backends.miio import MiioBackend
 
 logger = logging.getLogger(__name__)
 

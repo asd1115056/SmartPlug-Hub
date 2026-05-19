@@ -11,7 +11,7 @@ from miio.exceptions import DeviceException
 from miio.miot_device import MiotDevice
 from miio.protocol import Message
 
-from .core import (
+from ..core import (
     ChildState,
     DeviceBackend,
     DeviceConfig,
