@@ -27,6 +27,7 @@ class DeviceQueue:
         self._queue: asyncio.Queue[Command] = asyncio.Queue()
         self._pending: list[Command] = []
         self._processor: asyncio.Task[None] | None = None
+        self._executing: bool = False
         self._last_cmd_time: float = 0.0
 
     def submit(self, outlet_id: str | None, on: bool) -> asyncio.Future[DeviceState]:
@@ -48,8 +49,8 @@ class DeviceQueue:
         return future
 
     def is_active(self) -> bool:
-        """True while the processor task is running (TCP session is held open)."""
-        return self._processor is not None and not self._processor.done()
+        """True while a command is actively executing (not just idle session hold)."""
+        return self._executing
 
     async def close(self) -> None:
         """Cancel the processor and close the backend connection."""
@@ -105,6 +106,7 @@ class DeviceQueue:
 
     async def _execute(self, cmd: Command) -> None:
         logger.debug("[%s] executing outlet=%s on=%s", self._device_id, cmd.outlet_id, cmd.on)
+        self._executing = True
         try:
             await self._backend.set_power(self._config, cmd.outlet_id, cmd.on)
             state = await self._backend.probe(self._config)
@@ -119,6 +121,8 @@ class DeviceQueue:
             logger.exception("[%s] unexpected error executing command", self._device_id)
             if not cmd.future.done():
                 cmd.future.set_exception(e)
+        finally:
+            self._executing = False
 
     async def _rate_limit(self) -> None:
         interval = self._backend.command_interval
