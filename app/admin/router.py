@@ -100,6 +100,7 @@ async def create_device(
     try:
         row = await service.add_device(
             body.mac, body.type, body.broadcast, db, svc,
+            group_name=body.group_name,
             account_id=body.account_id,
             miio_token=body.miio_token,
             miio_id=body.miio_id,

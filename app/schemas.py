@@ -65,6 +65,7 @@ class AddDeviceRequest(BaseModel):
     mac: str
     type: str
     broadcast: str
+    group_name: str | None = None
     account_id: int | None = None
     miio_token: str | None = None
     miio_id: str | None = None
