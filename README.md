@@ -1,6 +1,6 @@
 # SmartPlug Hub
 
-A web-based controller for smart plugs and power strips. Supports multiple protocols (Kasa, MiIO) through a unified API, with more protocols easy to add.
+A web-based controller for smart plugs and power strips. Supports multiple protocols (Kasa, MiIO) through a unified API and admin panel.
 
 ## Requirements
 
@@ -13,283 +13,201 @@ A web-based controller for smart plugs and power strips. Supports multiple proto
 # Install dependencies
 uv sync
 
-# Configure devices (see Configuration section)
-cp config/devices.example.json config/devices.json
+# Configure admin token
+cp config/settings.toml.example config/settings.toml
+# Edit config/settings.toml and set a strong token
 
 # Run the server
 uv run smartplug-hub
-# Or with auto-reload for development
-uv run uvicorn app.main:app --reload
 
 # Open http://localhost:8000
+# Admin panel at http://localhost:8000/admin
+```
+
+Options:
+
+```text
+--port PORT    Port to listen on (default: 8000)
+--debug        Enable debug logging for app.* loggers
 ```
 
 ## Configuration
 
-### Device Whitelist (`config/devices.json`)
+### `config/settings.toml`
 
-Copy `config/devices.example.json` to `config/devices.json` and add your devices.
-
-```json
-{
-  "devices": [
-    {
-      "mac": "AA:BB:CC:DD:EE:FF",
-      "name": "Living Room Strip",
-      "type": "kasa",
-      "broadcast": "192.168.1.255",
-      "username": "your@email.com",
-      "password": "your_password",
-      "group": "Living Room"
-    },
-    {
-      "mac": "11:22:33:44:55:66",
-      "name": "Bedroom Plug (no auth needed)",
-      "type": "kasa",
-      "broadcast": "192.168.1.255",
-      "group": "Bedroom"
-    }
-  ]
-}
+```toml
+[admin]
+token = "change-me-to-a-strong-secret"
 ```
 
-#### Common fields
+This token is required to access the admin panel at `/admin`.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `mac` | Yes | Device MAC address (formats: `AA:BB:CC:DD:EE:FF`, `AA-BB-CC-DD-EE-FF`, `AABBCCDDEEFF`) |
-| `name` | No | Display name (defaults to device ID if omitted) |
-| `type` | Yes | Protocol: `"kasa"` or `"miio"` |
-| `broadcast` | Yes | Broadcast address for discovery (e.g., `192.168.1.255`) |
-| `group` | No | Tab group name in the web UI. Devices without a group appear only in All. |
+### Adding Devices
 
-#### Kasa-specific fields
+Devices and accounts are managed through the admin panel — no config files needed.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `username` | No | TP-Link account email (for newer devices requiring authentication) |
-| `password` | No | TP-Link account password |
+1. **Add an account** — TP-Link credentials for Kasa devices that require authentication (newer KLAP-based firmware), or any label for MiIO
+2. **Add a device** — MAC address, broadcast address, optional group name, optional account
 
-**Connection strategy:** The system first attempts to connect without credentials. If authentication is required, it retries with the provided credentials.
+#### Finding your Kasa device MAC and credentials
 
-**Finding your Kasa device MAC address:**
 ```bash
 uv run kasa discover
 ```
 
-#### MiIO-specific fields
+Newer Kasa devices (EP25, KP125M, etc.) require TP-Link account credentials. Older models (HS103, KP303, etc.) work without authentication.
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `token` | Yes | 32-character hex token |
-| `miio_id` | Yes | Device ID (DID) — decimal integer as a string |
+#### Finding your MiIO device token and ID
 
-**Finding your MiIO device token and ID:**
-```bash
-# Discover devices on the network
-python tests/miio/test_discover.py 192.168.1.255
+MiIO requires a 32-character hex token and a numeric device ID.
 
-# Verify connectivity and check outlet states
-python tests/miio/test_device.py <ip> <token> <miio_id>
-```
-
-The hello-response token is only visible in plaintext on unprovisioned devices. For provisioned devices (token shows as `ffffffffffffffffffffffffffffffff`), use [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) to retrieve the token.
-
-**Example MiIO entry:**
-```json
-{
-  "mac": "34:FA:1C:DC:F2:F7",
-  "name": "WP12",
-  "type": "miio",
-  "broadcast": "192.168.1.255",
-  "token": "914199af8752d7ff070f90e84e095852",
-  "miio_id": "2055379229",
-  "group": "Office"
-}
-```
+- **Token**: visible in plaintext on **unprovisioned** devices via UDP discovery. For already-provisioned devices (token shows as `ffffffffffffffffffffffffffffffff`), extract it from the Xiaomi cloud using [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor).
+- **Device ID**: returned alongside the token during discovery.
 
 ## Architecture
 
 ### Module Structure
 
+```text
+smartplug-hub/
+├── app/
+│   ├── backends/
+│   │   ├── kasa.py          # Kasa backend — persistent TCP, reconnects on demand
+│   │   └── miio.py          # MiIO backend — stateless UDP
+│   ├── admin/
+│   │   ├── auth.py          # Bearer token authentication
+│   │   ├── router.py        # Admin API routes
+│   │   └── service.py       # Admin CRUD operations (pure functions)
+│   ├── __main__.py          # Entry point (uv run smartplug-hub)
+│   ├── command_queue.py     # Per-device command serialization with session lifecycle
+│   ├── core.py              # DeviceBackend ABC, DeviceConfig, DeviceState, exceptions
+│   ├── db.py                # SQLite layer (devices, accounts, outlet names)
+│   ├── device_service.py    # Runtime state: polling, command dispatch, SSE broadcast
+│   ├── logging.py           # Rich handler + library log suppression
+│   ├── main.py              # FastAPI app, public API, SSE, lifespan
+│   └── schemas.py           # Pydantic request/response models
+├── config/
+│   ├── settings.toml        # Admin token (create from example)
+│   └── settings.toml.example
+├── data/
+│   └── smartplug.db         # SQLite database (auto-created)
+├── static/
+│   ├── index.html           # Main web UI
+│   ├── index.js             # Main page wiring (ES modules)
+│   ├── admin.html           # Admin panel
+│   ├── admin.js             # Admin panel wiring
+│   ├── style.css
+│   └── js/
+│       ├── api.js           # Public API fetch wrappers
+│       ├── devices.js       # Device card rendering
+│       ├── notifications.js # Toast + notification bell
+│       ├── sse.js           # SSE connection with auto-reconnect
+│       └── admin/
+│           ├── api.js       # Admin API fetch wrappers
+│           ├── auth.js      # Token login + sessionStorage
+│           ├── accounts.js  # Accounts CRUD UI
+│           └── devices.js   # Devices CRUD + outlets modal
+└── pyproject.toml
 ```
-app/
-├── core/
-│   ├── backend.py       # DeviceBackend ABC, BackendPolicy, Command types
-│   ├── config.py        # Whitelist loading and ID resolution
-│   ├── exceptions.py    # Domain exceptions (DeviceOfflineError, etc.)
-│   ├── models.py        # Shared types (DeviceState, DeviceStatus, etc.)
-│   ├── registry.py      # Protocol registration
-│   └── utils.py         # Shared utilities (e.g. MAC normalisation)
-├── kasa/
-│   ├── __init__.py      # Exports KasaBackend, discover_all
-│   ├── backend.py       # KasaBackend: persistent TCP connection pool
-│   ├── config.py        # KasaDeviceConfig dataclass
-│   └── connection.py    # Stateless Kasa network functions
-├── miio/
-│   ├── __init__.py      # Exports MiioBackend, discover_all
-│   ├── backend.py       # MiioBackend: stateless UDP
-│   ├── config.py        # MiioDeviceConfig dataclass
-│   └── connection.py    # Stateless MiIO network functions
-├── __main__.py          # Entry point (uv run smartplug-hub)
-├── command_queue.py     # Protocol-agnostic per-device command queue
-├── device_manager.py    # Facade: lifecycle, state cache, polling, SSE broadcast
-└── main.py              # FastAPI routes and lifecycle
-```
-
-Adding a new protocol only requires a new `app/<protocol>/` subpackage — no changes to `app/core/` or `app/` root files.
 
 ### Connection Strategy (Kasa)
 
-Kasa devices can't handle frequent TCP connections, but long-lived connections go stale. The solution is **short-term persistent connections** managed by `KasaBackend`:
+Kasa devices use **short-term persistent TCP connections** managed per device:
 
-- The command queue processor connects on the first command (not at startup)
-- Consecutive commands to the same device reuse the connection
+- Connects on the first command (not at startup)
+- Consecutive commands reuse the existing connection
 - After 60 seconds of idle, the connection is automatically closed
-- On failure: retry with cached IP → mark offline (use `POST /refresh` to trigger rediscovery)
+- On first contact or after failure: try last known IP → broadcast discover → mark offline
+- Use `POST /api/v1/devices/{id}/refresh` to trigger rediscovery for an offline device
 
 ### Connection Strategy (MiIO)
 
-MiIO devices use **stateless UDP** — each command is an independent encrypted packet. `MiioBackend` holds no persistent connection:
+MiIO devices use **stateless UDP** — each command is an independent encrypted packet:
 
 - Every command opens a UDP socket, sends the request, and closes immediately
-- On failure: retry with cached IP → mark offline (use `POST /refresh` to trigger rediscovery)
+- On first contact: try last known IP → broadcast discover
+- On failure: mark offline (use `POST /refresh` to trigger rediscovery)
 
-### Backend ABC
+### Command Queue
 
-All protocol backends implement `DeviceBackend`:
+Each device has its own `DeviceQueue` that serializes commands and manages the backend session lifecycle:
 
-```
-DeviceBackend (ABC)
-  policy             # BackendPolicy: session_timeout, command_interval, command_timeout
-  execute_command()  # Called by CommandQueue; owns retry, rediscovery, connection lifecycle
-  fetch_state()      # One-shot: connect, verify identity, read state, disconnect
-  find_ip()          # Broadcast to locate this device's current IP
-  close()            # Close open connections on shutdown (default: no-op)
-```
+- Deduplicates identical pending commands (e.g. two rapid "turn on" clicks)
+- Rate-limits commands per backend (`command_interval`)
+- For stateful backends (Kasa): holds the TCP connection open between commands
+- After each command, re-reads device state and broadcasts via SSE
 
 ### Real-time Updates (SSE)
 
-The frontend subscribes to `GET /api/v1/events` (Server-Sent Events). State changes — from commands, refresh, or the background polling loop — fan-out immediately to all connected clients via a per-subscriber `asyncio.Queue`. The background loop polls physical devices every 60 seconds to detect external changes (physical button, Kasa app).
+The frontend subscribes to `GET /api/v1/events` (Server-Sent Events). State changes — from commands, refresh, or background polling — fan out immediately to all connected clients via a per-subscriber `asyncio.Queue`. The background loop polls all devices every 60 seconds to detect external state changes (physical button presses, Kasa app).
 
 ## API Reference
 
-All endpoints are under `/api/v1/`.
+All public endpoints are under `/api/v1/`. Admin endpoints are under `/api/v1/admin/` and require `Authorization: Bearer <token>`.
 
-### Endpoints
+### Public Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/devices` | Get cached status of all devices (zero I/O) |
-| GET | `/api/v1/devices/{id}` | Get single device cached status |
-| PATCH | `/api/v1/devices/{id}` | Control device (on/off), blocks until complete |
-| POST | `/api/v1/devices/{id}/refresh` | Rediscover offline device |
-| GET | `/api/v1/events` | SSE stream: push state on change, heartbeat every 30s when idle |
+| Method  | Path                           | Description                                     |
+|---------|--------------------------------|-------------------------------------------------|
+| `GET`   | `/api/v1/devices`              | Cached status of all devices (zero I/O)         |
+| `GET`   | `/api/v1/devices/{id}`         | Single device cached status                     |
+| `PATCH` | `/api/v1/devices/{id}`         | Control device (on/off), blocks until complete  |
+| `POST`  | `/api/v1/devices/{id}/refresh` | Force rediscovery for offline device            |
+| `GET`   | `/api/v1/events`               | SSE stream — push on change, 5s keepalive       |
 
-### Device ID
-
-Devices are identified by an 8-character ID derived from their MAC address (SHA-256 hash).
-This provides a stable identifier that doesn't change when the device's IP address changes.
-
-Example: MAC `AA:BB:CC:DD:EE:FF` → ID `a1b2c3d4`
-
-### Device Status
-
-| Status    | Description |
-|-----------|-------------|
-| `online`  | Device is connected and responding |
-| `offline` | Device unreachable; topology preserved for UI display |
-
-### Examples
-
-#### GET /api/v1/devices
-
-Returns cached state of all devices. Zero I/O.
+### Device Object
 
 ```json
 {
-  "devices": [
-    {
-      "id": "a1b2c3d4",
-      "name": "Living Room Strip",
-      "status": "online",
-      "is_on": true,
-      "alias": "TP-LINK_Power Strip_A1B2",
-      "model": "KP303",
-      "is_strip": true,
-      "children": [
-        { "id": "0", "alias": "Outlet 1", "is_on": true },
-        { "id": "1", "alias": "Outlet 2", "is_on": false }
-      ],
-      "last_updated": "2024-01-15T10:30:00+00:00",
-      "group": "Living Room"
-    }
+  "id": "a1b2c3d4",
+  "name": "Living Room Strip",
+  "type": "kasa",
+  "group_name": "Living Room",
+  "model": "KP303",
+  "is_strip": true,
+  "is_online": true,
+  "is_on": true,
+  "last_updated": "2024-01-15T10:30:00+00:00",
+  "outlets": [
+    { "outlet_id": "abc123", "name": "Outlet 1", "is_on": true },
+    { "outlet_id": "def456", "name": "Outlet 2", "is_on": false }
   ]
 }
 ```
 
-#### PATCH /api/v1/devices/{id}
+`GET /api/v1/devices` returns a flat array of device objects. `is_on` and `outlets` are `null` until the first successful poll.
 
-Control a device. Blocks until the operation completes (or fails).
+### PATCH /api/v1/devices/{id}
 
-Request:
+Control a device or a single outlet. Blocks until the operation completes (or fails).
+
+Request body:
+
 ```json
-{
-  "is_on": true,
-  "child_id": "optional_outlet_id"
-}
+{ "outlet_id": "abc123", "on": true }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `is_on` | Yes | `true` to turn on, `false` to turn off |
-| `child_id` | No | Outlet ID for power strips |
+| Field       | Required | Description                                              |
+|-------------|----------|----------------------------------------------------------|
+| `on`        | Yes      | `true` to turn on, `false` to turn off                   |
+| `outlet_id` | No       | Outlet ID for power strips; omit to control whole device |
 
-Response (200): Full `DeviceState` with updated values.
+Response (200): updated device object.
 
-Error responses:
+Error codes: `404` device not found, `503` device offline.
 
-| Code | Meaning |
-|------|---------|
-| 400 | Invalid action or child_id |
-| 503 | Device offline (retry + discover all failed) |
-| 502 | Operation failed but device may still be online |
-| 504 | Command queue timeout |
+### POST /api/v1/devices/{id}/refresh
 
-#### POST /api/v1/devices/{id}/refresh
+Force-closes the cached connection, clears the cached IP, and rediscovers the device from scratch. Useful when a device changes IP address.
 
-Rediscover an offline device. Returns `DeviceState` with status code 200 (online) or 503 (still offline).
+Returns the updated device object. Returns `503` if the device is still unreachable after rediscovery.
 
-## Project Structure
+### GET /api/v1/events
 
-```
-smartplug-hub/
-├── app/
-│   ├── core/
-│   │   ├── config.py           # Whitelist configuration
-│   │   ├── models.py           # Shared types, exceptions, DeviceBackend ABC
-│   │   ├── registry.py         # Protocol registration
-│   │   └── utils.py            # Shared utilities
-│   ├── kasa/
-│   │   ├── __init__.py
-│   │   ├── backend.py          # KasaBackend
-│   │   ├── config.py           # KasaDeviceConfig
-│   │   └── connection.py       # Stateless Kasa network functions
-│   ├── miio/
-│   │   ├── __init__.py
-│   │   ├── backend.py          # MiioBackend
-│   │   ├── config.py           # MiioDeviceConfig
-│   │   └── connection.py       # Stateless MiIO network functions
-│   ├── __main__.py             # Entry point
-│   ├── command_queue.py        # Protocol-agnostic command queue
-│   ├── device_manager.py       # Facade combining all modules
-│   └── main.py                 # FastAPI routes and lifecycle
-├── config/
-│   ├── devices.json            # Device whitelist (create from example)
-│   └── devices.example.json
-├── static/
-│   ├── index.html              # Web UI
-│   ├── app.js                  # Frontend logic
-│   └── style.css
-└── pyproject.toml
-```
+Server-Sent Events stream. Each event is a JSON array of all device objects (same shape as `GET /api/v1/devices`). A `: keepalive` comment is sent every 5 seconds when idle.
+
+### Device ID
+
+Devices are identified by an 8-character hex ID derived from their MAC address (first 8 characters of SHA-256). This remains stable even when the device's IP address changes.
+
+Example: MAC `AA:BB:CC:DD:EE:FF` → ID `a1b2c3d4`

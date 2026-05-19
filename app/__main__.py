@@ -1,14 +1,25 @@
-"""Entry point: python -m app  OR  uv run smartplug-hub"""
+"""Entry point — run with `python -m app` or `smartplug-hub`."""
 
-import os
+import argparse
 
 import uvicorn
 
+from .logging import build_log_config
+
 
 def main() -> None:
-    port = int(os.getenv("PORT", "8000"))
-    reload = os.getenv("RELOAD", "").lower() in ("1", "true", "yes")
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=reload)
+    parser = argparse.ArgumentParser(description="SmartPlug Hub")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging for app.*")
+    args = parser.parse_args()
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=args.port,
+        reload=False,
+        log_config=build_log_config(args.debug),
+        timeout_graceful_shutdown=5,
+    )
 
 
 if __name__ == "__main__":

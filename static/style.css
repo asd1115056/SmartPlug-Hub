@@ -1,356 +1,252 @@
-/* === Base === */
-body {
-    background-color: #212529;
-}
-
 /* === Device Cards === */
+
 .device-card {
-    border: none;
-    border-left: 4px solid #495057;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    overflow: hidden;
+  border: none;
+  border-left: 4px solid #495057;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+  overflow: hidden;
 }
 
 .device-card .card-header {
-    border-bottom: none;
-    padding: 1rem 1.25rem;
+  padding: 1rem 1.25rem;
+  border-bottom: none;
 }
 
-.device-card .card-body {
-    padding: 0;
-}
-
-/* === Device Connection States === */
 .device-card.state-online {
-    border-left-color: #198754;
+  border-left-color: #198754;
 }
 
 .device-card.state-online .card-header {
-    background: linear-gradient(135deg, #198754, #146c43);
-    color: white;
+  background: linear-gradient(135deg, #198754, #146c43);
+  color: white;
 }
 
 .device-card.state-offline {
-    border-left-color: #6c757d;
+  border-left-color: #6c757d;
 }
 
 .device-card.state-offline .card-header {
-    background: linear-gradient(135deg, #6c757d, #495057);
-    color: white;
+  background: linear-gradient(135deg, #6c757d, #495057);
+  color: white;
 }
 
-/* === Card Header Text === */
-.device-card .card-header .last-updated {
-    font-size: 0.75rem;
-    opacity: 0.65;
-    margin-top: 0.15rem;
+.device-model {
+  font-size: .8rem;
+  opacity: .8;
+  margin-top: .15rem;
 }
 
-.device-card .card-header .refresh-device-btn {
-    color: white;
-    border-color: rgba(255, 255, 255, 0.5);
-    background: transparent;
+.device-card .refresh-btn {
+  color: white;
+  border-color: rgba(255, 255, 255, .5);
+  background: transparent;
 }
 
-.device-card .card-header .refresh-device-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: white;
-    color: white;
+.device-card .refresh-btn:hover {
+  background: rgba(255, 255, 255, .15);
+  border-color: white;
+  color: white;
 }
 
 /* === Toggle Switch === */
+
 .toggle-switch {
-    position: relative;
-    width: 80px;
-    height: 40px;
-    background: #495057;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: background 0.3s;
-    border: none;
-    padding: 0;
+  position: relative;
+  width: 80px;
+  height: 40px;
+  background: #495057;
+  border-radius: 20px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background .25s;
+  flex-shrink: 0;
 }
 
-.toggle-switch:hover {
-    background: #5a6268;
-}
+.toggle-switch:hover:not(:disabled) { background: #5a6268; }
 
-.toggle-switch.is-on {
-    background: #198754;
-}
-
-.toggle-switch.is-on:hover {
-    background: #20a060;
-}
+.toggle-switch.is-on { background: #198754; }
+.toggle-switch.is-on:hover:not(:disabled) { background: #20a060; }
 
 .toggle-switch::after {
-    content: '';
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    width: 32px;
-    height: 32px;
-    background: white;
-    border-radius: 50%;
-    transition: transform 0.3s;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 32px;
+  height: 32px;
+  background: white;
+  border-radius: 50%;
+  transition: transform .25s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .2);
 }
 
-.toggle-switch.is-on::after {
-    transform: translateX(40px);
-}
+.toggle-switch.is-on::after { transform: translateX(40px); }
 
 .toggle-switch:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* === Single Device Control === */
-.single-device-control {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    background: #2b3035;
-}
-
-/* === Child Outlets (Power Strip) === */
-.child-outlet {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid #373b3e;
-    background: #2b3035;
-}
-
-.child-outlet:last-child {
-    border-bottom: none;
-}
-
-.child-outlet.is-on {
-    background: rgba(25, 135, 84, 0.25);
-}
-
-.outlet-name {
-    font-weight: 500;
-    color: #e0e0e0;
-}
-
-.outlet-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
+  opacity: .5;
+  cursor: not-allowed;
 }
 
 /* === Loading State === */
-.loading {
-    opacity: 0.6;
-    pointer-events: none;
+
+.device-card.loading {
+  opacity: .6;
+  pointer-events: none;
 }
 
 .device-card.loading .toggle-switch::after {
-    animation: pulse 0.6s ease-in-out infinite;
+  animation: toggle-pulse .6s ease-in-out infinite;
 }
 
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-    50% {
-        opacity: 0.4;
-        box-shadow: 0 0 8px rgba(13, 110, 253, 0.6);
-    }
+@keyframes toggle-pulse {
+  0%, 100% { opacity: 1;  box-shadow: 0 2px 4px rgba(0, 0, 0, .2); }
+  50%       { opacity: .4; box-shadow: 0 0 8px rgba(13, 110, 253, .6); }
 }
 
-/* === Refresh Button === */
-.refresh-device-btn.spinning {
-    animation: spin 0.8s linear infinite;
+/* === Single Device Control === */
+
+.single-device-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: #2b3035;
 }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+/* === Child Outlets (Strip) === */
+
+.child-outlet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #373b3e;
+  background: #2b3035;
 }
 
-/* === Device Info === */
-.device-model {
-    font-size: 0.8rem;
-    opacity: 0.8;
-    margin-top: 0.25rem;
-}
+.child-outlet:last-child { border-bottom: none; }
 
-/* === Search Input === */
-#search-input {
-    border-radius: 8px;
+.child-outlet.is-on { background: rgba(25, 135, 84, .2); }
+
+.outlet-name {
+  font-weight: 500;
+  color: #e0e0e0;
 }
 
 /* === Group Tabs === */
-#tabs-nav .nav-tabs {
-    border-bottom: 1px solid #495057;
-}
 
 #tabs-nav .nav-link {
-    color: #adb5bd;
-    border-radius: 8px 8px 0 0;
-    font-weight: 500;
+  color: #adb5bd;
+  border-radius: 8px 8px 0 0;
 }
 
 #tabs-nav .nav-link.active {
-    font-weight: 600;
-    background-color: #2b3035;
-    border-color: #495057 #495057 #2b3035;
-    color: #e0e0e0;
+  font-weight: 600;
+  background-color: #2b3035;
+  border-color: #495057 #495057 #2b3035;
+  color: #e0e0e0;
 }
 
 /* === Toast === */
-#toast-container {
-    z-index: 1080;
-}
-
-#toast-container .toast {
-    min-width: 340px;
-    font-size: 1rem;
-    border: none;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-#toast-container .toast .toast-body {
-    padding: 0.875rem 1rem;
-    font-weight: 500;
-}
 
 .toast-icon {
-    padding-left: 1.1rem;
-    font-size: 1.15rem;
-    font-weight: 700;
-    flex-shrink: 0;
+  padding-left: 1rem;
+  font-size: 1.1rem;
+  flex-shrink: 0;
 }
 
 /* === Notification Bell === */
+
 .notif-btn {
-    background: transparent;
-    border: 1px solid #495057;
-    border-radius: 8px;
-    color: #adb5bd;
-    padding: 0.4rem 0.65rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  background: transparent;
+  border: 1px solid #495057;
+  border-radius: 8px;
+  color: #adb5bd;
+  padding: .4rem .65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background .15s, border-color .15s, color .15s;
 }
 
 .notif-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: #6c757d;
-    color: #e0e0e0;
+  background: rgba(255, 255, 255, .06);
+  border-color: #6c757d;
+  color: #e0e0e0;
 }
 
 .notif-badge {
-    background: #dc3545;
-    color: white;
-    font-size: 0.7rem;
-    font-weight: 700;
-    min-width: 1.1rem;
-    height: 1.1rem;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 0.25rem;
+  background: #dc3545;
+  color: white;
+  font-size: .7rem;
+  font-weight: 700;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 .25rem;
+  margin-left: .3rem;
 }
 
-/* === Notification Dropdown === */
 .notif-dropdown {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 8px);
-    width: 320px;
-    max-height: 400px;
-    overflow-y: auto;
-    background: #2b3035;
-    border: 1px solid #495057;
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    z-index: 1050;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 300px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: #2b3035;
+  border: 1px solid #495057;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  z-index: 1050;
 }
 
 .notif-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #373b3e;
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid #373b3e;
 }
 
-.notif-item:last-child {
-    border-bottom: none;
-}
+.notif-item:last-child { border-bottom: none; }
 
-.notif-item-icon {
-    font-size: 1rem;
-    font-weight: 700;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
+.notif-item-icon { font-size: 1rem; flex-shrink: 0; margin-top: 2px; }
 .notif-item-icon.type-success { color: #20c997; }
 .notif-item-icon.type-warning { color: #ffc107; }
 .notif-item-icon.type-danger  { color: #f56565; }
 .notif-item-icon.type-info    { color: #0dcaf0; }
 
-.notif-item-body {
-    min-width: 0;
+.notif-item-msg  { font-size: .9rem; color: #e0e0e0; line-height: 1.4; }
+.notif-item-time { font-size: .75rem; color: #6c757d; margin-top: .2rem; }
+.notif-empty     { text-align: center; color: #6c757d; font-size: .9rem; padding: 1.5rem; margin: 0; }
+
+/* === Admin === */
+
+#loginView {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.notif-item-msg {
-    font-size: 0.9rem;
-    color: #e0e0e0;
-    line-height: 1.4;
-}
+.login-card  { width: 360px; }
+#adminView   { display: none; }
+.inline-input { flex: 1 1 0; min-width: 0; }
 
-.notif-item-time {
-    font-size: 0.75rem;
-    color: #6c757d;
-    margin-top: 0.2rem;
-}
-
-.notif-empty {
-    text-align: center;
-    color: #6c757d;
-    font-size: 0.9rem;
-    padding: 1.5rem;
-    margin: 0;
-}
+.outlet-row { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; }
+.outlet-id  { color: #6c757d; min-width: 2.5rem; font-family: monospace; }
 
 /* === Responsive === */
+
 @media (max-width: 576px) {
-    .toggle-switch {
-        width: 60px;
-        height: 32px;
-    }
-
-    .toggle-switch::after {
-        width: 24px;
-        height: 24px;
-    }
-
-    .toggle-switch.is-on::after {
-        transform: translateX(28px);
-    }
-
-    .child-outlet {
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .outlet-controls {
-        width: 100%;
-        justify-content: flex-end;
-    }
+  .toggle-switch { width: 60px; height: 32px; border-radius: 16px; }
+  .toggle-switch::after { width: 24px; height: 24px; }
+  .toggle-switch.is-on::after { transform: translateX(28px); }
+  .child-outlet { flex-wrap: wrap; gap: .5rem; }
 }

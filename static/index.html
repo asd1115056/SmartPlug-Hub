@@ -1,51 +1,54 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartPlug Hub</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartPlug Hub</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container py-4">
-        <div class="mb-4 d-flex justify-content-between align-items-center">
-            <h1 class="h3 mb-0">SmartPlug Hub</h1>
-            <div id="notif-wrapper" class="position-relative">
-                <button id="notif-btn" class="notif-btn" title="Notification history">
-                    <i class="bi bi-bell-fill" style="font-size: 1.1rem;"></i>
-                    <span id="notif-badge" class="notif-badge d-none">0</span>
-                </button>
-                <div id="notif-dropdown" class="notif-dropdown d-none"></div>
-            </div>
+  <div class="container py-4">
+    <div class="mb-4 d-flex justify-content-between align-items-center">
+      <h1 class="h3 mb-0"><i class="bi bi-plug-fill text-success me-2"></i>SmartPlug Hub</h1>
+      <div class="d-flex align-items-center gap-2">
+        <a href="/admin" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-shield-lock me-1"></i>Admin
+        </a>
+        <div id="notif-wrapper" class="position-relative">
+          <button id="notif-btn" class="notif-btn" title="Notification history">
+            <i class="bi bi-bell-fill"></i>
+            <span id="notif-badge" class="notif-badge d-none">0</span>
+          </button>
+          <div id="notif-dropdown" class="notif-dropdown d-none"></div>
         </div>
-
-        <div class="mb-3">
-            <input type="search" id="search-input" class="form-control"
-                   placeholder="Search devices…" autocomplete="off">
-        </div>
-
-        <div id="server-offline-banner" class="alert alert-danger d-none mb-3" role="alert">
-            Cannot reach server &mdash; retrying&hellip;
-        </div>
-
-        <div id="tabs-nav"></div>
-
-        <div id="devices-container">
-            <div class="text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2 text-muted">Loading devices...</p>
-            </div>
-        </div>
+      </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
+    <div class="mb-3">
+      <input type="search" id="search-input" class="form-control" placeholder="Search devices…" autocomplete="off">
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/app.js"></script>
+    <div id="server-offline-banner" class="alert alert-danger d-none mb-3" role="alert">
+      Cannot reach server &mdash; retrying&hellip;
+    </div>
+
+    <div id="tabs-nav" class="mb-3"></div>
+    <div id="devices-container">
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading…</span>
+        </div>
+        <p class="mt-2 text-muted">Loading devices…</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/static/index.js"></script>
 </body>
 </html>

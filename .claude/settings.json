@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from app.miio import MiioBackend; print\\('ok'\\)\")",
+      "Bash(python -c \"from app.main import app; print\\('ok'\\)\")",
+      "Bash(.venv/bin/python -c \"from app.main import app; print\\('ok'\\)\")",
+      "Bash(grep -n \"captcha\\\\|CAPTCHA\\\\|getCode\\\\|PIL\\\\|Image\\\\|qr\\\\|QR\" /home/testing/token_extractor/token_extractor.py | head -20)",
+      "Read(//home/testing/token_extractor/**)",
+      "Bash(git checkout *)",
+      "Bash(uv sync *)",
+      "Bash(uv run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
