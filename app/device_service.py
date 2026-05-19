@@ -180,11 +180,13 @@ class DeviceService:
             return
         try:
             state = await entry.backend.probe(entry.config)
-        except DeviceOfflineError:
+        except DeviceOfflineError as e:
+            if entry.is_online:
+                logger.warning("Device %s unreachable: %s", device_id, e)
             self._mark_offline(device_id, entry)
             return
         except Exception:
-            logger.exception(f"Unexpected error probing {device_id}")
+            logger.exception("Unexpected error probing %s", device_id)
             self._mark_offline(device_id, entry)
             return
         self._update_state(device_id, entry, state)
