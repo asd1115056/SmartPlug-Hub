@@ -24,7 +24,6 @@ def build_log_config(debug: bool = False) -> dict:
     for lib in ("kasa", "miio", "sqlalchemy", "httpx", "httpcore"):
         cfg["loggers"][lib] = {"level": "WARNING", "propagate": False}
 
-    if not debug:
-        cfg["loggers"]["uvicorn.access"] = {"level": "WARNING", "propagate": False}
+    cfg["loggers"]["uvicorn.access"] = {"handlers": ["access"], "level": "INFO", "propagate": False}
 
     return cfg

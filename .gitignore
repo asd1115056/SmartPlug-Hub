@@ -15,3 +15,5 @@ config/settings.toml
 
 # Runtime data
 data/smartplug.db
+data/smartplug.db-shm
+data/smartplug.db-wal
