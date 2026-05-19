@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from .command_queue import DeviceQueue
@@ -93,11 +93,12 @@ class DeviceService:
         return state
 
     async def refresh(self, device_id: str) -> DeviceState:
-        """Force-close and re-probe. Useful for recovering an offline device."""
+        """Force-close and rediscover — skips cached IPs to handle IP changes."""
         entry = self._get_entry(device_id)
         await entry.queue.close()
+        entry.backend.ip = None
         try:
-            state = await entry.backend.probe(entry.config)
+            state = await entry.backend.probe(replace(entry.config, last_known_ip=None))
         except DeviceOfflineError:
             self._mark_offline(device_id, entry)
             raise
