@@ -94,9 +94,15 @@ document.getElementById('accountsTable').addEventListener('click', async e => {
 // ── Devices ───────────────────────────────────────────────────────────────────
 
 const accountSel = document.getElementById('accountSelect')
+const miioToken = document.getElementById('miioToken')
+const miioDeviceId = document.getElementById('miioDeviceId')
+
 accountSel.addEventListener('change', () => {
   const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
-  document.getElementById('miioFields').hidden = type !== 'miio'
+  const isMiio = type === 'miio'
+  document.getElementById('miioFields').hidden = !isMiio
+  miioToken.required = isMiio
+  miioDeviceId.required = isMiio
 })
 
 let _miioSessionId = null
