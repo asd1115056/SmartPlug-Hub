@@ -168,14 +168,15 @@ All public endpoints are under `/api/v1/`. Admin endpoints are under `/api/v1/ad
   "is_online": true,
   "is_on": true,
   "last_updated": "2024-01-15T10:30:00+00:00",
+  "watts": 42.5,
   "outlets": [
-    { "outlet_id": "abc123", "name": "Outlet 1", "is_on": true },
-    { "outlet_id": "def456", "name": "Outlet 2", "is_on": false }
+    { "outlet_id": "abc123", "name": "Outlet 1", "is_on": true, "watts": 42.5 },
+    { "outlet_id": "def456", "name": "Outlet 2", "is_on": false, "watts": 0.0 }
   ]
 }
 ```
 
-`GET /api/v1/devices` returns a flat array of device objects. `is_on` and `outlets` are `null` until the first successful poll.
+`GET /api/v1/devices` returns a flat array of device objects. `is_on`, `outlets`, and `watts` are `null` until the first successful poll. `watts` is instantaneous power in watts; `null` if the device does not support energy monitoring.
 
 ### PATCH /api/v1/devices/{id}
 

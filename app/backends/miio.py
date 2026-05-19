@@ -37,6 +37,9 @@ _SIID_MAP: dict[int, tuple[str, str]] = {
 }
 _OUTLET_ID_TO_SIID: dict[str, int] = {oid: siid for siid, (oid, _) in _SIID_MAP.items()}
 
+_POWER_SIID = 11   # power consumption service
+_POWER_PIID = 4    # electric-power (W, instantaneous)
+
 
 class MiioBackend(DeviceBackend):
     # MiIO does not support hardware rename — labels live in DB only
@@ -116,19 +119,26 @@ async def _discover(cfg: DeviceConfig) -> str | None:
 
 def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
     device = MiotDevice(ip=ip, token=cfg.miio_token)
-    props = [{"did": cfg.miio_id, "siid": s, "piid": 1}
-             for s in _OUTLET_SIIDS + [_USB_SIID]]
+    props = (
+        [{"did": cfg.miio_id, "siid": s, "piid": 1} for s in _OUTLET_SIIDS + [_USB_SIID]]
+        + [{"did": cfg.miio_id, "siid": _POWER_SIID, "piid": _POWER_PIID}]
+    )
     try:
         results = device.send("get_properties", props)
     except DeviceException as e:
         raise DeviceOfflineError(f"{cfg.mac} unreachable: {e}") from e
 
-    values = {r["siid"]: bool(r["value"]) for r in results if r.get("code") == 0}
+    ok = [r for r in results if r.get("code") == 0]
+    switch_values = {r["siid"]: bool(r["value"]) for r in ok if r.get("piid") == 1}
+    power_result = next(
+        (r for r in ok if r.get("siid") == _POWER_SIID and r.get("piid") == _POWER_PIID), None
+    )
+    watts = float(power_result["value"]) if power_result else None
 
     children = [
-        ChildState(outlet_id=oid, hw_alias=alias, is_on=values[siid])
+        ChildState(outlet_id=oid, hw_alias=alias, is_on=switch_values[siid])
         for siid, (oid, alias) in sorted(_SIID_MAP.items())
-        if siid in values
+        if siid in switch_values
     ]
 
     return DeviceState(
@@ -137,6 +147,7 @@ def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
         hw_is_strip=True,
         is_on=any(c.is_on for c in children),
         children=children,
+        watts=watts,
     )
 
 

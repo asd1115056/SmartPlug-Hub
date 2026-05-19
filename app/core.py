@@ -31,6 +31,7 @@ class ChildState:
     outlet_id: str      # Kasa: child.device_id / MiIO: str(index)
     hw_alias: str | None
     is_on: bool
+    watts: float | None = None
 
 
 @dataclass
@@ -40,6 +41,7 @@ class DeviceState:
     hw_is_strip: bool
     is_on: bool
     children: list[ChildState] = field(default_factory=list)
+    watts: float | None = None
 
 
 # ── Device config (passed to backends) ───────────────────────────────────────

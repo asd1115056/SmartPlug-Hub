@@ -14,6 +14,7 @@ class OutletOut(BaseModel):
     outlet_id: str
     name: str
     is_on: bool
+    watts: float | None
 
 
 class DeviceOut(BaseModel):
@@ -27,6 +28,7 @@ class DeviceOut(BaseModel):
     is_on: bool | None
     last_updated: datetime | None
     outlets: list[OutletOut]
+    watts: float | None
 
 
 class AdminDeviceOut(BaseModel):
@@ -96,7 +98,7 @@ def _build_outlets(entry: DeviceEntry) -> list[OutletOut]:
             name = child.hw_alias or child.outlet_id
         else:
             name = entry.outlet_names.get(child.outlet_id) or child.hw_alias or child.outlet_id
-        result.append(OutletOut(outlet_id=child.outlet_id, name=name, is_on=child.is_on))
+        result.append(OutletOut(outlet_id=child.outlet_id, name=name, is_on=child.is_on, watts=child.watts))
     return result
 
 
@@ -113,6 +115,7 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
         is_on=state.is_on if state else None,
         last_updated=entry.last_updated,
         outlets=_build_outlets(entry),
+        watts=state.watts if state else None,
     )
 
 

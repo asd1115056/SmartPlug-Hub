@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from kasa import Credentials, Device
+from kasa import Credentials, Device, Module
 from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
 from kasa.exceptions import AuthenticationError
@@ -189,15 +189,32 @@ def _unique(*values: str | None) -> list[str]:
     return list(seen)
 
 
+def _watts(obj: Device) -> float | None:
+    energy = obj.modules.get(Module.Energy)
+    if energy is None:
+        return None
+    try:
+        return energy.current_consumption
+    except Exception:
+        return None
+
+
 def _build_state(device: Device) -> DeviceState:
+    is_strip = bool(device.children)
     children = [
-        ChildState(outlet_id=child.device_id, hw_alias=child.alias, is_on=child.is_on)
+        ChildState(
+            outlet_id=child.device_id,
+            hw_alias=child.alias,
+            is_on=child.is_on,
+            watts=_watts(child),
+        )
         for child in (device.children or [])
     ]
     return DeviceState(
         hw_alias=device.alias,
         hw_model=device.model,
-        hw_is_strip=bool(device.children),
+        hw_is_strip=is_strip,
         is_on=device.is_on,
         children=children,
+        watts=_watts(device) if not is_strip else None,
     )

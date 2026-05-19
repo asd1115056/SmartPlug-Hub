@@ -41,6 +41,11 @@
   margin-top: .15rem;
 }
 
+.device-watts {
+  font-size: .85rem;
+  opacity: .9;
+}
+
 .device-card .refresh-btn {
   color: white;
   border-color: rgba(255, 255, 255, .5);
@@ -137,6 +142,13 @@
 .outlet-name {
   font-weight: 500;
   color: #e0e0e0;
+}
+
+.outlet-watts {
+  font-size: .8rem;
+  color: #6c757d;
+  margin-left: .5rem;
+  cursor: default;
 }
 
 /* === Group Tabs === */
