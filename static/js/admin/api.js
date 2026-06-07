@@ -2,20 +2,26 @@ import { authFetch } from './auth.js'
 
 const BASE = '/admin/api'
 
-export const getAccounts = () => authFetch('GET', `${BASE}/accounts`)
-export const addAccount = data => authFetch('POST', `${BASE}/accounts`, data)
-export const deleteAccount = id => authFetch('DELETE', `${BASE}/accounts/${id}`)
+export function getAccounts() { return authFetch('GET', `${BASE}/accounts`) }
+export function addAccount(data) { return authFetch('POST', `${BASE}/accounts`, data) }
+export function deleteAccount(id) { return authFetch('DELETE', `${BASE}/accounts/${id}`) }
 
-export const getDevices = () => authFetch('GET', `${BASE}/devices`)
-export const addDevice = data => authFetch('POST', `${BASE}/devices`, data)
-export const deleteDevice = id => authFetch('DELETE', `${BASE}/devices/${id}`)
-export const setDeviceName = (id, name) => authFetch('PATCH', `${BASE}/devices/${id}/name`, { name })
-export const setDeviceGroup = (id, group_name) => authFetch('PATCH', `${BASE}/devices/${id}/group`, { group_name })
-export const setOutletName = (deviceId, outletId, name) =>
-  authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
+export function getDevices() { return authFetch('GET', `${BASE}/devices`) }
+export function addDevice(data) { return authFetch('POST', `${BASE}/devices`, data) }
+export function deleteDevice(id) { return authFetch('DELETE', `${BASE}/devices/${id}`) }
+export function setDeviceName(id, name) {
+  return authFetch('PATCH', `${BASE}/devices/${id}/name`, { name })
+}
+export function setDeviceGroup(id, group_name) {
+  return authFetch('PATCH', `${BASE}/devices/${id}/group`, { group_name })
+}
+export function setOutletName(deviceId, outletId, name) {
+  return authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
+}
 
-export const miioLoginStart = (accountId, mac, region) =>
-  authFetch('POST', `${BASE}/accounts/${accountId}/miio-login`, { mac, region })
-
-export const miioSolve = (sessionId, solution) =>
-  authFetch('POST', `${BASE}/miio-sessions/${sessionId}/solve`, { solution })
+export function miioLoginStart(accountId, mac, region) {
+  return authFetch('POST', `${BASE}/accounts/${accountId}/miio-login`, { mac, region })
+}
+export function miioSolve(sessionId, solution) {
+  return authFetch('POST', `${BASE}/miio-sessions/${sessionId}/solve`, { solution })
+}

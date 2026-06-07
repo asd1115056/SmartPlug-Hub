@@ -34,7 +34,12 @@ async def find_device_by_mac(target_mac: str, broadcast: str | None = None) -> D
     return found_device
 
 
-async def main(mac: str, action: str | None = None, child_index: int | None = None, broadcast: str | None = None) -> None:
+async def main(
+    mac: str,
+    action: str | None = None,
+    child_index: int | None = None,
+    broadcast: str | None = None,
+) -> None:
     device = await find_device_by_mac(mac, broadcast)
     if not device:
         print(f"\nDevice with MAC {normalize_mac(mac)} not found.")

@@ -64,7 +64,10 @@ class DeviceQueue:
     # ── Processor ─────────────────────────────────────────────────────────────
 
     async def _run(self) -> None:
-        logger.debug("[%s] processor running (session_timeout=%.0fs)", self._device_id, self._backend.session_timeout)
+        logger.debug(
+            "[%s] processor running (session_timeout=%.0fs)",
+            self._device_id, self._backend.session_timeout,
+        )
         try:
             while True:
                 cmd = await self._next_command()
@@ -95,7 +98,10 @@ class DeviceQueue:
             try:
                 return await asyncio.wait_for(self._queue.get(), timeout=timeout)
             except asyncio.TimeoutError:
-                logger.debug("[%s] session idle after %.0fs — closing", self._device_id, self._backend.session_timeout)
+                logger.debug(
+                    "[%s] session idle after %.0fs — closing",
+                    self._device_id, self._backend.session_timeout,
+                )
                 return None
         else:
             # Stateless (MiIO): drain queue immediately then exit

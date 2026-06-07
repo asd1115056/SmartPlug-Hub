@@ -117,7 +117,9 @@ class DeviceService:
 
     # ── Admin helpers (called after DB writes are committed) ──────────────────
 
-    def add_entry(self, row: DeviceRow, account: Account | None, outlet_names: dict[str, str]) -> None:
+    def add_entry(
+        self, row: DeviceRow, account: Account | None, outlet_names: dict[str, str]
+    ) -> None:
         entry = _make_entry(row, account, outlet_names)
         self._devices[row.id] = entry
         asyncio.create_task(self._probe_one(row.id, entry))
@@ -161,7 +163,7 @@ class DeviceService:
         entry.is_online = True
         entry.last_updated = datetime.now(UTC)
         if not was_online:
-            logger.info(f"Device {device_id} is now online")
+            logger.info("Device %s is now online", device_id)
         self._broadcast()
         asyncio.create_task(self._db.update_device_hw(
             device_id,
@@ -175,7 +177,7 @@ class DeviceService:
         was_online = entry.is_online
         entry.is_online = False
         if was_online:
-            logger.info(f"Device {device_id} is now offline")
+            logger.info("Device %s is now offline", device_id)
         self._broadcast()
 
     def _broadcast(self) -> None:
@@ -236,7 +238,9 @@ def _make_backend(device_type: str) -> DeviceBackend:
     raise ValueError(f"Unknown device type: {device_type!r}")
 
 
-def _make_entry(row: DeviceRow, account: Account | None, outlet_names: dict[str, str]) -> DeviceEntry:
+def _make_entry(
+    row: DeviceRow, account: Account | None, outlet_names: dict[str, str]
+) -> DeviceEntry:
     config = _make_config(row, account)
     backend = _make_backend(row.type)
     return DeviceEntry(

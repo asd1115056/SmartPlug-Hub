@@ -13,7 +13,10 @@ from utils import load_credentials
 
 async def discover_devices(raw: bool = False, broadcast: str | None = None) -> None:
     credentials = load_credentials()
-    print("Using credentials from config/.env" if credentials else "No credentials found, discovering without")
+    print(
+        "Using credentials from config/.env" if credentials
+        else "No credentials found, discovering without"
+    )
     if broadcast:
         print(f"Broadcast target: {broadcast}")
     print("Discovering devices...\n")

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import tomllib
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -24,7 +25,7 @@ _SETTINGS_PATH = Path("config/settings.toml")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     with _SETTINGS_PATH.open("rb") as f:
         cfg = tomllib.load(f)
     app.state.admin_token = cfg["admin"]["token"]
@@ -115,7 +116,7 @@ async def sse_stream(request: Request, svc: DeviceService = Depends(_svc)) -> St
         devices = [build_device_out(e).model_dump(mode='json') for e in svc.get_devices()]
         return f"data: {json.dumps(devices)}\n\n"
 
-    async def generate():
+    async def generate() -> AsyncGenerator[str, None]:
         try:
             yield _payload()
             while True:

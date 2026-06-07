@@ -98,7 +98,9 @@ def _build_outlets(entry: DeviceEntry) -> list[OutletOut]:
             name = child.hw_alias or child.outlet_id
         else:
             name = entry.outlet_names.get(child.outlet_id) or child.hw_alias or child.outlet_id
-        result.append(OutletOut(outlet_id=child.outlet_id, name=name, is_on=child.is_on, watts=child.watts))
+        result.append(
+            OutletOut(outlet_id=child.outlet_id, name=name, is_on=child.is_on, watts=child.watts)
+        )
     return result
 
 

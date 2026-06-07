@@ -61,7 +61,9 @@ class MiioBackend(DeviceBackend):
                     self.ip = cfg.last_known_ip
                     return state
                 except DeviceOfflineError:
-                    logger.warning("Cannot connect to %s, falling back to discover", cfg.last_known_ip)
+                    logger.warning(
+                        "Cannot connect to %s, falling back to discover", cfg.last_known_ip
+                    )
             ip = await _discover(cfg)
             if not ip:
                 raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
@@ -96,12 +98,13 @@ def _udp_discover_sync(broadcast: str, timeout: float = 3.0) -> dict[str, str]:
                 break
             try:
                 m = Message.parse(data)
-                did = str(int.from_bytes(m.header.value.device_id, byteorder="big"))  # type: ignore[union-attr]
+                device_id_bytes = m.header.value.device_id  # type: ignore[union-attr]
+                did = str(int.from_bytes(device_id_bytes, byteorder="big"))
                 found[did] = addr[0]
-            except Exception:
-                pass  # skip malformed packets
+            except Exception as e:
+                logger.debug("Skipping malformed UDP packet from %s: %s", addr[0], e)
     except OSError as e:
-        logger.warning(f"UDP discover on {broadcast} failed: {e}")
+        logger.warning("UDP discover on %s failed: %s", broadcast, e)
     finally:
         sock.close()
     return found
