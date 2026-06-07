@@ -101,8 +101,8 @@ def _udp_discover_sync(broadcast: str, timeout: float = 3.0) -> dict[str, str]:
                 device_id_bytes = m.header.value.device_id  # type: ignore[union-attr]
                 did = str(int.from_bytes(device_id_bytes, byteorder="big"))
                 found[did] = addr[0]
-            except Exception:
-                pass  # skip malformed packets
+            except Exception as e:
+                logger.debug("Skipping malformed UDP packet from %s: %s", addr[0], e)
     except OSError as e:
         logger.warning("UDP discover on %s failed: %s", broadcast, e)
     finally:

@@ -27,6 +27,12 @@ REGIONS = ("cn", "de", "us", "ru", "tw", "sg", "in", "i2")
 # ── Session state ─────────────────────────────────────────────────────────────
 
 @dataclass
+class _HomeRef:
+    home_id: int | str
+    owner_id: int | str | None
+
+
+@dataclass
 class _Session:
     http: requests.Session
     agent: str
@@ -285,7 +291,8 @@ def _verify_2fa(s: _Session, code: str) -> bool:
 
     try:
         finish_loc = r.json().get("location")
-    except Exception:
+    except Exception as e:
+        logger.debug("2fa: response not JSON, falling back to headers/body: %s", e)
         finish_loc = r.headers.get("Location")
         if not finish_loc and r.text:
             m = re.search(r"https://account\.xiaomi\.com/identity/result/check\?[^\"']+", r.text)
@@ -328,8 +335,8 @@ def _verify_2fa(s: _Session, code: str) -> bool:
             ep = json.loads(ext_prag)
             if ep.get("ssecurity"):
                 s.ssecurity = ep["ssecurity"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("2fa: failed to parse extension-pragma: %s", e)
 
     if not s.ssecurity:
         logger.error("2fa: no ssecurity in extension-pragma")
@@ -382,20 +389,21 @@ def _find_device(s: _Session, region: str, mac: str) -> tuple[str, str] | None:
 
     homes = _api_call(s, region, "/v2/homeroom/gethome",
         '{"fg": true, "fetch_share": true, "fetch_share_dev": true, "limit": 300, "app_ver": 7}')
-    home_ids: list[tuple] = []
+    home_ids: list[_HomeRef] = []
     if homes:
         for h in homes.get("result", {}).get("homelist", []):
-            home_ids.append((h["id"], s.user_id))
+            home_ids.append(_HomeRef(home_id=h["id"], owner_id=s.user_id))
 
     cnt = _api_call(
         s, region, "/v2/user/get_device_cnt", '{"fetch_own": true, "fetch_share": true}'
     )
     if cnt:
         for h in cnt.get("result", {}).get("share", {}).get("share_family", []):
-            home_ids.append((h["home_id"], h["home_owner"]))
+            home_ids.append(_HomeRef(home_id=h["home_id"], owner_id=h["home_owner"]))
 
     logger.debug("find_device: %d home(s) to search", len(home_ids))
-    for home_id, owner_id in home_ids:
+    for ref in home_ids:
+        home_id, owner_id = ref.home_id, ref.owner_id
         data = (
             f'{{"home_owner": {owner_id}, "home_id": {home_id}, "limit": 200,'
             f' "get_split_device": true, "support_smart_home": true}}'

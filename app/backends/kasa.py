@@ -166,8 +166,8 @@ async def _discover(cfg: DeviceConfig) -> str | None:
 async def _safe_close(device: Device) -> None:
     try:
         await device.disconnect()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Disconnect error (ignored): %s", e)
 
 
 def _mac_ok(device: Device, expected_mac: str) -> bool:
