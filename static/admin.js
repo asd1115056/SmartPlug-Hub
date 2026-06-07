@@ -1,7 +1,18 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
 import { loadAccounts, getCache as getAccounts, populateAccountSelect } from './js/admin/accounts.js'
-import { loadDevices, openOutletsModal, renameDevice, regroupDevice, renameOutlet, confirmDelete } from './js/admin/devices.js'
+import {
+  loadDevices, openOutletsModal, renameDevice, regroupDevice, renameOutlet, confirmDelete,
+} from './js/admin/devices.js'
+
+// ── Cached DOM refs ───────────────────────────────────────────────────────────
+
+const loginView   = document.getElementById('loginView')
+const adminView   = document.getElementById('adminView')
+const loginBtn    = document.getElementById('loginBtn')
+const loginErr    = document.getElementById('loginErr')
+const tokenInput  = document.getElementById('tokenInput')
+const logoutBtn   = document.getElementById('logoutBtn')
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 
@@ -21,44 +32,47 @@ function flash(msg, ok = true) {
 }
 
 function esc(str) {
-  const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML
+  const d = document.createElement('div')
+  d.textContent = str ?? ''
+  return d.innerHTML
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 function showLogin(err) {
-  document.getElementById('adminView').style.display = 'none'
-  document.getElementById('loginView').style.display = 'flex'
-  document.getElementById('loginErr').textContent = err || ''
-  document.getElementById('loginBtn').disabled = false
+  adminView.style.display = 'none'
+  loginView.style.display = 'flex'
+  loginErr.textContent = err || ''
+  loginBtn.disabled = false
 }
 
 function showAdmin() {
-  document.getElementById('loginView').style.display = 'none'
-  document.getElementById('adminView').style.display = 'block'
+  loginView.style.display = 'none'
+  adminView.style.display = 'block'
   loadAll()
 }
 
-const onUnauth = () => showLogin('Session expired. Please sign in again.')
+function onUnauth() {
+  showLogin('Session expired. Please sign in again.')
+}
 
-document.getElementById('loginBtn').addEventListener('click', async () => {
-  const input = document.getElementById('tokenInput')
-  const token = input.value.trim()
+loginBtn.addEventListener('click', async () => {
+  const token = tokenInput.value.trim()
   if (!token) return
-  document.getElementById('loginBtn').disabled = true
-  document.getElementById('loginErr').textContent = ''
+  loginBtn.disabled = true
+  loginErr.textContent = ''
   setToken(token)
   if (await verifyToken()) { showAdmin() }
   else { clearToken(); showLogin('Invalid token.') }
 })
 
-document.getElementById('tokenInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('loginBtn').click()
+tokenInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') loginBtn.click()
 })
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
+logoutBtn.addEventListener('click', () => {
   clearToken()
-  document.getElementById('tokenInput').value = ''
+  tokenInput.value = ''
   showLogin('')
 })
 
@@ -93,8 +107,8 @@ document.getElementById('accountsTable').addEventListener('click', async e => {
 
 // ── Devices ───────────────────────────────────────────────────────────────────
 
-const accountSel = document.getElementById('accountSelect')
-const miioToken = document.getElementById('miioToken')
+const accountSel   = document.getElementById('accountSelect')
+const miioToken    = document.getElementById('miioToken')
 const miioDeviceId = document.getElementById('miioDeviceId')
 
 accountSel.addEventListener('change', () => {
@@ -122,8 +136,8 @@ async function _applyMiioResult(result) {
   } else {
     _miioSessionId = null
     document.getElementById('miioCaptchaBlock').hidden = true
-    document.getElementById('miioToken').value = result.token
-    document.getElementById('miioDeviceId').value = result.did
+    miioToken.value = result.token
+    miioDeviceId.value = result.did
     flash('Token and Device ID fetched')
   }
 }

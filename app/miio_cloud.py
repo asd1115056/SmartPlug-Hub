@@ -10,7 +10,9 @@ import random
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -82,7 +84,9 @@ def _enc_signature(url: str, method: str, signed_nonce: str, params: dict) -> st
     return base64.b64encode(hashlib.sha1("&".join(parts).encode()).digest()).decode()
 
 
-def _enc_params(url: str, method: str, signed_nonce: str, nonce: str, params: dict, ssecurity: str) -> dict:
+def _enc_params(
+    url: str, method: str, signed_nonce: str, nonce: str, params: dict, ssecurity: str
+) -> dict:
     p = dict(params)
     p["rc4_hash__"] = _enc_signature(url, method, signed_nonce, p)
     for k, v in p.items():
@@ -225,7 +229,9 @@ def _step3(s: _Session) -> bool:
     r = s.http.get(s.location, headers={"User-Agent": s.agent})
     logger.debug("step3: status=%s", r.status_code)
     if r.status_code == 200:
-        s.service_token = _get_cookie(r.cookies, "serviceToken") or _get_cookie(s.http.cookies, "serviceToken")
+        s.service_token = (
+            _get_cookie(r.cookies, "serviceToken") or _get_cookie(s.http.cookies, "serviceToken")
+        )
         logger.debug("step3: serviceToken=%s", bool(s.service_token))
     return r.status_code == 200
 
@@ -252,7 +258,8 @@ def _start_2fa(s: _Session, notification_url: str) -> None:
         "https://account.xiaomi.com/identity/auth/sendEmailTicket",
         params={"_dc": str(int(time.time() * 1000)), "sid": "xiaomiio",
                 "context": context, "mask": "0", "_locale": "en_US"},
-        data={"retry": "0", "icode": "", "_json": "true", "ick": _get_cookie(s.http.cookies, "ick") or ""},
+        data={"retry": "0", "icode": "", "_json": "true",
+              "ick": _get_cookie(s.http.cookies, "ick") or ""},
         headers=headers,
     )
     logger.debug("2fa: sendEmailTicket status=%s body=%s", r.status_code, r.text[:100])
@@ -380,14 +387,19 @@ def _find_device(s: _Session, region: str, mac: str) -> tuple[str, str] | None:
         for h in homes.get("result", {}).get("homelist", []):
             home_ids.append((h["id"], s.user_id))
 
-    cnt = _api_call(s, region, "/v2/user/get_device_cnt", '{"fetch_own": true, "fetch_share": true}')
+    cnt = _api_call(
+        s, region, "/v2/user/get_device_cnt", '{"fetch_own": true, "fetch_share": true}'
+    )
     if cnt:
         for h in cnt.get("result", {}).get("share", {}).get("share_family", []):
             home_ids.append((h["home_id"], h["home_owner"]))
 
     logger.debug("find_device: %d home(s) to search", len(home_ids))
     for home_id, owner_id in home_ids:
-        data = f'{{"home_owner": {owner_id}, "home_id": {home_id}, "limit": 200, "get_split_device": true, "support_smart_home": true}}'
+        data = (
+            f'{{"home_owner": {owner_id}, "home_id": {home_id}, "limit": 200,'
+            f' "get_split_device": true, "support_smart_home": true}}'
+        )
         devices = _api_call(s, region, "/v2/home/home_device_list", data)
         if not devices:
             logger.debug("find_device: no response for home %s", home_id)
@@ -404,7 +416,7 @@ def _find_device(s: _Session, region: str, mac: str) -> tuple[str, str] | None:
 
 # ── Public async API ──────────────────────────────────────────────────────────
 
-async def _run(fn, *args):
+async def _run(fn: Callable[..., Any], *args: Any) -> Any:
     return await asyncio.get_event_loop().run_in_executor(None, fn, *args)
 
 

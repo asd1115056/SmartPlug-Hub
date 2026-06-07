@@ -8,7 +8,9 @@ from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
 from kasa.exceptions import AuthenticationError
 
-from ..core import ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState, normalize_mac
+from ..core import (
+    ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState, normalize_mac,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +73,7 @@ class KasaBackend(DeviceBackend):
             raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
 
     async def rename_device(self, cfg: DeviceConfig, name: str) -> None:
-        # TODO: verify set_alias behaviour —
-        #   1. power strip: does it rename the strip itself or a no-op? (HS300 untested)
-        #   2. single plug: does it sync to Kasa cloud / Kasa app?
-        #   Until verified, can_rename_device stays True but admin rename is not wired up.
+        # TODO: verify set_alias on strip (HS300 untested) and cloud sync on single plug
         device = await self._get_device(cfg)
         try:
             await device.set_alias(name)
