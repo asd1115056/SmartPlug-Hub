@@ -90,8 +90,8 @@ async def set_power(
         await svc.set_power(device_id, body.outlet_id, body.on)
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")
-    except DeviceOfflineError:
-        raise HTTPException(status_code=503, detail="Device offline")
+    except DeviceOfflineError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return build_device_out(svc.get_device(device_id))
 
 
@@ -101,8 +101,8 @@ async def refresh_device(device_id: str, svc: DeviceService = Depends(_svc)) -> 
         await svc.refresh(device_id)
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")
-    except DeviceOfflineError:
-        raise HTTPException(status_code=503, detail="Device offline")
+    except DeviceOfflineError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return build_device_out(svc.get_device(device_id))
 
 
