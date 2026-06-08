@@ -282,27 +282,45 @@ document.getElementById('outletsModalBody').addEventListener('click', async e =>
 
 // ── Scan ──────────────────────────────────────────────────────────────────────
 
-const scanBtn    = document.getElementById('scanBtn')
-const scanRunBtn = document.getElementById('scanRunBtn')
-const scanModal  = bootstrap.Modal.getOrCreateInstance(document.getElementById('scanModal'))
-const scanStatus = document.getElementById('scanModalStatus')
-const scanTable  = document.getElementById('scanTable')
-const scanBody   = document.getElementById('scanTableBody')
+const scanBtn        = document.getElementById('scanBtn')
+const scanRunBtn     = document.getElementById('scanRunBtn')
+const scanModal      = bootstrap.Modal.getOrCreateInstance(document.getElementById('scanModal'))
+const scanStatus     = document.getElementById('scanModalStatus')
+const scanTable      = document.getElementById('scanTable')
+const scanBody       = document.getElementById('scanTableBody')
+const scanPagination = document.getElementById('scanPagination')
+const scanPageInfo   = document.getElementById('scanPageInfo')
+
+const SCAN_PAGE_SIZE = 10
+let _scanDevices = []
+let _scanPage    = 0
 
 function fmtMac(mac) {
   return (mac ?? '').replace(/(.{2})(?=.)/g, '$1:')
 }
 
 function renderScanTable(devices) {
+  _scanDevices = devices
+  _scanPage = 0
+  _renderScanPage()
+}
+
+function _renderScanPage() {
   scanStatus.hidden = true
-  if (!devices.length) {
+  if (!_scanDevices.length) {
     scanBody.innerHTML = ''
     scanTable.hidden = true
+    scanPagination.hidden = true
     scanStatus.textContent = 'No new devices found.'
     scanStatus.hidden = false
     return
   }
-  scanBody.innerHTML = devices.map(d => `<tr>
+  const total      = _scanDevices.length
+  const totalPages = Math.ceil(total / SCAN_PAGE_SIZE)
+  const start      = _scanPage * SCAN_PAGE_SIZE
+  const slice      = _scanDevices.slice(start, start + SCAN_PAGE_SIZE)
+
+  scanBody.innerHTML = slice.map(d => `<tr>
     <td class="text-center"><span class="badge bg-secondary">${esc(d.type)}</span></td>
     <td class="text-muted">${esc(d.model ?? '—')}</td>
     <td class="font-monospace small">${esc(fmtMac(d.mac))}</td>
@@ -319,7 +337,32 @@ function renderScanTable(devices) {
     </td>
   </tr>`).join('')
   scanTable.hidden = false
+
+  if (totalPages <= 1) { scanPagination.hidden = true; return }
+
+  scanPageInfo.textContent = `${start + 1}–${Math.min(start + SCAN_PAGE_SIZE, total)} / ${total}`
+  scanPagination.querySelector('ul').innerHTML = `
+    <li class="page-item ${_scanPage === 0 ? 'disabled' : ''}">
+      <button class="page-link" data-page="${_scanPage - 1}">‹</button>
+    </li>
+    ${Array.from({ length: totalPages }, (_, i) => `
+      <li class="page-item ${i === _scanPage ? 'active' : ''}">
+        <button class="page-link" data-page="${i}">${i + 1}</button>
+      </li>`).join('')}
+    <li class="page-item ${_scanPage === totalPages - 1 ? 'disabled' : ''}">
+      <button class="page-link" data-page="${_scanPage + 1}">›</button>
+    </li>`
+  scanPagination.hidden = false
 }
+
+scanPagination.addEventListener('click', e => {
+  const btn = e.target.closest('[data-page]')
+  if (!btn) return
+  const page = parseInt(btn.dataset.page)
+  if (page < 0 || page >= Math.ceil(_scanDevices.length / SCAN_PAGE_SIZE)) return
+  _scanPage = page
+  _renderScanPage()
+})
 
 async function runScan() {
   scanBody.innerHTML = ''
