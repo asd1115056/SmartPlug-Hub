@@ -22,8 +22,8 @@ function renderAccounts() {
   }
   tbody.innerHTML = cache.map(a => `
     <tr>
-      <td class="text-muted">${a.id}</td>
-      <td><span class="badge bg-secondary">${a.type}</span></td>
+      <td class="text-center text-muted font-monospace small">${a.id}</td>
+      <td class="text-center"><span class="badge bg-secondary">${a.type}</span></td>
       <td class="font-monospace">${esc(a.username)}</td>
       <td class="text-end">
         <button class="btn btn-sm btn-outline-danger js-delete-account" data-id="${a.id}">
