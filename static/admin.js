@@ -107,16 +107,23 @@ document.getElementById('accountsTable').addEventListener('click', async e => {
 
 // ── Devices ───────────────────────────────────────────────────────────────────
 
-const accountSel   = document.getElementById('accountSelect')
-const miioToken    = document.getElementById('miioToken')
-const miioDeviceId = document.getElementById('miioDeviceId')
+const accountSel      = document.getElementById('accountSelect')
+const deviceTypeSel   = document.getElementById('deviceTypeSelect')
+const miioToken       = document.getElementById('miioToken')
+const miioDeviceId    = document.getElementById('miioDeviceId')
 
-accountSel.addEventListener('change', () => {
-  const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
+function _applyDeviceType(type) {
   const isMiio = type === 'miio'
   document.getElementById('miioFields').hidden = !isMiio
   miioToken.required = isMiio
   miioDeviceId.required = isMiio
+}
+
+deviceTypeSel.addEventListener('change', () => _applyDeviceType(deviceTypeSel.value))
+
+accountSel.addEventListener('change', () => {
+  const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
+  if (type) { deviceTypeSel.value = type; _applyDeviceType(type) }
 })
 
 let _miioSessionId = null
@@ -192,7 +199,7 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
   const accountId = f.account_id.value ? parseInt(f.account_id.value) : null
   try {
     await adminApi.addDevice({
-      mac: f.mac.value, type: accountSel.options[accountSel.selectedIndex]?.dataset.type || f.device_type_hint.value || 'kasa',
+      mac: f.mac.value, type: f.type.value,
       broadcast: f.broadcast.value, account_id: accountId,
       group_name: f.group_name.value || null,
       miio_token: f.miio_token?.value || null, miio_id: f.miio_id?.value || null,
@@ -397,7 +404,8 @@ document.getElementById('scanTable').addEventListener('click', e => {
   const form = document.getElementById('addDeviceForm')
   form.querySelector('[name="mac"]').value = fmtMac(mac)
   form.querySelector('[name="broadcast"]').value = broadcast
-  form.querySelector('[name="device_type_hint"]').value = type
+  deviceTypeSel.value = type
+  _applyDeviceType(type)
 
   const opts = accountSel.options
   let matched = false

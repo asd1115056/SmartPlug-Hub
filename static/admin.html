@@ -166,13 +166,20 @@
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form id="addDeviceForm">
-        <input type="hidden" name="device_type_hint">
         <div class="modal-header">
           <h5 class="modal-title"><i class="bi bi-plug me-2"></i>Add Device</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <div class="row g-3">
+            <div class="col-sm-6">
+              <label class="form-label fw-semibold">Type</label>
+              <select name="type" id="deviceTypeSelect" class="form-select" required>
+                <option value="">—</option>
+                <option value="kasa">Kasa</option>
+                <option value="miio">MiIO</option>
+              </select>
+            </div>
             <div class="col-sm-6">
               <label class="form-label fw-semibold">Account</label>
               <select name="account_id" id="accountSelect" class="form-select">
