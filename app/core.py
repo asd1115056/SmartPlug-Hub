@@ -57,6 +57,7 @@ class DeviceConfig:
     password: str | None = None     # Kasa
     miio_token: str | None = None
     miio_id: str | None = None
+    hw_model: str | None = None     # populated during scan; None for stored configs
 
 
 # ── Backend interface ─────────────────────────────────────────────────────────

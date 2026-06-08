@@ -107,16 +107,23 @@ document.getElementById('accountsTable').addEventListener('click', async e => {
 
 // ── Devices ───────────────────────────────────────────────────────────────────
 
-const accountSel   = document.getElementById('accountSelect')
-const miioToken    = document.getElementById('miioToken')
-const miioDeviceId = document.getElementById('miioDeviceId')
+const accountSel      = document.getElementById('accountSelect')
+const deviceTypeSel   = document.getElementById('deviceTypeSelect')
+const miioToken       = document.getElementById('miioToken')
+const miioDeviceId    = document.getElementById('miioDeviceId')
 
-accountSel.addEventListener('change', () => {
-  const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
+function _applyDeviceType(type) {
   const isMiio = type === 'miio'
   document.getElementById('miioFields').hidden = !isMiio
   miioToken.required = isMiio
   miioDeviceId.required = isMiio
+}
+
+deviceTypeSel.addEventListener('change', () => _applyDeviceType(deviceTypeSel.value))
+
+accountSel.addEventListener('change', () => {
+  const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
+  if (type) { deviceTypeSel.value = type; _applyDeviceType(type) }
 })
 
 let _miioSessionId = null
@@ -192,13 +199,14 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
   const accountId = f.account_id.value ? parseInt(f.account_id.value) : null
   try {
     await adminApi.addDevice({
-      mac: f.mac.value, type: accountSel.options[accountSel.selectedIndex]?.dataset.type || 'kasa',
+      mac: f.mac.value, type: f.type.value,
       broadcast: f.broadcast.value, account_id: accountId,
       group_name: f.group_name.value || null,
       miio_token: f.miio_token?.value || null, miio_id: f.miio_id?.value || null,
     })
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     f.reset()
+    accountSel.dispatchEvent(new Event('change'))
     flash('Device added — probing in background…')
     await loadDevices(onUnauth)
   } catch (err) {
@@ -277,6 +285,140 @@ document.getElementById('devicesTable').addEventListener('keydown', e => {
 document.getElementById('outletsModalBody').addEventListener('click', async e => {
   const btn = e.target.closest('.js-rename-outlet')
   if (btn) await renameOutlet(btn.dataset.deviceId, btn.dataset.outletId, flash)
+})
+
+// ── Scan ──────────────────────────────────────────────────────────────────────
+
+const scanBtn        = document.getElementById('scanBtn')
+const scanRunBtn     = document.getElementById('scanRunBtn')
+const scanModal      = bootstrap.Modal.getOrCreateInstance(document.getElementById('scanModal'))
+const scanStatus     = document.getElementById('scanModalStatus')
+const scanTable      = document.getElementById('scanTable')
+const scanBody       = document.getElementById('scanTableBody')
+const scanPagination = document.getElementById('scanPagination')
+const scanPageInfo   = document.getElementById('scanPageInfo')
+
+const SCAN_PAGE_SIZE = 10
+let _scanDevices = []
+let _scanPage    = 0
+
+function fmtMac(mac) {
+  return (mac ?? '').replace(/(.{2})(?=.)/g, '$1:')
+}
+
+function renderScanTable(devices) {
+  _scanDevices = devices
+  _scanPage = 0
+  _renderScanPage()
+}
+
+function _renderScanPage() {
+  scanStatus.hidden = true
+  if (!_scanDevices.length) {
+    scanBody.innerHTML = ''
+    scanTable.hidden = true
+    scanPagination.hidden = true
+    scanStatus.textContent = 'No new devices found.'
+    scanStatus.hidden = false
+    return
+  }
+  const total      = _scanDevices.length
+  const totalPages = Math.ceil(total / SCAN_PAGE_SIZE)
+  const start      = _scanPage * SCAN_PAGE_SIZE
+  const slice      = _scanDevices.slice(start, start + SCAN_PAGE_SIZE)
+
+  scanBody.innerHTML = slice.map(d => `<tr>
+    <td class="text-center"><span class="badge bg-secondary">${esc(d.type)}</span></td>
+    <td class="text-muted">${esc(d.model ?? '—')}</td>
+    <td class="font-monospace small">${esc(fmtMac(d.mac))}</td>
+    <td class="text-center text-muted">${esc(d.ip)}</td>
+    <td class="text-center text-muted small">${esc(d.broadcast)}</td>
+    <td class="text-end">
+      <button class="btn btn-sm btn-outline-primary js-scan-add"
+        data-mac="${esc(d.mac)}"
+        data-type="${esc(d.type)}"
+        data-broadcast="${esc(d.broadcast)}"
+        data-miio-id="${esc(d.miio_id ?? '')}">
+        <i class="bi bi-plus-lg me-1"></i>Add
+      </button>
+    </td>
+  </tr>`).join('')
+  scanTable.hidden = false
+
+  if (totalPages <= 1) { scanPagination.hidden = true; return }
+
+  scanPageInfo.textContent = `${start + 1}–${Math.min(start + SCAN_PAGE_SIZE, total)} / ${total}`
+  scanPagination.querySelector('ul').innerHTML = `
+    <li class="page-item ${_scanPage === 0 ? 'disabled' : ''}">
+      <button class="page-link" data-page="${_scanPage - 1}">‹</button>
+    </li>
+    ${Array.from({ length: totalPages }, (_, i) => `
+      <li class="page-item ${i === _scanPage ? 'active' : ''}">
+        <button class="page-link" data-page="${i}">${i + 1}</button>
+      </li>`).join('')}
+    <li class="page-item ${_scanPage === totalPages - 1 ? 'disabled' : ''}">
+      <button class="page-link" data-page="${_scanPage + 1}">›</button>
+    </li>`
+  scanPagination.hidden = false
+}
+
+scanPagination.addEventListener('click', e => {
+  const btn = e.target.closest('[data-page]')
+  if (!btn) return
+  const page = parseInt(btn.dataset.page)
+  if (page < 0 || page >= Math.ceil(_scanDevices.length / SCAN_PAGE_SIZE)) return
+  _scanPage = page
+  _renderScanPage()
+})
+
+async function runScan() {
+  scanBody.innerHTML = ''
+  scanTable.hidden = true
+  scanStatus.textContent = ''
+  scanStatus.hidden = true
+  scanRunBtn.disabled = true
+  scanRunBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…'
+  scanStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scanning all interfaces…'
+  scanStatus.hidden = false
+  try {
+    const devices = await adminApi.scanNetwork()
+    renderScanTable(devices)
+  } catch (err) {
+    scanStatus.textContent = err.message || 'Scan failed'
+    scanStatus.hidden = false
+  } finally {
+    scanRunBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Scan'
+    scanRunBtn.disabled = false
+  }
+}
+
+scanBtn.addEventListener('click', () => scanModal.show())
+document.getElementById('scanModal').addEventListener('shown.bs.modal', runScan)
+scanRunBtn.addEventListener('click', runScan)
+
+document.getElementById('scanTable').addEventListener('click', e => {
+  const btn = e.target.closest('.js-scan-add')
+  if (!btn) return
+  const { mac, type, broadcast, miioId } = btn.dataset
+
+  const form = document.getElementById('addDeviceForm')
+  form.querySelector('[name="mac"]').value = fmtMac(mac)
+  form.querySelector('[name="broadcast"]').value = broadcast
+  deviceTypeSel.value = type
+  _applyDeviceType(type)
+
+  const opts = accountSel.options
+  let matched = false
+  for (let i = 0; i < opts.length; i++) {
+    if (opts[i].dataset.type === type) { accountSel.selectedIndex = i; matched = true; break }
+  }
+  if (!matched) accountSel.selectedIndex = 0
+  accountSel.dispatchEvent(new Event('change'))
+
+  if (type === 'miio' && miioId) miioDeviceId.value = miioId
+
+  scanModal.hide()
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('addDeviceModal')).show()
 })
 
 // ── Init ──────────────────────────────────────────────────────────────────────

@@ -49,6 +49,8 @@ Devices and accounts are managed through the admin panel — no config files nee
 1. **Add an account** — TP-Link credentials for Kasa devices that require authentication (newer KLAP-based firmware), or any label for MiIO
 2. **Add a device** — MAC address, broadcast address, optional group name, optional account
 
+**Scan Network** (recommended): click *Scan Network* in the Devices tab to auto-discover all Kasa and MiIO devices on every local network interface. Results show type, model, MAC, IP, and broadcast address — click *+ Add* on any row to pre-fill the Add Device form.
+
 #### Finding your Kasa device MAC and credentials
 
 ```bash

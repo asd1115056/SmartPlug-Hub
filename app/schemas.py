@@ -58,6 +58,15 @@ class AccountOut(BaseModel):
 
 # ── Request models ────────────────────────────────────────────────────────────
 
+class DiscoveredDeviceOut(BaseModel):
+    mac: str
+    type: str
+    broadcast: str
+    ip: str
+    model: str | None = None
+    miio_id: str | None = None
+
+
 class SetPowerRequest(BaseModel):
     outlet_id: str | None = None
     on: bool

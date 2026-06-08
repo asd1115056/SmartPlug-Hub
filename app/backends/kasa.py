@@ -9,7 +9,8 @@ from kasa import Discover
 from kasa.exceptions import AuthenticationError
 
 from ..core import (
-    ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState, normalize_mac,
+    ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState,
+    mac_to_id, normalize_mac,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,18 +150,44 @@ async def _connect(ip: str, credentials: Credentials | None) -> Device | None:
     return None
 
 
-async def _discover(cfg: DeviceConfig) -> str | None:
-    found: str | None = None
+async def _broadcast_discover(
+    broadcast: str, timeout: float = 3.0
+) -> list[tuple[str, str, str | None]]:
+    """Send Kasa discovery to one broadcast; return [(normalized_mac, ip, model)]."""
+    found: list[tuple[str, str, str | None]] = []
 
     async def on_found(device: Device) -> None:
-        nonlocal found
         mac = getattr(device, "mac", None)
-        if mac and normalize_mac(mac) == cfg.mac:
-            found = device.host
+        if mac:
+            model = getattr(device, "model", None)
+            found.append((normalize_mac(mac), device.host, model))
         await _safe_close(device)
 
-    await Discover.discover(target=cfg.broadcast, on_discovered=on_found)
+    await Discover.discover(target=broadcast, on_discovered=on_found, timeout=int(timeout))
     return found
+
+
+async def _discover(cfg: DeviceConfig) -> str | None:
+    """Search cfg.broadcast for a device matching cfg.mac; return IP or None."""
+    for mac, ip, _model in await _broadcast_discover(cfg.broadcast):
+        if mac == cfg.mac:
+            return ip
+    return None
+
+
+async def scan(broadcasts: list[str], timeout: float = 3.0) -> list[DeviceConfig]:
+    """Discover all Kasa devices across multiple broadcast addresses."""
+    seen: dict[str, DeviceConfig] = {}
+
+    async def _one(broadcast: str) -> None:
+        for mac, ip, model in await _broadcast_discover(broadcast, timeout):
+            seen.setdefault(mac, DeviceConfig(
+                id=mac_to_id(mac), mac=mac, type="kasa",
+                broadcast=broadcast, last_known_ip=ip, hw_model=model,
+            ))
+
+    await asyncio.gather(*(_one(b) for b in broadcasts), return_exceptions=True)
+    return list(seen.values())
 
 
 async def _safe_close(device: Device) -> None:
