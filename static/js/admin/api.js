@@ -19,6 +19,8 @@ export function setOutletName(deviceId, outletId, name) {
   return authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
 }
 
+export function scanNetwork() { return authFetch('POST', `${BASE}/scan`) }
+
 export function miioLoginStart(accountId, mac, region) {
   return authFetch('POST', `${BASE}/accounts/${accountId}/miio-login`, { mac, region })
 }

@@ -17,7 +17,9 @@ from ..core import (
     DeviceConfig,
     DeviceOfflineError,
     DeviceState,
+    mac_to_id,
 )
+from ..network import mac_from_ip
 
 logger = logging.getLogger(__name__)
 
@@ -110,12 +112,39 @@ def _udp_discover_sync(broadcast: str, timeout: float = 3.0) -> dict[str, str]:
     return found
 
 
-async def _discover(cfg: DeviceConfig) -> str | None:
+async def _broadcast_discover(
+    broadcast: str, timeout: float = 3.0
+) -> dict[str, str]:
+    """Send MiIO hello to one broadcast; return {miio_id: ip}."""
     loop = asyncio.get_running_loop()
-    results = await loop.run_in_executor(
-        None, partial(_udp_discover_sync, cfg.broadcast)
+    return await loop.run_in_executor(
+        None, partial(_udp_discover_sync, broadcast, timeout)
     )
+
+
+async def _discover(cfg: DeviceConfig) -> str | None:
+    """Search cfg.broadcast for a device matching cfg.miio_id; return IP or None."""
+    results = await _broadcast_discover(cfg.broadcast)
     return results.get(cfg.miio_id or "")
+
+
+async def scan(broadcasts: list[str], timeout: float = 3.0) -> list[DeviceConfig]:
+    """Discover all MiIO devices across multiple broadcast addresses."""
+    seen: dict[str, DeviceConfig] = {}
+
+    async def _one(broadcast: str) -> None:
+        loop = asyncio.get_running_loop()
+        raw = await _broadcast_discover(broadcast, timeout)
+        for miio_id, ip in raw.items():
+            mac = await loop.run_in_executor(None, partial(mac_from_ip, ip))
+            if mac and mac not in seen:
+                seen[mac] = DeviceConfig(
+                    id=mac_to_id(mac), mac=mac, type="miio",
+                    broadcast=broadcast, last_known_ip=ip, miio_id=miio_id,
+                )
+
+    await asyncio.gather(*(_one(b) for b in broadcasts), return_exceptions=True)
+    return list(seen.values())
 
 
 # ── Status / control ──────────────────────────────────────────────────────────

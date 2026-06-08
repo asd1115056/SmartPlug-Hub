@@ -1,17 +1,23 @@
 """Admin API — device and account management."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from ..core import AccountInUseError
+from ..backends.kasa import scan as kasa_scan
+from ..backends.miio import scan as miio_scan
+from ..core import AccountInUseError, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
 from ..miio_cloud import REGIONS, solve_challenge, start_login
+from ..network import get_broadcast_addresses
 from ..schemas import (
     AccountOut,
     AddAccountRequest,
     AddDeviceRequest,
     AdminDeviceOut,
+    DiscoveredDeviceOut,
     SetGroupRequest,
     SetNameRequest,
     build_admin_device_out,
@@ -135,6 +141,36 @@ async def list_devices(
     rows = await db.get_devices()
     entries = {e.config.id: e for e in svc.get_devices()}
     return [build_admin_device_out(row, entries.get(row.id)) for row in rows]
+
+
+@router.post("/scan", response_model=list[DiscoveredDeviceOut])
+async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]:
+    broadcasts = get_broadcast_addresses()
+    if not broadcasts:
+        raise HTTPException(status_code=503, detail="No usable network interfaces found")
+
+    existing = {normalize_mac(d.mac) for d in await db.get_devices()}
+
+    results = await asyncio.gather(
+        kasa_scan(broadcasts), miio_scan(broadcasts), return_exceptions=True
+    )
+
+    seen_macs: set[str] = set()
+    found: list[DiscoveredDeviceOut] = []
+    for r in results:
+        if isinstance(r, list):
+            for d in r:
+                if d.mac not in existing and d.mac not in seen_macs:
+                    seen_macs.add(d.mac)
+                    found.append(DiscoveredDeviceOut(
+                        mac=d.mac,
+                        type=d.type,
+                        broadcast=d.broadcast,
+                        ip=d.last_known_ip or "",
+                        model=d.hw_model,
+                        miio_id=d.miio_id,
+                    ))
+    return found
 
 
 @router.post("/devices", response_model=AdminDeviceOut, status_code=201)

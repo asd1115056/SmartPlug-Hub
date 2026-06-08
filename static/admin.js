@@ -199,6 +199,7 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
     })
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     f.reset()
+    accountSel.dispatchEvent(new Event('change'))
     flash('Device added — probing in background…')
     await loadDevices(onUnauth)
   } catch (err) {
@@ -277,6 +278,97 @@ document.getElementById('devicesTable').addEventListener('keydown', e => {
 document.getElementById('outletsModalBody').addEventListener('click', async e => {
   const btn = e.target.closest('.js-rename-outlet')
   if (btn) await renameOutlet(btn.dataset.deviceId, btn.dataset.outletId, flash)
+})
+
+// ── Scan ──────────────────────────────────────────────────────────────────────
+
+const scanBtn    = document.getElementById('scanBtn')
+const scanRunBtn = document.getElementById('scanRunBtn')
+const scanModal  = bootstrap.Modal.getOrCreateInstance(document.getElementById('scanModal'))
+const scanStatus = document.getElementById('scanModalStatus')
+const scanTable  = document.getElementById('scanTable')
+const scanBody   = document.getElementById('scanTableBody')
+
+function fmtMac(mac) {
+  return (mac ?? '').replace(/(.{2})(?=.)/g, '$1:')
+}
+
+function renderScanTable(devices) {
+  scanStatus.hidden = true
+  if (!devices.length) {
+    scanBody.innerHTML = ''
+    scanTable.hidden = true
+    scanStatus.textContent = 'No new devices found.'
+    scanStatus.hidden = false
+    return
+  }
+  scanBody.innerHTML = devices.map(d => `<tr>
+    <td>
+      <span class="badge bg-secondary">${esc(d.type)}</span>
+      ${d.model ? `<span class="text-muted small ms-1">${esc(d.model)}</span>` : ''}
+    </td>
+    <td class="font-monospace">${esc(fmtMac(d.mac))}</td>
+    <td class="text-muted">${esc(d.ip)}</td>
+    <td class="text-muted small">${esc(d.broadcast)}</td>
+    <td class="text-end">
+      <button class="btn btn-sm btn-outline-primary js-scan-add"
+        data-mac="${esc(d.mac)}"
+        data-type="${esc(d.type)}"
+        data-broadcast="${esc(d.broadcast)}"
+        data-miio-id="${esc(d.miio_id ?? '')}">
+        <i class="bi bi-plus-lg me-1"></i>Add
+      </button>
+    </td>
+  </tr>`).join('')
+  scanTable.hidden = false
+}
+
+async function runScan() {
+  scanBody.innerHTML = ''
+  scanTable.hidden = true
+  scanStatus.textContent = ''
+  scanStatus.hidden = true
+  scanRunBtn.disabled = true
+  scanRunBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…'
+  scanStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scanning all interfaces…'
+  scanStatus.hidden = false
+  try {
+    const devices = await adminApi.scanNetwork()
+    renderScanTable(devices)
+  } catch (err) {
+    scanStatus.textContent = err.message || 'Scan failed'
+    scanStatus.hidden = false
+  } finally {
+    scanRunBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Scan'
+    scanRunBtn.disabled = false
+  }
+}
+
+scanBtn.addEventListener('click', () => scanModal.show())
+document.getElementById('scanModal').addEventListener('shown.bs.modal', runScan)
+scanRunBtn.addEventListener('click', runScan)
+
+document.getElementById('scanTable').addEventListener('click', e => {
+  const btn = e.target.closest('.js-scan-add')
+  if (!btn) return
+  const { mac, type, broadcast, miioId } = btn.dataset
+
+  const form = document.getElementById('addDeviceForm')
+  form.querySelector('[name="mac"]').value = fmtMac(mac)
+  form.querySelector('[name="broadcast"]').value = broadcast
+
+  const opts = accountSel.options
+  let matched = false
+  for (let i = 0; i < opts.length; i++) {
+    if (opts[i].dataset.type === type) { accountSel.selectedIndex = i; matched = true; break }
+  }
+  if (!matched) accountSel.selectedIndex = 0
+  accountSel.dispatchEvent(new Event('change'))
+
+  if (type === 'miio' && miioId) miioDeviceId.value = miioId
+
+  scanModal.hide()
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('addDeviceModal')).show()
 })
 
 // ── Init ──────────────────────────────────────────────────────────────────────
