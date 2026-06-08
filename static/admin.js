@@ -192,7 +192,7 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
   const accountId = f.account_id.value ? parseInt(f.account_id.value) : null
   try {
     await adminApi.addDevice({
-      mac: f.mac.value, type: accountSel.options[accountSel.selectedIndex]?.dataset.type || 'kasa',
+      mac: f.mac.value, type: accountSel.options[accountSel.selectedIndex]?.dataset.type || f.device_type_hint.value || 'kasa',
       broadcast: f.broadcast.value, account_id: accountId,
       group_name: f.group_name.value || null,
       miio_token: f.miio_token?.value || null, miio_id: f.miio_id?.value || null,
@@ -397,6 +397,7 @@ document.getElementById('scanTable').addEventListener('click', e => {
   const form = document.getElementById('addDeviceForm')
   form.querySelector('[name="mac"]').value = fmtMac(mac)
   form.querySelector('[name="broadcast"]').value = broadcast
+  form.querySelector('[name="device_type_hint"]').value = type
 
   const opts = accountSel.options
   let matched = false
