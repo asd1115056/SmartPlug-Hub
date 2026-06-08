@@ -303,13 +303,11 @@ function renderScanTable(devices) {
     return
   }
   scanBody.innerHTML = devices.map(d => `<tr>
-    <td>
-      <span class="badge bg-secondary">${esc(d.type)}</span>
-      ${d.model ? `<span class="text-muted small ms-1">${esc(d.model)}</span>` : ''}
-    </td>
-    <td class="font-monospace">${esc(fmtMac(d.mac))}</td>
-    <td class="text-muted">${esc(d.ip)}</td>
-    <td class="text-muted small">${esc(d.broadcast)}</td>
+    <td class="text-center"><span class="badge bg-secondary">${esc(d.type)}</span></td>
+    <td class="text-muted">${esc(d.model ?? '—')}</td>
+    <td class="font-monospace small">${esc(fmtMac(d.mac))}</td>
+    <td class="text-center text-muted">${esc(d.ip)}</td>
+    <td class="text-center text-muted small">${esc(d.broadcast)}</td>
     <td class="text-end">
       <button class="btn btn-sm btn-outline-primary js-scan-add"
         data-mac="${esc(d.mac)}"
