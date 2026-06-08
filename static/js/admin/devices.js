@@ -36,6 +36,7 @@ function renderDevices(devices) {
       : '<span class="text-muted">—</span>'
     return `<tr>
       <td class="text-center">${statusDot}</td>
+      <td class="text-center"><span class="badge bg-secondary">${d.type}</span></td>
       <td>
         <span id="name-view-${d.id}" class="editable-field" data-id="${d.id}" data-field="name">
           <span class="field-value">${esc(d.name ?? d.hw_alias ?? d.mac)}</span><i class="bi bi-pencil edit-pencil ms-1"></i>
@@ -66,7 +67,6 @@ function renderDevices(devices) {
           </button>
         </div>
       </td>
-      <td class="text-center"><span class="badge bg-secondary">${d.type}</span></td>
       <td class="text-center text-muted">${esc(d.last_known_ip ?? '—')}</td>
       <td class="text-center font-monospace text-muted small">${fmtMac(d.mac)}</td>
       <td class="text-center">${outletBtn}</td>
