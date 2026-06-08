@@ -84,10 +84,10 @@ export async function openOutletsModal(deviceId, deviceName) {
       return
     }
     bodyEl.innerHTML = device.outlets.map((o, i) => `
-      <div class="outlet-row">
-        <span class="outlet-id">${i}</span>
-        <input id="ol-${deviceId}-${o.outlet_id}" class="form-control flex-grow-1" value="${esc(o.name)}">
-        <button class="btn btn-sm btn-outline-secondary js-rename-outlet"
+      <div class="input-group mb-2">
+        <span class="input-group-text text-secondary font-monospace outlet-id-cell">${i}</span>
+        <input id="ol-${deviceId}-${o.outlet_id}" class="form-control" value="${esc(o.name)}">
+        <button class="btn btn-outline-secondary js-rename-outlet"
           data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}">
           <i class="bi bi-check-lg"></i>
         </button>
