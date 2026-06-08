@@ -255,8 +255,11 @@
 #adminView   { display: none; }
 .inline-input { flex: 1 1 0; min-width: 0; }
 
-.outlet-row { display: flex; align-items: center; gap: .5rem; padding: .35rem 0; }
-.outlet-id  { color: #6c757d; min-width: 2.5rem; font-family: monospace; }
+
+.editable-field { cursor: pointer; display: inline-flex; align-items: center; gap: .3rem;
+                  padding: .15rem .35rem; border-radius: 4px; transition: background .15s; }
+.editable-field:hover { background: rgba(255, 255, 255, .07); }
+.edit-pencil    { font-size: .7rem; color: #6c757d; }
 
 /* === Responsive === */
 

@@ -23,7 +23,7 @@ export async function loadDevices(onUnauth) {
 function renderDevices(devices) {
   const tbody = document.querySelector('#devicesTable tbody')
   if (!devices.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No devices yet.</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No devices yet.</td></tr>'
     return
   }
   tbody.innerHTML = devices.map(d => {
@@ -36,29 +36,41 @@ function renderDevices(devices) {
       : '<span class="text-muted">—</span>'
     return `<tr>
       <td class="text-center">${statusDot}</td>
+      <td class="text-center"><span class="badge bg-secondary">${d.type}</span></td>
       <td>
-        <div class="d-flex gap-2 align-items-center">
+        <span id="name-view-${d.id}" class="editable-field" data-id="${d.id}" data-field="name">
+          <span class="field-value">${esc(d.name ?? d.hw_alias ?? d.mac)}</span><i class="bi bi-pencil edit-pencil ms-1"></i>
+        </span>
+        <div id="name-edit-${d.id}" class="d-none d-flex gap-1 align-items-center">
           <input id="name-${d.id}" class="form-control form-control-sm" value="${esc(d.name ?? '')}"
             placeholder="${esc(d.hw_alias ?? d.mac)}" style="width:160px">
           <button class="btn btn-sm btn-outline-secondary js-rename" data-id="${d.id}">
             <i class="bi bi-check-lg"></i>
           </button>
+          <button class="btn btn-sm btn-outline-secondary js-cancel-edit" data-id="${d.id}" data-field="name">
+            <i class="bi bi-x-lg"></i>
+          </button>
         </div>
       </td>
-      <td><span class="badge bg-secondary">${d.type}</span></td>
-      <td class="font-monospace text-muted">${fmtMac(d.mac)}</td>
       <td>
-        <div class="d-flex gap-2 align-items-center">
+        <span id="group-view-${d.id}" class="editable-field" data-id="${d.id}" data-field="group">
+          <span class="field-value">${esc(d.group_name ?? '—')}</span><i class="bi bi-pencil edit-pencil ms-1"></i>
+        </span>
+        <div id="group-edit-${d.id}" class="d-none d-flex gap-1 align-items-center">
           <input id="group-${d.id}" class="form-control form-control-sm" value="${esc(d.group_name ?? '')}"
             placeholder="—" style="width:110px">
           <button class="btn btn-sm btn-outline-secondary js-regroup" data-id="${d.id}">
             <i class="bi bi-check-lg"></i>
           </button>
+          <button class="btn btn-sm btn-outline-secondary js-cancel-edit" data-id="${d.id}" data-field="group">
+            <i class="bi bi-x-lg"></i>
+          </button>
         </div>
       </td>
-      <td class="text-muted">${esc(d.last_known_ip ?? '—')}</td>
-      <td>${outletBtn}</td>
-      <td class="text-end">
+      <td class="text-center text-muted">${esc(d.last_known_ip ?? '—')}</td>
+      <td class="text-center font-monospace text-muted small">${fmtMac(d.mac)}</td>
+      <td class="text-center">${outletBtn}</td>
+      <td class="text-center">
         <button class="btn btn-sm btn-outline-danger js-delete-device" data-id="${d.id}">
           <i class="bi bi-trash"></i>
         </button>
@@ -84,10 +96,10 @@ export async function openOutletsModal(deviceId, deviceName) {
       return
     }
     bodyEl.innerHTML = device.outlets.map((o, i) => `
-      <div class="outlet-row">
-        <span class="outlet-id">${i}</span>
-        <input id="ol-${deviceId}-${o.outlet_id}" class="form-control flex-grow-1" value="${esc(o.name)}">
-        <button class="btn btn-sm btn-outline-secondary js-rename-outlet"
+      <div class="input-group mb-2">
+        <span class="input-group-text text-secondary font-monospace outlet-id-cell">${i}</span>
+        <input id="ol-${deviceId}-${o.outlet_id}" class="form-control" value="${esc(o.name)}">
+        <button class="btn btn-outline-secondary js-rename-outlet"
           data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}">
           <i class="bi bi-check-lg"></i>
         </button>
@@ -100,15 +112,15 @@ export async function openOutletsModal(deviceId, deviceName) {
 export async function renameDevice(id, flash) {
   const input = document.getElementById(`name-${id}`)
   const btn = input?.nextElementSibling
-  if (!input || !btn) return
-  await _renameWithFeedback(input, btn, () => api.setDeviceName(id, input.value), flash)
+  if (!input || !btn) return false
+  return _renameWithFeedback(input, btn, () => api.setDeviceName(id, input.value), flash)
 }
 
 export async function regroupDevice(id, flash) {
   const input = document.getElementById(`group-${id}`)
   const btn = input?.nextElementSibling
-  if (!input || !btn) return
-  await _renameWithFeedback(input, btn, () => api.setDeviceGroup(id, input.value), flash)
+  if (!input || !btn) return false
+  return _renameWithFeedback(input, btn, () => api.setDeviceGroup(id, input.value), flash)
 }
 
 export async function renameOutlet(deviceId, outletId, flash) {
@@ -123,8 +135,10 @@ async function _renameWithFeedback(input, btn, apiCall, flash) {
   btn.disabled = true
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
   input.classList.remove('is-valid', 'is-invalid')
+  let success = false
   try {
     await apiCall()
+    success = true
     input.classList.add('is-valid')
     setTimeout(() => input.classList.remove('is-valid'), 1500)
   } catch (e) {
@@ -135,6 +149,7 @@ async function _renameWithFeedback(input, btn, apiCall, flash) {
     btn.innerHTML = orig
     btn.disabled = false
   }
+  return success
 }
 
 export function confirmDelete(message) {

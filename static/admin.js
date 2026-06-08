@@ -206,7 +206,25 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
   }
 })
 
+function _switchToView(id, field) {
+  document.getElementById(`${field}-edit-${id}`)?.classList.add('d-none')
+  document.getElementById(`${field}-view-${id}`)?.classList.remove('d-none')
+}
+
+function _switchToEdit(id, field) {
+  document.getElementById(`${field}-view-${id}`)?.classList.add('d-none')
+  const editDiv = document.getElementById(`${field}-edit-${id}`)
+  editDiv?.classList.remove('d-none')
+  editDiv?.querySelector('input')?.focus()
+}
+
 document.getElementById('devicesTable').addEventListener('click', async e => {
+  const editTrigger = e.target.closest('.editable-field')
+  if (editTrigger) { _switchToEdit(editTrigger.dataset.id, editTrigger.dataset.field); return }
+
+  const cancel = e.target.closest('.js-cancel-edit')
+  if (cancel) { _switchToView(cancel.dataset.id, cancel.dataset.field); return }
+
   const del = e.target.closest('.js-delete-device')
   if (del) {
     if (!await confirmDelete('Delete this device? This cannot be undone.')) return
@@ -221,13 +239,39 @@ document.getElementById('devicesTable').addEventListener('click', async e => {
   }
 
   const rename = e.target.closest('.js-rename')
-  if (rename) { await renameDevice(rename.dataset.id, flash); return }
+  if (rename) {
+    const id = rename.dataset.id
+    const ok = await renameDevice(id, flash)
+    if (ok) {
+      const val = document.getElementById(`name-${id}`).value
+      document.querySelector(`#name-view-${id} .field-value`).textContent =
+        val || document.getElementById(`name-${id}`).placeholder
+      const outletBtn = document.querySelector(`.js-outlets[data-id="${id}"]`)
+      if (outletBtn) outletBtn.dataset.name = val
+      _switchToView(id, 'name')
+    }
+    return
+  }
 
   const regroup = e.target.closest('.js-regroup')
-  if (regroup) { await regroupDevice(regroup.dataset.id, flash); return }
+  if (regroup) {
+    const id = regroup.dataset.id
+    const ok = await regroupDevice(id, flash)
+    if (ok) {
+      const val = document.getElementById(`group-${id}`).value
+      document.querySelector(`#group-view-${id} .field-value`).textContent = val || '—'
+      _switchToView(id, 'group')
+    }
+    return
+  }
 
   const outlets = e.target.closest('.js-outlets')
   if (outlets) { await openOutletsModal(outlets.dataset.id, outlets.dataset.name) }
+})
+
+document.getElementById('devicesTable').addEventListener('keydown', e => {
+  if (e.key === 'Enter') e.target.closest('tr')?.querySelector('.js-rename, .js-regroup')?.click()
+  else if (e.key === 'Escape') e.target.closest('tr')?.querySelector('.js-cancel-edit')?.click()
 })
 
 document.getElementById('outletsModalBody').addEventListener('click', async e => {
