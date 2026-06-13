@@ -46,7 +46,7 @@ This token is required to access the admin panel at `/admin`.
 
 Devices and accounts are managed through the admin panel — no config files needed.
 
-1. **Add an account** — TP-Link credentials for Kasa devices that require authentication (newer KLAP-based firmware), or any label for MiIO
+1. **Add an account** — TP-Link credentials for Kasa devices that require authentication (newer KLAP-based firmware)
 2. **Add a device** — MAC address, broadcast address, optional group name, optional account
 
 **Scan Network** (recommended): click *Scan Network* in the Devices tab to auto-discover all Kasa and MiIO devices on every local network interface. Results show type, model, MAC, IP, and broadcast address — click *+ Add* on any row to pre-fill the Add Device form.
@@ -63,7 +63,7 @@ Newer Kasa devices (EP25, KP125M, etc.) require TP-Link account credentials. Old
 
 MiIO requires a 32-character hex token and a numeric device ID.
 
-- **Token**: visible in plaintext on **unprovisioned** devices via UDP discovery. For already-provisioned devices (token shows as `ffffffffffffffffffffffffffffffff`), extract it from the Xiaomi cloud using [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor).
+- **Token**: visible in plaintext on **unprovisioned** devices via UDP discovery. For already-provisioned devices (token shows as `ffffffffffffffffffffffffffffffff`), use [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) to retrieve it.
 - **Device ID**: returned alongside the token during discovery.
 
 ## Architecture

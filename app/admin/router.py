@@ -10,7 +10,6 @@ from ..backends.miio import scan as miio_scan
 from ..core import AccountInUseError, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
-from ..miio_cloud import REGIONS, solve_challenge, start_login
 from ..network import get_broadcast_addresses
 from ..schemas import (
     AccountOut,
@@ -49,49 +48,6 @@ async def _require_device(device_id: str, db: Database) -> DeviceRow:
 async def login() -> dict:
     """Token validation endpoint — 200 means the token is valid."""
     return {"ok": True}
-
-
-# ── MiIO Cloud ────────────────────────────────────────────────────────────────
-
-class MiioLoginRequest(BaseModel):
-    mac: str
-    region: str
-
-
-class MiioSolveRequest(BaseModel):
-    solution: str
-
-
-@router.post("/accounts/{account_id}/miio-login")
-async def miio_login_start(
-    account_id: int,
-    body: MiioLoginRequest,
-    db: Database = Depends(_db),
-) -> dict:
-    """Start Xiaomi cloud login. Returns {token, did} or {session_id, captcha_url}."""
-    if body.region not in REGIONS:
-        raise HTTPException(status_code=422, detail=f"Invalid region. Valid: {', '.join(REGIONS)}")
-    accounts = {a.id: a for a in await db.get_accounts() if a.id is not None}
-    account = accounts.get(account_id)
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
-    try:
-        return await start_login(account.username, account.password, body.region, body.mac)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@router.post("/miio-sessions/{session_id}/solve")
-async def miio_solve(session_id: str, body: MiioSolveRequest) -> dict:
-    """Submit captcha or 2FA solution. Returns {token, did} or next challenge."""
-    try:
-        return await solve_challenge(session_id, body.solution)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
 
 
 # ── Accounts ──────────────────────────────────────────────────────────────────
