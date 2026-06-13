@@ -207,34 +207,6 @@
                 <label class="form-label fw-semibold">MiIO Device ID</label>
                 <input name="miio_id" id="miioDeviceId" class="form-control" placeholder="123456789">
               </div>
-              <div class="col-12">
-                <label class="form-label fw-semibold">Fetch from Xiaomi Cloud</label>
-                <div class="d-flex gap-2">
-                  <select id="miioRegion" class="form-select" style="max-width:11rem">
-                    <option value="cn">China (cn)</option>
-                    <option value="de">Europe (de)</option>
-                    <option value="us">US (us)</option>
-                    <option value="ru">Russia (ru)</option>
-                    <option value="tw">Taiwan (tw)</option>
-                    <option value="sg">Singapore (sg)</option>
-                    <option value="in">India (in)</option>
-                    <option value="i2">India 2 (i2)</option>
-                  </select>
-                  <button type="button" id="miioFetchBtn" class="btn btn-outline-secondary">
-                    <i class="bi bi-cloud-download me-1"></i>Fetch
-                  </button>
-                </div>
-              </div>
-              <div id="miioCaptchaBlock" class="col-12" hidden>
-                <label class="form-label fw-semibold">Captcha</label>
-                <div class="d-flex gap-3 align-items-start">
-                  <img id="miioCaptchaImg" src="" alt="captcha" class="border rounded" style="height:3rem">
-                  <div class="flex-grow-1">
-                    <input id="miioCaptchaInput" class="form-control" placeholder="Enter captcha (case-sensitive)">
-                  </div>
-                  <button type="button" id="miioCaptchaSubmitBtn" class="btn btn-primary">Submit</button>
-                </div>
-              </div>
             </div>
           </div>
         </div>

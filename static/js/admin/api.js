@@ -20,10 +20,3 @@ export function setOutletName(deviceId, outletId, name) {
 }
 
 export function scanNetwork() { return authFetch('POST', `${BASE}/scan`) }
-
-export function miioLoginStart(accountId, mac, region) {
-  return authFetch('POST', `${BASE}/accounts/${accountId}/miio-login`, { mac, region })
-}
-export function miioSolve(sessionId, solution) {
-  return authFetch('POST', `${BASE}/miio-sessions/${sessionId}/solve`, { solution })
-}
