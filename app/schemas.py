@@ -40,6 +40,8 @@ class AdminDeviceOut(BaseModel):
     broadcast: str
     miio_token: str | None
     miio_id: str | None
+    tuya_device_id: str | None
+    tuya_local_key: str | None
     name: str | None
     hw_alias: str | None
     hw_model: str | None
@@ -65,6 +67,8 @@ class DiscoveredDeviceOut(BaseModel):
     ip: str
     model: str | None = None
     miio_id: str | None = None
+    tuya_device_id: str | None = None
+    tuya_local_key: str | None = None
 
 
 class SetPowerRequest(BaseModel):
@@ -80,6 +84,8 @@ class AddDeviceRequest(BaseModel):
     account_id: int | None = None
     miio_token: str | None = None
     miio_id: str | None = None
+    tuya_device_id: str | None = None
+    tuya_local_key: str | None = None
 
 
 class AddAccountRequest(BaseModel):
@@ -141,6 +147,8 @@ def build_admin_device_out(row: DeviceRow, entry: DeviceEntry | None) -> AdminDe
         broadcast=row.broadcast,
         miio_token=row.miio_token,
         miio_id=row.miio_id,
+        tuya_device_id=row.tuya_device_id,
+        tuya_local_key=row.tuya_local_key,
         name=row.name,
         hw_alias=row.hw_alias,
         hw_model=row.hw_model,

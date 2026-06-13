@@ -20,6 +20,8 @@ async def add_device(
     account_id: int | None = None,
     miio_token: str | None = None,
     miio_id: str | None = None,
+    tuya_device_id: str | None = None,
+    tuya_local_key: str | None = None,
 ) -> DeviceRow:
     row = DeviceRow(
         id=mac_to_id(mac),
@@ -30,6 +32,8 @@ async def add_device(
         account_id=account_id,
         miio_token=miio_token,
         miio_id=miio_id,
+        tuya_device_id=tuya_device_id,
+        tuya_local_key=tuya_local_key,
     )
     row = await db.add_device(row)
     accounts = {a.id: a for a in await db.get_accounts() if a.id is not None}

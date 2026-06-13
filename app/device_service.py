@@ -10,6 +10,7 @@ from .core import DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflin
 from .db import Account, Database, Device as DeviceRow
 from .backends.kasa import KasaBackend
 from .backends.miio import MiioBackend
+from .backends.tuya import TuyaBackend
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +228,8 @@ def _make_config(row: DeviceRow, account: Account | None) -> DeviceConfig:
         password=account.password if account else None,
         miio_token=row.miio_token,
         miio_id=row.miio_id,
+        tuya_device_id=row.tuya_device_id,
+        tuya_local_key=row.tuya_local_key,
     )
 
 
@@ -235,6 +238,8 @@ def _make_backend(device_type: str) -> DeviceBackend:
         return KasaBackend()
     if device_type == "miio":
         return MiioBackend()
+    if device_type == "tuya":
+        return TuyaBackend()
     raise ValueError(f"Unknown device type: {device_type!r}")
 
 

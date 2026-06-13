@@ -35,6 +35,10 @@ class Device(SQLModel, table=True):
     miio_token: str | None = None
     miio_id: str | None = None
 
+    # Tuya connection credentials
+    tuya_device_id: str | None = None     # gwId from Tuya IoT Platform
+    tuya_local_key: str | None = None     # 16-char local encryption key
+
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None
     hw_model: str | None = None

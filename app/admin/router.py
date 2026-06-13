@@ -7,6 +7,8 @@ from pydantic import BaseModel
 
 from ..backends.kasa import scan as kasa_scan
 from ..backends.miio import scan as miio_scan
+from ..backends.tuya import cloud_fetch as tuya_cloud_fetch
+from ..backends.tuya import scan as tuya_scan
 from ..core import AccountInUseError, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
@@ -108,7 +110,8 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
     existing = {normalize_mac(d.mac) for d in await db.get_devices()}
 
     results = await asyncio.gather(
-        kasa_scan(broadcasts), miio_scan(broadcasts), return_exceptions=True
+        kasa_scan(broadcasts), miio_scan(broadcasts), tuya_scan(broadcasts),
+        return_exceptions=True,
     )
 
     seen_macs: set[str] = set()
@@ -125,8 +128,57 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
                         ip=d.last_known_ip or "",
                         model=d.hw_model,
                         miio_id=d.miio_id,
+                        tuya_device_id=d.tuya_device_id,
+                        tuya_local_key=d.tuya_local_key,
                     ))
     return found
+
+
+# ── Tuya Cloud sync ───────────────────────────────────────────────────────────
+
+class TuyaSyncRequest(BaseModel):
+    region: str
+
+
+class TuyaSyncResult(BaseModel):
+    gwId: str
+    localKey: str
+    mac: str
+    ip: str
+    name: str
+    productName: str
+
+
+@router.post("/accounts/{account_id}/tuya-sync", response_model=list[TuyaSyncResult])
+async def tuya_sync(
+    account_id: int,
+    body: TuyaSyncRequest,
+    db: Database = Depends(_db),
+) -> list[TuyaSyncResult]:
+    """Fetch all device credentials from Tuya IoT Platform for this account.
+
+    Stores nothing — caller uses the returned gwId + localKey when adding devices.
+    """
+    accounts = {a.id: a for a in await db.get_accounts() if a.id is not None}
+    account = accounts.get(account_id)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.type != "tuya":
+        raise HTTPException(status_code=422, detail="Account is not of type 'tuya'")
+
+    valid_regions = {"cn", "us", "eu", "in"}
+    if body.region not in valid_regions:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid region. Valid: {', '.join(sorted(valid_regions))}",
+        )
+
+    try:
+        devices = await tuya_cloud_fetch(account.username, account.password, body.region)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return [TuyaSyncResult(**d) for d in devices]
 
 
 @router.post("/devices", response_model=AdminDeviceOut, status_code=201)
@@ -142,6 +194,8 @@ async def create_device(
             account_id=body.account_id,
             miio_token=body.miio_token,
             miio_id=body.miio_id,
+            tuya_device_id=body.tuya_device_id,
+            tuya_local_key=body.tuya_local_key,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
