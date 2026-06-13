@@ -20,7 +20,3 @@ export function setOutletName(deviceId, outletId, name) {
 }
 
 export function scanNetwork() { return authFetch('POST', `${BASE}/scan`) }
-
-export function tuyaSync(accountId, region) {
-  return authFetch('POST', `${BASE}/accounts/${accountId}/tuya-sync`, { region })
-}

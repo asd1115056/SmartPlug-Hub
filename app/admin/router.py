@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from ..backends.kasa import scan as kasa_scan
 from ..backends.miio import scan as miio_scan
-from ..backends.tuya import cloud_fetch as tuya_cloud_fetch
 from ..backends.tuya import scan as tuya_scan
 from ..core import AccountInUseError, normalize_mac
 from ..db import Database, Device as DeviceRow
@@ -132,54 +131,6 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
                         tuya_local_key=d.tuya_local_key,
                     ))
     return found
-
-
-# ── Tuya Cloud sync ───────────────────────────────────────────────────────────
-
-class TuyaSyncRequest(BaseModel):
-    region: str
-
-
-class TuyaSyncResult(BaseModel):
-    gwId: str
-    localKey: str
-    mac: str
-    ip: str
-    name: str
-    productName: str
-
-
-@router.post("/accounts/{account_id}/tuya-sync", response_model=list[TuyaSyncResult])
-async def tuya_sync(
-    account_id: int,
-    body: TuyaSyncRequest,
-    db: Database = Depends(_db),
-) -> list[TuyaSyncResult]:
-    """Fetch all device credentials from Tuya IoT Platform for this account.
-
-    Stores nothing — caller uses the returned gwId + localKey when adding devices.
-    """
-    accounts = {a.id: a for a in await db.get_accounts() if a.id is not None}
-    account = accounts.get(account_id)
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
-    if account.type != "tuya":
-        raise HTTPException(status_code=422, detail="Account is not of type 'tuya'")
-
-    valid_regions = {"cn", "us", "eu", "sg", "in"}
-    if body.region not in valid_regions:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid region. Valid: {', '.join(sorted(valid_regions))}",
-        )
-
-    try:
-        devices = await tuya_cloud_fetch(account.username, account.password, body.region)
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-
-    return [TuyaSyncResult(**d) for d in devices]
-
 
 @router.post("/devices", response_model=AdminDeviceOut, status_code=201)
 async def create_device(

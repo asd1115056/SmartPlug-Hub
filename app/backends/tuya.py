@@ -133,18 +133,14 @@ def _extract_watts(dps: dict) -> float | None:
 def _require_credentials(cfg: DeviceConfig) -> None:
     if not cfg.tuya_device_id or not cfg.tuya_local_key:
         raise DeviceOfflineError(
-            f"Missing tuya_device_id or tuya_local_key for {cfg.mac}. "
-            "Use the tuya-sync endpoint to fetch credentials."
+            f"Missing tuya_device_id or tuya_local_key for {cfg.mac}"
         )
 
 
 # ── Network scan ──────────────────────────────────────────────────────────────
 
 async def scan(broadcasts: list[str]) -> list[DeviceConfig]:
-    """Discover Tuya devices via UDP broadcast (v3.1/v3.3 only).
-
-    v3.4/v3.5 devices do not broadcast — use cloud_fetch() to obtain their credentials.
-    """
+    """Discover Tuya devices via UDP broadcast (v3.1/v3.3 only)."""
     return await asyncio.to_thread(_sync_scan, broadcasts)
 
 
@@ -168,40 +164,3 @@ def _sync_scan(broadcasts: list[str]) -> list[DeviceConfig]:
         ))
     return results
 
-
-# ── Cloud credential fetch ────────────────────────────────────────────────────
-
-async def cloud_fetch(
-    api_key: str,
-    api_secret: str,
-    region: str,
-) -> list[dict]:
-    """Fetch all device credentials from Tuya IoT Platform.
-
-    Returns list of dicts with keys: gwId, localKey, mac, ip, name, productName.
-    """
-    return await asyncio.to_thread(_sync_cloud_fetch, api_key, api_secret, region)
-
-
-def _sync_cloud_fetch(api_key: str, api_secret: str, region: str) -> list[dict]:
-    cloud = tinytuya.Cloud(
-        apiRegion=region,
-        apiKey=api_key,
-        apiSecret=api_secret,
-        apiDeviceID=None,
-    )
-    devices = cloud.getdevices()
-    if not isinstance(devices, list):
-        raise RuntimeError(f"Tuya Cloud error: {devices}")
-
-    results = []
-    for dev in devices:
-        results.append({
-            "gwId": dev.get("id") or dev.get("gwId", ""),
-            "localKey": dev.get("local_key") or dev.get("localKey", ""),
-            "mac": dev.get("mac", ""),
-            "ip": dev.get("ip", ""),
-            "name": dev.get("name", ""),
-            "productName": dev.get("product_name") or dev.get("productName", ""),
-        })
-    return results

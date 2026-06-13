@@ -123,7 +123,6 @@ function _applyDeviceType(type) {
   document.getElementById('tuyaFields').hidden = !isTuya
   tuyaDeviceId.required = isTuya
   tuyaLocalKey.required = isTuya
-  document.getElementById('tuyaSyncList').hidden = true
 }
 
 deviceTypeSel.addEventListener('change', () => _applyDeviceType(deviceTypeSel.value))
@@ -133,48 +132,6 @@ accountSel.addEventListener('change', () => {
   if (type) { deviceTypeSel.value = type; _applyDeviceType(type) }
 })
 
-document.getElementById('tuyaSyncBtn').addEventListener('click', async () => {
-  const accountId = accountSel.value
-  const region = document.getElementById('tuyaRegion').value
-  if (!accountId) { flash('Select a Tuya account first', false); return }
-  const btn = document.getElementById('tuyaSyncBtn')
-  const list = document.getElementById('tuyaSyncList')
-  const orig = btn.innerHTML
-  btn.disabled = true
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
-  list.hidden = true
-  try {
-    const devices = await adminApi.tuyaSync(parseInt(accountId), region)
-    if (!devices.length) { flash('No devices found in this account', false); return }
-    list.innerHTML = devices.map(d => `
-      <button type="button" class="list-group-item list-group-item-action js-tuya-pick"
-        data-gwid="${esc(d.gwId)}" data-key="${esc(d.localKey)}" data-mac="${esc(d.mac)}">
-        <div class="d-flex justify-content-between align-items-center">
-          <span class="fw-semibold">${esc(d.name || d.productName || '—')}</span>
-          <span class="text-muted small font-monospace">${esc(fmtMac(d.mac))}</span>
-        </div>
-        <div class="text-muted small font-monospace">${esc(d.gwId)}</div>
-      </button>`).join('')
-    list.hidden = false
-  } catch (err) {
-    flash(err.message, false)
-  } finally {
-    btn.innerHTML = orig
-    btn.disabled = false
-  }
-})
-
-document.getElementById('tuyaSyncList').addEventListener('click', e => {
-  const btn = e.target.closest('.js-tuya-pick')
-  if (!btn) return
-  tuyaDeviceId.value = btn.dataset.gwid
-  tuyaLocalKey.value = btn.dataset.key
-  if (btn.dataset.mac) {
-    const macInput = document.querySelector('[name="mac"]')
-    if (!macInput.value) macInput.value = fmtMac(btn.dataset.mac)
-  }
-  document.getElementById('tuyaSyncList').hidden = true
-})
 
 document.getElementById('addDeviceForm').addEventListener('submit', async e => {
   e.preventDefault()
