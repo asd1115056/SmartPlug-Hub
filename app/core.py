@@ -50,7 +50,7 @@ class DeviceState:
 class DeviceConfig:
     id: str
     mac: str
-    type: str           # "kasa" | "miio"
+    type: str           # "kasa" | "miio" | "tuya"
     broadcast: str
     last_known_ip: str | None
     username: str | None = None     # Kasa

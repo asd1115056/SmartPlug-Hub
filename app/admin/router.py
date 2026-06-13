@@ -166,7 +166,7 @@ async def tuya_sync(
     if account.type != "tuya":
         raise HTTPException(status_code=422, detail="Account is not of type 'tuya'")
 
-    valid_regions = {"cn", "us", "eu", "in"}
+    valid_regions = {"cn", "us", "eu", "sg", "in"}
     if body.region not in valid_regions:
         raise HTTPException(
             status_code=422,
