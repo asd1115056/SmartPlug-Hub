@@ -126,7 +126,7 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
     state = entry.state
     return DeviceOut(
         id=entry.config.id,
-        name=entry.name or (state.hw_alias if state else None) or entry.config.mac,
+        name=entry.name or (state.hw_alias if state else None) or f"Unnamed ···{entry.config.mac[-4:]}",
         group_name=entry.group_name,
         type=entry.config.type,
         model=state.hw_model if state else None,
