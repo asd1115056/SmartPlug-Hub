@@ -67,6 +67,8 @@ class TuyaBackend(DeviceBackend):
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_credentials(cfg)
         profile = _get_profile(cfg)
+        if not cfg.last_known_ip and not self.ip:
+            self.ip = await _discover_ip(cfg)
         try:
             state = await asyncio.to_thread(_sync_probe, cfg, self.ip, profile)
             self.ip = cfg.last_known_ip or self.ip
@@ -79,6 +81,8 @@ class TuyaBackend(DeviceBackend):
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         _require_credentials(cfg)
         profile = _get_profile(cfg)
+        if not cfg.last_known_ip and not self.ip:
+            self.ip = await _discover_ip(cfg)
         try:
             await asyncio.to_thread(_sync_set_power, cfg, self.ip, on, profile)
         except DeviceOfflineError:
@@ -173,6 +177,15 @@ def _require_credentials(cfg: DeviceConfig) -> None:
 
 _UDP_PORTS = (6666, 6667, 7000)
 _SCAN_TIMEOUT = 5.0
+
+
+async def _discover_ip(cfg: DeviceConfig) -> str | None:
+    """UDP-scan all interfaces for cfg.mac; return its current IP or None."""
+    iface_pairs = get_interface_pairs()
+    for found in await asyncio.to_thread(_sync_discover, iface_pairs, _SCAN_TIMEOUT):
+        if found.mac == cfg.mac:
+            return found.last_known_ip
+    return None
 
 
 async def scan(broadcasts: list[str], timeout: float = _SCAN_TIMEOUT) -> list[DeviceConfig]:
