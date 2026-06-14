@@ -140,12 +140,13 @@ class Database:
                 await session.commit()
 
     async def set_miio_credentials(
-        self, device_id: str, token: str | None
+        self, device_id: str, miio_device_id: str | None, miio_device_token: str | None
     ) -> None:
         async with AsyncSession(self._engine) as session:
             device = await session.get(Device, device_id)
             if device:
-                device.miio_token = token
+                device.miio_id = miio_device_id
+                device.miio_token = miio_device_token
                 session.add(device)
                 await session.commit()
 

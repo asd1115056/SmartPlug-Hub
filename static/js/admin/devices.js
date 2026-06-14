@@ -223,11 +223,11 @@ export function fillDetailPanel(device) {
     tuyaSec.hidden = true
   }
 
-  // MiIO credentials (read-only)
+  // MiIO credentials (editable)
   const miioSec = document.getElementById('panelMiio')
   if (device.type === 'miio') {
+    document.getElementById('panelMiioId').value = device.miio_id ?? ''
     document.getElementById('panelMiioToken').value = device.miio_token ?? ''
-    document.getElementById('panelMiioId').textContent = device.miio_id ?? '—'
     miioSec.hidden = false
   } else {
     miioSec.hidden = true

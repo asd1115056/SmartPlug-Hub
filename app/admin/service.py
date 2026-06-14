@@ -84,11 +84,12 @@ async def set_kasa_credentials(
 
 async def set_miio_credentials(
     device_id: str,
-    token: str | None,
+    miio_device_id: str | None,
+    miio_device_token: str | None,
     db: Database,
     svc: DeviceService,
 ) -> None:
-    await db.set_miio_credentials(device_id, token)
+    await db.set_miio_credentials(device_id, miio_device_id, miio_device_token)
     row = await db.get_device(device_id)
     if row:
         entry = svc._devices.get(device_id)

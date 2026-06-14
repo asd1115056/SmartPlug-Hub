@@ -170,13 +170,14 @@
   <div id="panelMiio" class="panel-sec" hidden>
     <div class="panel-sec-title">MiIO</div>
     <div class="mb-3">
+      <label class="form-label fw-semibold">Device ID</label>
+      <input id="panelMiioId" type="text" class="form-control form-control-sm font-monospace"
+             autocomplete="off" placeholder="DID (decimal)">
+    </div>
+    <div>
       <label class="form-label fw-semibold">Token</label>
       <input id="panelMiioToken" type="text" class="form-control form-control-sm font-monospace"
              autocomplete="off" placeholder="32-char hex token" maxlength="32">
-    </div>
-    <div class="panel-info-row">
-      <span class="panel-info-lbl">Device ID</span>
-      <span id="panelMiioId" class="panel-info-val font-monospace"></span>
     </div>
   </div>
 

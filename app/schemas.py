@@ -95,7 +95,8 @@ class SetKasaCredentialsRequest(BaseModel):
 
 
 class SetMiioCredentialsRequest(BaseModel):
-    token: str | None = None
+    miio_device_id: str | None = None
+    miio_device_token: str | None = None
 
 
 class SetTuyaCredentialsRequest(BaseModel):

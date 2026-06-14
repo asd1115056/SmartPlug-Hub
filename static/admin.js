@@ -242,9 +242,10 @@ panelSaveBtn.addEventListener('click', async () => {
     // MiIO credentials (miio only)
     const miioSec = document.getElementById('panelMiio')
     if (!miioSec.hidden) {
-      const newToken = document.getElementById('panelMiioToken').value.trim() || null
-      if (newToken !== (device.miio_token ?? null)) {
-        await adminApi.setMiioCredentials(_activeDeviceId, newToken)
+      const newMiioDeviceId = document.getElementById('panelMiioId').value.trim() || null
+      const newMiioDeviceToken = document.getElementById('panelMiioToken').value.trim() || null
+      if (newMiioDeviceId !== (device.miio_id ?? null) || newMiioDeviceToken !== (device.miio_token ?? null)) {
+        await adminApi.setMiioCredentials(_activeDeviceId, newMiioDeviceId, newMiioDeviceToken)
       }
     }
 

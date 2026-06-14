@@ -170,7 +170,7 @@ async def set_miio_credentials(
     row = await _require_device(device_id, db)
     if row.type != "miio":
         raise HTTPException(status_code=400, detail="Device is not a MiIO device")
-    await service.set_miio_credentials(device_id, body.token, db, svc)
+    await service.set_miio_credentials(device_id, body.miio_device_id, body.miio_device_token, db, svc)
     row = await db.get_device(device_id)
     assert row is not None
     return build_admin_device_out(row, svc._devices.get(device_id))
