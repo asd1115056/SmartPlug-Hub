@@ -242,7 +242,7 @@ def _get_status_sync(ip: str, cfg: DeviceConfig, profile: MiotProfile) -> Device
     ]
 
     return DeviceState(
-        hw_alias=cfg.mac,
+        hw_alias=None,
         hw_model=profile.model,
         hw_is_strip=True,
         is_on=any(c.is_on for c in children),
