@@ -203,9 +203,8 @@ async def _discover_ip(cfg: DeviceConfig) -> str | None:
     return None
 
 
-async def scan(broadcasts: list[str], timeout: float = _SCAN_TIMEOUT) -> list[DeviceConfig]:
+async def scan(iface_pairs: list[tuple[str, str]], timeout: float = _SCAN_TIMEOUT) -> list[DeviceConfig]:
     """Discover Tuya devices via encrypted UDP discovery on all local interfaces."""
-    iface_pairs = get_interface_pairs()
     seen: dict[str, DeviceConfig] = {}
     for cfg in await asyncio.to_thread(_sync_discover, iface_pairs, timeout):
         seen.setdefault(cfg.mac, cfg)

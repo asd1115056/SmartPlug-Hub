@@ -10,7 +10,7 @@ from ..backends.tuya import scan as tuya_scan
 from ..core import normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
-from ..network import get_broadcast_addresses
+from ..network import get_interface_pairs
 from ..schemas import (
     AddDeviceRequest,
     AdminDeviceOut,
@@ -65,15 +65,15 @@ async def list_devices(
 
 @router.post("/scan", response_model=list[DiscoveredDeviceOut])
 async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]:
-    broadcasts = get_broadcast_addresses()
-    if not broadcasts:
+    iface_pairs = get_interface_pairs()
+    if not iface_pairs:
         raise HTTPException(status_code=503, detail="No usable network interfaces found")
 
     existing_rows = await db.get_devices()
     existing: dict[str, DeviceRow] = {normalize_mac(d.mac): d for d in existing_rows}
 
     results = await asyncio.gather(
-        kasa_scan(broadcasts), miio_scan(broadcasts), tuya_scan(broadcasts),
+        kasa_scan(iface_pairs), miio_scan(iface_pairs), tuya_scan(iface_pairs),
         return_exceptions=True,
     )
 
