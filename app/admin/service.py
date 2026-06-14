@@ -67,12 +67,12 @@ async def set_device_group_name(
 
 async def set_kasa_credentials(
     device_id: str,
-    username: str | None,
-    password: str | None,
+    kasa_username: str | None,
+    kasa_password: str | None,
     db: Database,
     svc: DeviceService,
 ) -> None:
-    await db.set_kasa_credentials(device_id, username, password)
+    await db.set_kasa_credentials(device_id, kasa_username, kasa_password)
     row = await db.get_device(device_id)
     if row:
         entry = svc._devices.get(device_id)
@@ -80,6 +80,41 @@ async def set_kasa_credentials(
         await svc.remove_entry(device_id)
         svc.add_entry(row, outlet_names)
     logger.info("Device %s kasa credentials updated", device_id)
+
+
+async def set_miio_credentials(
+    device_id: str,
+    miio_device_id: str | None,
+    miio_device_token: str | None,
+    db: Database,
+    svc: DeviceService,
+) -> None:
+    await db.set_miio_credentials(device_id, miio_device_id, miio_device_token)
+    row = await db.get_device(device_id)
+    if row:
+        entry = svc._devices.get(device_id)
+        outlet_names = entry.outlet_names if entry else {}
+        await svc.remove_entry(device_id)
+        svc.add_entry(row, outlet_names)
+    logger.info("Device %s miio credentials updated", device_id)
+
+
+async def set_tuya_credentials(
+    device_id: str,
+    tuya_device_id: str | None,
+    tuya_local_key: str | None,
+    tuya_product_id: str | None,
+    db: Database,
+    svc: DeviceService,
+) -> None:
+    await db.set_tuya_credentials(device_id, tuya_device_id, tuya_local_key, tuya_product_id)
+    row = await db.get_device(device_id)
+    if row:
+        entry = svc._devices.get(device_id)
+        outlet_names = entry.outlet_names if entry else {}
+        await svc.remove_entry(device_id)
+        svc.add_entry(row, outlet_names)
+    logger.info("Device %s tuya credentials updated", device_id)
 
 
 async def set_outlet_name(

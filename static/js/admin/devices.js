@@ -212,22 +212,22 @@ export function fillDetailPanel(device) {
     kasaSec.hidden = true
   }
 
-  // Tuya credentials (read-only)
+  // Tuya credentials (editable)
   const tuyaSec = document.getElementById('panelTuya')
   if (device.type === 'tuya') {
-    document.getElementById('panelTuyaDeviceId').textContent = device.tuya_device_id ?? '—'
-    document.getElementById('panelTuyaLocalKey').textContent = device.tuya_local_key ?? '—'
-    document.getElementById('panelTuyaProductId').textContent = device.tuya_product_id ?? '—'
+    document.getElementById('panelTuyaDeviceId').value = device.tuya_device_id ?? ''
+    document.getElementById('panelTuyaLocalKey').value = device.tuya_local_key ?? ''
+    document.getElementById('panelTuyaProductId').value = device.tuya_product_id ?? ''
     tuyaSec.hidden = false
   } else {
     tuyaSec.hidden = true
   }
 
-  // MiIO credentials (read-only)
+  // MiIO credentials (editable)
   const miioSec = document.getElementById('panelMiio')
   if (device.type === 'miio') {
-    document.getElementById('panelMiioToken').textContent = device.miio_token ?? '—'
-    document.getElementById('panelMiioId').textContent = device.miio_id ?? '—'
+    document.getElementById('panelMiioId').value = device.miio_id ?? ''
+    document.getElementById('panelMiioToken').value = device.miio_token ?? ''
     miioSec.hidden = false
   } else {
     miioSec.hidden = true

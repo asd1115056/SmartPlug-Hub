@@ -129,13 +129,40 @@ class Database:
                 await session.commit()
 
     async def set_kasa_credentials(
-        self, device_id: str, username: str | None, password: str | None
+        self, device_id: str, kasa_username: str | None, kasa_password: str | None
     ) -> None:
         async with AsyncSession(self._engine) as session:
             device = await session.get(Device, device_id)
             if device:
-                device.kasa_username = username
-                device.kasa_password = password
+                device.kasa_username = kasa_username
+                device.kasa_password = kasa_password
+                session.add(device)
+                await session.commit()
+
+    async def set_miio_credentials(
+        self, device_id: str, miio_device_id: str | None, miio_device_token: str | None
+    ) -> None:
+        async with AsyncSession(self._engine) as session:
+            device = await session.get(Device, device_id)
+            if device:
+                device.miio_id = miio_device_id
+                device.miio_token = miio_device_token
+                session.add(device)
+                await session.commit()
+
+    async def set_tuya_credentials(
+        self,
+        device_id: str,
+        tuya_device_id: str | None,
+        tuya_local_key: str | None,
+        tuya_product_id: str | None,
+    ) -> None:
+        async with AsyncSession(self._engine) as session:
+            device = await session.get(Device, device_id)
+            if device:
+                device.tuya_device_id = tuya_device_id
+                device.tuya_local_key = tuya_local_key
+                device.tuya_product_id = tuya_product_id
                 session.add(device)
                 await session.commit()
 

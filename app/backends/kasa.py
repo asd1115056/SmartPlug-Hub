@@ -30,6 +30,9 @@ class KasaBackend(DeviceBackend):
         self.ip: str | None = None
         self._device: Device | None = None
 
+    def is_configured(self, cfg: DeviceConfig) -> bool:
+        return True  # Kasa probes without credentials; auth is attempted opportunistically
+
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         device = await self._get_device(cfg)
         try:

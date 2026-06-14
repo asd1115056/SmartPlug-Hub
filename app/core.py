@@ -65,6 +65,10 @@ class DeviceBackend(ABC):
     session_timeout: float = 0.0        # 0 = stateless (MiIO); >0 = keep TCP alive this long
     command_interval: float = 0.0       # minimum seconds between consecutive commands
 
+    def is_configured(self, cfg: DeviceConfig) -> bool:
+        """Return True if cfg has the minimum credentials needed to attempt a connection."""
+        return False
+
     @abstractmethod
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         """Connect to the device and return its current state."""

@@ -224,13 +224,38 @@ panelSaveBtn.addEventListener('click', async () => {
       await adminApi.setDeviceGroup(_activeDeviceId, newGroup)
     }
 
+    // Tuya credentials (tuya only)
+    const tuyaSec = document.getElementById('panelTuya')
+    if (!tuyaSec.hidden) {
+      const newTuyaDeviceId = document.getElementById('panelTuyaDeviceId').value.trim() || null
+      const newTuyaLocalKey = document.getElementById('panelTuyaLocalKey').value.trim() || null
+      const newTuyaProductId = document.getElementById('panelTuyaProductId').value.trim() || null
+      if (
+        newTuyaDeviceId !== (device.tuya_device_id ?? null) ||
+        newTuyaLocalKey !== (device.tuya_local_key ?? null) ||
+        newTuyaProductId !== (device.tuya_product_id ?? null)
+      ) {
+        await adminApi.setTuyaCredentials(_activeDeviceId, newTuyaDeviceId, newTuyaLocalKey, newTuyaProductId)
+      }
+    }
+
+    // MiIO credentials (miio only)
+    const miioSec = document.getElementById('panelMiio')
+    if (!miioSec.hidden) {
+      const newMiioDeviceId = document.getElementById('panelMiioId').value.trim() || null
+      const newMiioDeviceToken = document.getElementById('panelMiioToken').value.trim() || null
+      if (newMiioDeviceId !== (device.miio_id ?? null) || newMiioDeviceToken !== (device.miio_token ?? null)) {
+        await adminApi.setMiioCredentials(_activeDeviceId, newMiioDeviceId, newMiioDeviceToken)
+      }
+    }
+
     // Kasa credentials (kasa only)
     const kasaSec = document.getElementById('panelKasa')
     if (!kasaSec.hidden) {
-      const newUsername = document.getElementById('panelKasaUsername').value.trim() || null
-      const newPassword = document.getElementById('panelKasaPassword').value || null
-      if (newUsername !== (device.kasa_username ?? null) || newPassword !== (device.kasa_password ?? null)) {
-        await adminApi.setKasaCredentials(_activeDeviceId, newUsername, newPassword)
+      const newKasaUsername = document.getElementById('panelKasaUsername').value.trim() || null
+      const newKasaPassword = document.getElementById('panelKasaPassword').value || null
+      if (newKasaUsername !== (device.kasa_username ?? null) || newKasaPassword !== (device.kasa_password ?? null)) {
+        await adminApi.setKasaCredentials(_activeDeviceId, newKasaUsername, newKasaPassword)
       }
     }
 

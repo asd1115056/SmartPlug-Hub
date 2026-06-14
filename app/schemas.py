@@ -90,8 +90,19 @@ class AddDeviceRequest(BaseModel):
 
 
 class SetKasaCredentialsRequest(BaseModel):
-    username: str | None = None
-    password: str | None = None
+    kasa_username: str | None = None
+    kasa_password: str | None = None
+
+
+class SetMiioCredentialsRequest(BaseModel):
+    miio_device_id: str | None = None
+    miio_device_token: str | None = None
+
+
+class SetTuyaCredentialsRequest(BaseModel):
+    tuya_device_id: str | None = None
+    tuya_local_key: str | None = None
+    tuya_product_id: str | None = None
 
 
 class SetNameRequest(BaseModel):

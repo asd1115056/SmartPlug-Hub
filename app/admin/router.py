@@ -17,6 +17,8 @@ from ..schemas import (
     DiscoveredDeviceOut,
     SetGroupRequest,
     SetKasaCredentialsRequest,
+    SetMiioCredentialsRequest,
+    SetTuyaCredentialsRequest,
     SetNameRequest,
     build_admin_device_out,
 )
@@ -158,6 +160,40 @@ async def set_device_name(
     return build_admin_device_out(row, svc._devices.get(device_id))
 
 
+@router.patch("/devices/{device_id}/miio-credentials", response_model=AdminDeviceOut)
+async def set_miio_credentials(
+    device_id: str,
+    body: SetMiioCredentialsRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    row = await _require_device(device_id, db)
+    if row.type != "miio":
+        raise HTTPException(status_code=400, detail="Device is not a MiIO device")
+    await service.set_miio_credentials(device_id, body.miio_device_id, body.miio_device_token, db, svc)
+    row = await db.get_device(device_id)
+    assert row is not None
+    return build_admin_device_out(row, svc._devices.get(device_id))
+
+
+@router.patch("/devices/{device_id}/tuya-credentials", response_model=AdminDeviceOut)
+async def set_tuya_credentials(
+    device_id: str,
+    body: SetTuyaCredentialsRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    row = await _require_device(device_id, db)
+    if row.type != "tuya":
+        raise HTTPException(status_code=400, detail="Device is not a Tuya device")
+    await service.set_tuya_credentials(
+        device_id, body.tuya_device_id, body.tuya_local_key, body.tuya_product_id, db, svc
+    )
+    row = await db.get_device(device_id)
+    assert row is not None
+    return build_admin_device_out(row, svc._devices.get(device_id))
+
+
 @router.patch("/devices/{device_id}/kasa-credentials", response_model=AdminDeviceOut)
 async def set_kasa_credentials(
     device_id: str,
@@ -168,7 +204,7 @@ async def set_kasa_credentials(
     row = await _require_device(device_id, db)
     if row.type != "kasa":
         raise HTTPException(status_code=400, detail="Device is not a Kasa device")
-    await service.set_kasa_credentials(device_id, body.username, body.password, db, svc)
+    await service.set_kasa_credentials(device_id, body.kasa_username, body.kasa_password, db, svc)
     row = await db.get_device(device_id)
     assert row is not None
     return build_admin_device_out(row, svc._devices.get(device_id))
