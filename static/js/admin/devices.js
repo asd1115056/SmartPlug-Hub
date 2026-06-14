@@ -1,161 +1,243 @@
-import * as api from './api.js'
-import { refreshDevice } from '../api.js'
-
 function esc(str) {
   const d = document.createElement('div')
   d.textContent = str ?? ''
   return d.innerHTML.replaceAll('"', '&quot;')
 }
 
-function fmtMac(mac) {
-  return (mac ?? '').replace(/(.{2})(?=.)/g, '$1:')
+function _formatMac(mac) {
+  if (!mac) return '—'
+  const clean = mac.replace(/[:-]/g, '').toUpperCase()
+  return clean.match(/.{1,2}/g)?.join(':') ?? mac
 }
 
-export async function loadDevices(onUnauth) {
-  try {
-    const devices = await api.getDevices()
-    renderDevices(devices)
-  } catch (e) {
-    if (e.status === 401) onUnauth?.()
-  }
+function _protocolBadge(type) {
+  return `<span class="protocol-badge type-${esc(type)}">${esc(type)}</span>`
 }
 
-function renderDevices(devices) {
-  const tbody = document.querySelector('#devicesTable tbody')
-  if (!devices.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No devices yet.</td></tr>'
+// ── Device cards ──────────────────────────────────────────────────────────────
+
+export function renderDeviceCards(devices, filter = '') {
+  const container = document.getElementById('deviceCards')
+  const count = document.getElementById('deviceCount')
+
+  const q = filter.toLowerCase().trim()
+  const filtered = q
+    ? devices.filter(d =>
+        (d.name ?? '').toLowerCase().includes(q) ||
+        (d.hw_alias ?? '').toLowerCase().includes(q) ||
+        (d.mac ?? '').toLowerCase().includes(q) ||
+        (d.group_name ?? '').toLowerCase().includes(q)
+      )
+    : devices
+
+  count.textContent = filtered.length
+
+  if (!filtered.length) {
+    container.innerHTML = q
+      ? '<p class="text-muted py-3">No devices match the filter.</p>'
+      : '<p class="text-muted py-3">No devices yet. Use Scan to discover devices.</p>'
     return
   }
-  tbody.innerHTML = devices.map(d => {
-    const statusDot = `<i class="bi bi-circle-fill ${d.is_online ? 'text-success' : 'text-secondary'}"
-      style="font-size:.7rem;flex-shrink:0" title="${d.is_online ? 'online' : 'offline'}"></i>`
-    const outletBtn = d.hw_is_strip
-      ? `<button class="btn btn-sm btn-outline-secondary js-outlets" data-id="${d.id}" data-name="${esc(d.name ?? d.hw_alias ?? d.mac)}">
-           <i class="bi bi-diagram-3"></i>
-         </button>`
-      : '<span class="text-muted">—</span>'
-    return `<tr>
-      <td class="text-center">${statusDot}</td>
-      <td class="text-center">
-        <span class="badge bg-secondary">${d.type}</span>
-        ${d.type === 'tuya' && d.tuya_product_id
-          ? `<br><small class="text-muted font-monospace" style="font-size:.65rem">${esc(d.tuya_product_id)}</small>`
-          : ''}
-      </td>
-      <td>
-        <span id="name-view-${d.id}" class="editable-field" data-id="${d.id}" data-field="name">
-          <span class="field-value">${esc(d.name ?? d.hw_alias ?? d.mac)}</span><i class="bi bi-pencil edit-pencil ms-1"></i>
-        </span>
-        <div id="name-edit-${d.id}" class="d-none d-flex gap-1 align-items-center">
-          <input id="name-${d.id}" class="form-control form-control-sm" value="${esc(d.name ?? '')}"
-            placeholder="${esc(d.hw_alias ?? d.mac)}" style="width:160px">
-          <button class="btn btn-sm btn-outline-secondary js-rename" data-id="${d.id}">
-            <i class="bi bi-check-lg"></i>
-          </button>
-          <button class="btn btn-sm btn-outline-secondary js-cancel-edit" data-id="${d.id}" data-field="name">
-            <i class="bi bi-x-lg"></i>
-          </button>
+
+  container.innerHTML = filtered.map(d => {
+    const dotClass = d.is_online ? 'online' : 'offline'
+    const cardClass = d.is_online ? '' : 'offline'
+    const displayName = d.name || d.hw_alias || d.mac
+    const model = d.hw_model ? `${esc(d.hw_model)} ${_protocolBadge(d.type)}` : _protocolBadge(d.type)
+    const group = d.group_name
+      ? `<div class="adc-group"><i class="bi bi-folder me-1"></i>${esc(d.group_name)}</div>`
+      : ''
+    const meta = [_formatMac(d.mac), d.last_known_ip].filter(Boolean).join(' · ')
+
+    return `
+      <div class="col-lg-4 col-md-6">
+        <div class="admin-device-card ${cardClass}" data-device-id="${esc(d.id)}" role="button">
+          <div class="d-flex gap-2">
+            <div class="adc-dot ${dotClass}"></div>
+            <div class="flex-fill">
+              <div class="adc-name">${esc(displayName)}</div>
+              <div class="adc-model">${model}</div>
+              ${group}
+              ${meta ? `<div class="adc-meta">${esc(meta)}</div>` : ''}
+            </div>
+          </div>
         </div>
-      </td>
-      <td>
-        <span id="group-view-${d.id}" class="editable-field" data-id="${d.id}" data-field="group">
-          <span class="field-value">${esc(d.group_name ?? '—')}</span><i class="bi bi-pencil edit-pencil ms-1"></i>
-        </span>
-        <div id="group-edit-${d.id}" class="d-none d-flex gap-1 align-items-center">
-          <input id="group-${d.id}" class="form-control form-control-sm" value="${esc(d.group_name ?? '')}"
-            placeholder="—" style="width:110px">
-          <button class="btn btn-sm btn-outline-secondary js-regroup" data-id="${d.id}">
-            <i class="bi bi-check-lg"></i>
-          </button>
-          <button class="btn btn-sm btn-outline-secondary js-cancel-edit" data-id="${d.id}" data-field="group">
-            <i class="bi bi-x-lg"></i>
-          </button>
-        </div>
-      </td>
-      <td class="text-center text-muted">${esc(d.last_known_ip ?? '—')}</td>
-      <td class="text-center font-monospace text-muted small">${fmtMac(d.mac)}</td>
-      <td class="text-center">${outletBtn}</td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-outline-danger js-delete-device" data-id="${d.id}">
-          <i class="bi bi-trash"></i>
-        </button>
-      </td>
-    </tr>`
+      </div>`
   }).join('')
 }
 
-export async function openOutletsModal(deviceId, deviceName) {
-  const modalEl = document.getElementById('outletsModal')
-  const bodyEl = document.getElementById('outletsModalBody')
-  document.getElementById('outletsModalTitle').innerHTML =
-    `<i class="bi bi-diagram-3 me-2"></i>Outlets — ${esc(deviceName)}`
-  bodyEl.innerHTML = `<div class="text-center py-3">
-    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div></div>`
-  bootstrap.Modal.getOrCreateInstance(modalEl).show()
+// ── Scan results ──────────────────────────────────────────────────────────────
 
-  try {
-    // refresh first to get the latest outlet state
-    const device = await refreshDevice(deviceId)
-    if (!device.outlets?.length) {
-      bodyEl.innerHTML = '<p class="text-muted mb-0">No outlets found.</p>'
-      return
-    }
-    bodyEl.innerHTML = device.outlets.map((o, i) => `
-      <div class="input-group mb-2">
-        <span class="input-group-text text-secondary font-monospace outlet-id-cell">${i}</span>
-        <input id="ol-${deviceId}-${o.outlet_id}" class="form-control" value="${esc(o.name)}">
-        <button class="btn btn-outline-secondary js-rename-outlet"
-          data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}">
-          <i class="bi bi-check-lg"></i>
-        </button>
+export function renderScanResults(discovered, onAdd) {
+  const container = document.getElementById('scanResults')
+  if (!discovered.length) {
+    container.innerHTML = '<p class="text-muted mb-0 mt-2">No devices found on any interface.</p>'
+    container.hidden = false
+    return
+  }
+
+  // Group by broadcast → derive subnet label
+  const groups = new Map()
+  for (const d of discovered) {
+    if (!groups.has(d.broadcast)) groups.set(d.broadcast, [])
+    groups.get(d.broadcast).push(d)
+  }
+
+  const newTotal = discovered.filter(d => !d.is_registered).length
+  const addedTotal = discovered.filter(d => d.is_registered).length
+
+  let html = `<div class="d-flex align-items-center gap-2 mb-3">
+    <span class="fw-semibold" style="font-size:.85rem">Scan Results</span>
+    ${newTotal ? `<span class="badge bg-success">${newTotal} new</span>` : ''}
+    ${addedTotal ? `<span class="badge bg-secondary">${addedTotal} already added</span>` : ''}
+  </div>`
+
+  for (const [broadcast, devices] of groups) {
+    const subnet = broadcast.replace(/\.\d+$/, '.0/24')
+    const newCount = devices.filter(d => !d.is_registered).length
+    const addedCount = devices.filter(d => d.is_registered).length
+    const groupId = `nic-${broadcast.replaceAll('.', '-')}`
+
+    html += `
+      <div class="mb-3">
+        <div class="scan-nic-header" data-toggle="${groupId}">
+          <i class="bi bi-chevron-down me-2" style="font-size:.65rem;transition:transform .2s" id="chev-${groupId}"></i>
+          <i class="bi bi-diagram-3 me-1 text-muted"></i>
+          <span class="fw-semibold font-monospace">${esc(subnet)}</span>
+          <span class="text-muted ms-2">·
+            ${newCount ? `${newCount} new` : ''}
+            ${newCount && addedCount ? ' · ' : ''}
+            ${addedCount ? `${addedCount} added` : ''}
+          </span>
+        </div>
+        <div class="scan-list" id="${groupId}">
+          ${devices.map(d => _scanRow(d)).join('')}
+        </div>
+      </div>`
+  }
+
+  container.innerHTML = html
+  container.hidden = false
+
+  // Collapse toggle
+  container.querySelectorAll('[data-toggle]').forEach(header => {
+    header.addEventListener('click', () => {
+      const list = document.getElementById(header.dataset.toggle)
+      const chev = document.getElementById(`chev-${header.dataset.toggle}`)
+      const collapsed = list.style.display === 'none'
+      list.style.display = collapsed ? '' : 'none'
+      chev.style.transform = collapsed ? '' : 'rotate(-90deg)'
+    })
+  })
+
+  // Add buttons
+  container.querySelectorAll('.js-scan-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { mac, type, broadcast, ip, model, miioId, tuyaDeviceId, tuyaLocalKey, tuyaProductId } = btn.dataset
+      onAdd({
+        mac, type, broadcast, ip, model: model || null,
+        miio_id: miioId || null,
+        tuya_device_id: tuyaDeviceId || null,
+        tuya_local_key: tuyaLocalKey || null,
+        tuya_product_id: tuyaProductId || null,
+      })
+    })
+  })
+}
+
+function _scanRow(d) {
+  const registeredLabel = d.is_registered
+    ? `<div class="scan-registered-label"><i class="bi bi-check-circle-fill me-1"></i>${esc(d.registered_name || 'Added')}</div>`
+    : ''
+
+  const action = d.is_registered
+    ? `<span class="flex-shrink-0" style="width:72px;text-align:center">
+         <i class="bi bi-check-circle-fill text-success" style="font-size:1.1rem"></i>
+       </span>`
+    : `<button class="js-scan-add btn btn-outline-success btn-sm flex-shrink-0"
+         style="width:72px"
+         data-mac="${esc(d.mac)}" data-type="${esc(d.type)}"
+         data-broadcast="${esc(d.broadcast)}" data-ip="${esc(d.ip)}"
+         data-model="${esc(d.model ?? '')}"
+         data-miio-id="${esc(d.miio_id ?? '')}"
+         data-tuya-device-id="${esc(d.tuya_device_id ?? '')}"
+         data-tuya-local-key="${esc(d.tuya_local_key ?? '')}"
+         data-tuya-product-id="${esc(d.tuya_product_id ?? '')}">
+         <i class="bi bi-plus-lg me-1"></i>Add
+       </button>`
+
+  return `
+    <div class="scan-row ${d.is_registered ? 'is-registered' : ''}">
+      <span style="flex-shrink:0">${_protocolBadge(d.type)}</span>
+      <div class="scan-model">
+        <div>${esc(d.model || d.type)}</div>
+        ${registeredLabel}
+      </div>
+      <span class="scan-ip">${esc(d.ip)}</span>
+      <span class="scan-mac">${esc(_formatMac(d.mac))}</span>
+      ${action}
+    </div>`
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────────
+
+export function fillDetailPanel(device) {
+  const displayName = device.name || device.hw_alias || device.mac
+
+  document.getElementById('panelName').textContent = displayName
+  document.getElementById('panelNameInput').value = device.name ?? ''
+  document.getElementById('panelGroupInput').value = device.group_name ?? ''
+
+  // Status
+  const statusEl = document.getElementById('panelStatus')
+  if (device.is_online) {
+    statusEl.innerHTML = '<span style="color:#198754"><i class="bi bi-circle-fill me-1" style="font-size:.45rem"></i>Online</span>'
+  } else {
+    statusEl.innerHTML = '<span class="text-muted">○ Offline</span>'
+  }
+
+  // Info
+  document.getElementById('panelModel').textContent = device.hw_model ?? '—'
+  document.getElementById('panelType').innerHTML = _protocolBadge(device.type)
+  document.getElementById('panelMac').textContent = _formatMac(device.mac)
+  document.getElementById('panelIp').textContent = device.last_known_ip ?? '—'
+
+  // Tuya credentials (read-only)
+  const tuyaSec = document.getElementById('panelTuya')
+  if (device.type === 'tuya') {
+    document.getElementById('panelTuyaDeviceId').textContent = device.tuya_device_id ?? '—'
+    document.getElementById('panelTuyaLocalKey').textContent = device.tuya_local_key ?? '—'
+    document.getElementById('panelTuyaProductId').textContent = device.tuya_product_id ?? '—'
+    tuyaSec.hidden = false
+  } else {
+    tuyaSec.hidden = true
+  }
+
+  // MiIO credentials (read-only)
+  const miioSec = document.getElementById('panelMiio')
+  if (device.type === 'miio') {
+    document.getElementById('panelMiioToken').textContent = device.miio_token ?? '—'
+    document.getElementById('panelMiioId').textContent = device.miio_id ?? '—'
+    miioSec.hidden = false
+  } else {
+    miioSec.hidden = true
+  }
+
+  // Outlets (strip only)
+  const outletsSec = document.getElementById('panelOutletsSec')
+  if (device.hw_is_strip && device.outlets?.length) {
+    document.getElementById('panelOutlets').innerHTML = device.outlets.map((o, i) => `
+      <div class="input-group input-group-sm mb-2">
+        <span class="input-group-text text-muted font-monospace" style="width:2.2rem">${i}</span>
+        <input class="form-control js-outlet-name" data-outlet-id="${esc(o.outlet_id)}" value="${esc(o.name)}">
       </div>`).join('')
-  } catch (e) {
-    bodyEl.innerHTML = `<p class="text-danger mb-0">Failed to load outlets: ${esc(e.message)}</p>`
+    outletsSec.hidden = false
+  } else {
+    outletsSec.hidden = true
   }
 }
 
-export async function renameDevice(id, flash) {
-  const input = document.getElementById(`name-${id}`)
-  const btn = input?.nextElementSibling
-  if (!input || !btn) return false
-  return _renameWithFeedback(input, btn, () => api.setDeviceName(id, input.value), flash)
-}
-
-export async function regroupDevice(id, flash) {
-  const input = document.getElementById(`group-${id}`)
-  const btn = input?.nextElementSibling
-  if (!input || !btn) return false
-  return _renameWithFeedback(input, btn, () => api.setDeviceGroup(id, input.value), flash)
-}
-
-export async function renameOutlet(deviceId, outletId, flash) {
-  const input = document.getElementById(`ol-${deviceId}-${outletId}`)
-  const btn = input?.nextElementSibling
-  if (!input || !btn) return
-  await _renameWithFeedback(input, btn, () => api.setOutletName(deviceId, outletId, input.value), flash)
-}
-
-async function _renameWithFeedback(input, btn, apiCall, flash) {
-  const orig = btn.innerHTML
-  btn.disabled = true
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'
-  input.classList.remove('is-valid', 'is-invalid')
-  let success = false
-  try {
-    await apiCall()
-    success = true
-    input.classList.add('is-valid')
-    setTimeout(() => input.classList.remove('is-valid'), 1500)
-  } catch (e) {
-    input.classList.add('is-invalid')
-    setTimeout(() => input.classList.remove('is-invalid'), 2000)
-    flash?.(e.message, false)
-  } finally {
-    btn.innerHTML = orig
-    btn.disabled = false
-  }
-  return success
-}
+// ── Delete confirm ────────────────────────────────────────────────────────────
 
 export function confirmDelete(message) {
   return new Promise(resolve => {
@@ -163,13 +245,13 @@ export function confirmDelete(message) {
     const btn = document.getElementById('deleteConfirmBtn')
     document.getElementById('deleteModalBody').textContent = message
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl)
-    const onConfirm = () => { cleanup(); resolve(true) }
-    const onDismiss = () => { cleanup(); resolve(false) }
     function cleanup() {
       btn.removeEventListener('click', onConfirm)
       modalEl.removeEventListener('hidden.bs.modal', onDismiss)
       modal.hide()
     }
+    const onConfirm = () => { cleanup(); resolve(true) }
+    const onDismiss = () => { cleanup(); resolve(false) }
     btn.addEventListener('click', onConfirm, { once: true })
     modalEl.addEventListener('hidden.bs.modal', onDismiss, { once: true })
     modal.show()

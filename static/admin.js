@@ -1,11 +1,14 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
-import { loadAccounts, getCache as getAccounts, populateAccountSelect } from './js/admin/accounts.js'
-import {
-  loadDevices, openOutletsModal, renameDevice, regroupDevice, renameOutlet, confirmDelete,
-} from './js/admin/devices.js'
+import { loadAccounts } from './js/admin/accounts.js'
+import { renderDeviceCards, renderScanResults, fillDetailPanel, confirmDelete } from './js/admin/devices.js'
 
-// ── Cached DOM refs ───────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let _devices = []
+let _activeDeviceId = null
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const loginView   = document.getElementById('loginView')
 const adminView   = document.getElementById('adminView')
@@ -13,8 +16,18 @@ const loginBtn    = document.getElementById('loginBtn')
 const loginErr    = document.getElementById('loginErr')
 const tokenInput  = document.getElementById('tokenInput')
 const logoutBtn   = document.getElementById('logoutBtn')
+const menuBtn     = document.getElementById('menuBtn')
+const menuDropdown = document.getElementById('menuDropdown')
+const accountsBtn = document.getElementById('accountsBtn')
+const scanBtn     = document.getElementById('scanBtn')
+const deviceFilter = document.getElementById('deviceFilter')
+const panelBackdrop = document.getElementById('panelBackdrop')
+const detailPanel   = document.getElementById('detailPanel')
+const panelClose    = document.getElementById('panelClose')
+const panelSaveBtn  = document.getElementById('panelSaveBtn')
+const panelDeleteBtn = document.getElementById('panelDeleteBtn')
 
-// ── Notifications ─────────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
 
 function flash(msg, ok = true) {
   const container = document.getElementById('toastContainer')
@@ -73,26 +86,34 @@ tokenInput.addEventListener('keydown', e => {
 logoutBtn.addEventListener('click', () => {
   clearToken()
   tokenInput.value = ''
+  closeMenu()
   showLogin('')
 })
 
-// ── Accounts ──────────────────────────────────────────────────────────────────
+// ── Navbar dropdown ───────────────────────────────────────────────────────────
 
-document.getElementById('addAccountForm').addEventListener('submit', async e => {
-  e.preventDefault()
-  const f = e.target
-  try {
-    await adminApi.addAccount({ type: f.type.value, username: f.username.value, password: f.password.value })
-    bootstrap.Modal.getInstance(document.getElementById('addAccountModal')).hide()
-    f.reset()
-    flash('Account added')
-    await loadAccounts(onUnauth)
-  } catch (err) {
-    if (err.status !== 401) flash(err.message, false)
-  }
+function closeMenu() { menuDropdown.classList.remove('open') }
+
+menuBtn.addEventListener('click', e => {
+  e.stopPropagation()
+  menuDropdown.classList.toggle('open')
 })
 
-document.getElementById('accountsTable').addEventListener('click', async e => {
+document.addEventListener('click', closeMenu)
+menuDropdown.addEventListener('click', e => e.stopPropagation())
+
+accountsBtn.addEventListener('click', () => {
+  closeMenu()
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('accountsModal')).show()
+})
+
+// ── Accounts modal ────────────────────────────────────────────────────────────
+
+document.getElementById('accountsModal').addEventListener('show.bs.modal', () => {
+  loadAccounts(onUnauth)
+})
+
+document.getElementById('accountsList').addEventListener('click', async e => {
   const btn = e.target.closest('.js-delete-account')
   if (!btn) return
   if (!await confirmDelete('Delete this account?')) return
@@ -105,281 +126,196 @@ document.getElementById('accountsTable').addEventListener('click', async e => {
   }
 })
 
-// ── Devices ───────────────────────────────────────────────────────────────────
-
-const accountSel      = document.getElementById('accountSelect')
-const deviceTypeSel   = document.getElementById('deviceTypeSelect')
-const miioToken       = document.getElementById('miioToken')
-const miioDeviceId    = document.getElementById('miioDeviceId')
-const tuyaDeviceId    = document.getElementById('tuyaDeviceId')
-const tuyaLocalKey    = document.getElementById('tuyaLocalKey')
-const tuyaProductId   = document.getElementById('tuyaProductId')
-
-function _applyDeviceType(type) {
-  const isMiio = type === 'miio'
-  const isTuya = type === 'tuya'
-  document.getElementById('miioFields').hidden = !isMiio
-  miioToken.required = isMiio
-  miioDeviceId.required = isMiio
-  document.getElementById('tuyaFields').hidden = !isTuya
-  tuyaDeviceId.required = isTuya
-  tuyaLocalKey.required = isTuya
-  if (!isTuya) tuyaProductId.value = ''
-}
-
-deviceTypeSel.addEventListener('change', () => _applyDeviceType(deviceTypeSel.value))
-
-accountSel.addEventListener('change', () => {
-  const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
-  if (type) { deviceTypeSel.value = type; _applyDeviceType(type) }
-})
-
-
-document.getElementById('addDeviceForm').addEventListener('submit', async e => {
+document.getElementById('addAccountForm').addEventListener('submit', async e => {
   e.preventDefault()
   const f = e.target
-  const accountId = f.account_id.value ? parseInt(f.account_id.value) : null
   try {
-    await adminApi.addDevice({
-      mac: f.mac.value, type: f.type.value,
-      broadcast: f.broadcast.value, account_id: accountId,
-      group_name: f.group_name.value || null,
-      miio_token: f.miio_token?.value || null, miio_id: f.miio_id?.value || null,
-      tuya_device_id: f.tuya_device_id?.value || null,
-      tuya_local_key: f.tuya_local_key?.value || null,
-      tuya_product_id: f.tuya_product_id?.value || null,
-    })
-    bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
+    await adminApi.addAccount({ type: f.type.value, username: f.username.value, password: f.password.value })
     f.reset()
-    accountSel.dispatchEvent(new Event('change'))
-    flash('Device added — probing in background…')
-    await loadDevices(onUnauth)
+    flash('Account added')
+    await loadAccounts(onUnauth)
   } catch (err) {
     if (err.status !== 401) flash(err.message, false)
   }
 })
 
-function _switchToView(id, field) {
-  document.getElementById(`${field}-edit-${id}`)?.classList.add('d-none')
-  document.getElementById(`${field}-view-${id}`)?.classList.remove('d-none')
+// ── Devices ───────────────────────────────────────────────────────────────────
+
+async function loadDevices() {
+  try {
+    _devices = await adminApi.getDevices()
+    renderDeviceCards(_devices, deviceFilter.value)
+  } catch (e) {
+    if (e.status === 401) onUnauth()
+  }
 }
 
-function _switchToEdit(id, field) {
-  document.getElementById(`${field}-view-${id}`)?.classList.add('d-none')
-  const editDiv = document.getElementById(`${field}-edit-${id}`)
-  editDiv?.classList.remove('d-none')
-  editDiv?.querySelector('input')?.focus()
-}
-
-document.getElementById('devicesTable').addEventListener('click', async e => {
-  const editTrigger = e.target.closest('.editable-field')
-  if (editTrigger) { _switchToEdit(editTrigger.dataset.id, editTrigger.dataset.field); return }
-
-  const cancel = e.target.closest('.js-cancel-edit')
-  if (cancel) { _switchToView(cancel.dataset.id, cancel.dataset.field); return }
-
-  const del = e.target.closest('.js-delete-device')
-  if (del) {
-    if (!await confirmDelete('Delete this device? This cannot be undone.')) return
-    try {
-      await adminApi.deleteDevice(del.dataset.id)
-      flash('Device deleted')
-      await loadDevices(onUnauth)
-    } catch (err) {
-      if (err.status !== 401) flash(err.message, false)
-    }
-    return
-  }
-
-  const rename = e.target.closest('.js-rename')
-  if (rename) {
-    const id = rename.dataset.id
-    const ok = await renameDevice(id, flash)
-    if (ok) {
-      const val = document.getElementById(`name-${id}`).value
-      document.querySelector(`#name-view-${id} .field-value`).textContent =
-        val || document.getElementById(`name-${id}`).placeholder
-      const outletBtn = document.querySelector(`.js-outlets[data-id="${id}"]`)
-      if (outletBtn) outletBtn.dataset.name = val
-      _switchToView(id, 'name')
-    }
-    return
-  }
-
-  const regroup = e.target.closest('.js-regroup')
-  if (regroup) {
-    const id = regroup.dataset.id
-    const ok = await regroupDevice(id, flash)
-    if (ok) {
-      const val = document.getElementById(`group-${id}`).value
-      document.querySelector(`#group-view-${id} .field-value`).textContent = val || '—'
-      _switchToView(id, 'group')
-    }
-    return
-  }
-
-  const outlets = e.target.closest('.js-outlets')
-  if (outlets) { await openOutletsModal(outlets.dataset.id, outlets.dataset.name) }
+deviceFilter.addEventListener('input', () => {
+  renderDeviceCards(_devices, deviceFilter.value)
 })
 
-document.getElementById('devicesTable').addEventListener('keydown', e => {
-  if (e.key === 'Enter') e.target.closest('tr')?.querySelector('.js-rename, .js-regroup')?.click()
-  else if (e.key === 'Escape') e.target.closest('tr')?.querySelector('.js-cancel-edit')?.click()
-})
-
-document.getElementById('outletsModalBody').addEventListener('click', async e => {
-  const btn = e.target.closest('.js-rename-outlet')
-  if (btn) await renameOutlet(btn.dataset.deviceId, btn.dataset.outletId, flash)
+document.getElementById('deviceCards').addEventListener('click', e => {
+  const card = e.target.closest('.admin-device-card')
+  if (!card) return
+  openPanel(card.dataset.deviceId)
 })
 
 // ── Scan ──────────────────────────────────────────────────────────────────────
 
-const scanBtn        = document.getElementById('scanBtn')
-const scanRunBtn     = document.getElementById('scanRunBtn')
-const scanModal      = bootstrap.Modal.getOrCreateInstance(document.getElementById('scanModal'))
-const scanStatus     = document.getElementById('scanModalStatus')
-const scanTable      = document.getElementById('scanTable')
-const scanBody       = document.getElementById('scanTableBody')
-const scanPagination = document.getElementById('scanPagination')
-const scanPageInfo   = document.getElementById('scanPageInfo')
+scanBtn.addEventListener('click', async () => {
+  scanBtn.disabled = true
+  scanBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…'
+  const resultsEl = document.getElementById('scanResults')
+  resultsEl.hidden = true
+  resultsEl.innerHTML = ''
 
-const SCAN_PAGE_SIZE = 10
-let _scanDevices = []
-let _scanPage    = 0
-
-function fmtMac(mac) {
-  return (mac ?? '').replace(/(.{2})(?=.)/g, '$1:')
-}
-
-function renderScanTable(devices) {
-  _scanDevices = devices
-  _scanPage = 0
-  _renderScanPage()
-}
-
-function _renderScanPage() {
-  scanStatus.hidden = true
-  if (!_scanDevices.length) {
-    scanBody.innerHTML = ''
-    scanTable.hidden = true
-    scanPagination.hidden = true
-    scanStatus.textContent = 'No new devices found.'
-    scanStatus.hidden = false
-    return
+  try {
+    const discovered = await adminApi.scanNetwork()
+    renderScanResults(discovered, handleScanAdd)
+  } catch (err) {
+    const resultsEl = document.getElementById('scanResults')
+    resultsEl.innerHTML = `<p class="text-danger mb-0 mt-2">${esc(err.message || 'Scan failed')}</p>`
+    resultsEl.hidden = false
+  } finally {
+    scanBtn.disabled = false
+    scanBtn.innerHTML = '<i class="bi bi-radar me-1"></i>Scan'
   }
-  const total      = _scanDevices.length
-  const totalPages = Math.ceil(total / SCAN_PAGE_SIZE)
-  const start      = _scanPage * SCAN_PAGE_SIZE
-  const slice      = _scanDevices.slice(start, start + SCAN_PAGE_SIZE)
-
-  scanBody.innerHTML = slice.map(d => `<tr>
-    <td class="text-center"><span class="badge bg-secondary">${esc(d.type)}</span></td>
-    <td class="text-muted">${esc(d.model ?? '—')}</td>
-    <td class="font-monospace small">${esc(fmtMac(d.mac))}</td>
-    <td class="text-center text-muted">${esc(d.ip)}</td>
-    <td class="text-center text-muted small">${esc(d.broadcast)}</td>
-    <td class="text-end">
-      <button class="btn btn-sm btn-outline-primary js-scan-add"
-        data-mac="${esc(d.mac)}"
-        data-type="${esc(d.type)}"
-        data-broadcast="${esc(d.broadcast)}"
-        data-model="${esc(d.model ?? '')}"
-        data-miio-id="${esc(d.miio_id ?? '')}"
-        data-tuya-device-id="${esc(d.tuya_device_id ?? '')}"
-        data-tuya-local-key="${esc(d.tuya_local_key ?? '')}"
-        data-tuya-product-id="${esc(d.tuya_product_id ?? '')}">
-        <i class="bi bi-plus-lg me-1"></i>Add
-      </button>
-    </td>
-  </tr>`).join('')
-  scanTable.hidden = false
-
-  if (totalPages <= 1) { scanPagination.hidden = true; return }
-
-  scanPageInfo.textContent = `${start + 1}–${Math.min(start + SCAN_PAGE_SIZE, total)} / ${total}`
-  scanPagination.querySelector('ul').innerHTML = `
-    <li class="page-item ${_scanPage === 0 ? 'disabled' : ''}">
-      <button class="page-link" data-page="${_scanPage - 1}">‹</button>
-    </li>
-    ${Array.from({ length: totalPages }, (_, i) => `
-      <li class="page-item ${i === _scanPage ? 'active' : ''}">
-        <button class="page-link" data-page="${i}">${i + 1}</button>
-      </li>`).join('')}
-    <li class="page-item ${_scanPage === totalPages - 1 ? 'disabled' : ''}">
-      <button class="page-link" data-page="${_scanPage + 1}">›</button>
-    </li>`
-  scanPagination.hidden = false
-}
-
-scanPagination.addEventListener('click', e => {
-  const btn = e.target.closest('[data-page]')
-  if (!btn) return
-  const page = parseInt(btn.dataset.page)
-  if (page < 0 || page >= Math.ceil(_scanDevices.length / SCAN_PAGE_SIZE)) return
-  _scanPage = page
-  _renderScanPage()
 })
 
-async function runScan() {
-  scanBody.innerHTML = ''
-  scanTable.hidden = true
-  scanStatus.textContent = ''
-  scanStatus.hidden = true
-  scanRunBtn.disabled = true
-  scanRunBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…'
-  scanStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Scanning all interfaces…'
-  scanStatus.hidden = false
+async function handleScanAdd(deviceData) {
   try {
-    const devices = await adminApi.scanNetwork()
-    renderScanTable(devices)
+    const row = await adminApi.addDevice({
+      mac: deviceData.mac,
+      type: deviceData.type,
+      broadcast: deviceData.broadcast,
+      miio_id: deviceData.miio_id,
+      miio_token: null,
+      tuya_device_id: deviceData.tuya_device_id,
+      tuya_local_key: deviceData.tuya_local_key,
+      tuya_product_id: deviceData.tuya_product_id,
+    })
+    flash('Device added')
+    await loadDevices()
+    openPanel(row.id)
+    // Mark as added in scan results
+    const btn = document.querySelector(`.js-scan-add[data-mac="${deviceData.mac}"]`)
+    if (btn) {
+      const scanRow = btn.closest('.scan-row')
+      if (scanRow) {
+        btn.replaceWith(Object.assign(document.createElement('span'), {
+          className: 'text-success flex-shrink-0',
+          style: 'font-size:.78rem;width:80px;text-align:center',
+          innerHTML: '<i class="bi bi-check-lg me-1"></i>Added',
+        }))
+        scanRow.classList.add('is-registered')
+      }
+    }
   } catch (err) {
-    scanStatus.textContent = err.message || 'Scan failed'
-    scanStatus.hidden = false
-  } finally {
-    scanRunBtn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Scan'
-    scanRunBtn.disabled = false
+    flash(err.message || 'Failed to add device', false)
   }
 }
 
-scanBtn.addEventListener('click', () => scanModal.show())
-document.getElementById('scanModal').addEventListener('shown.bs.modal', runScan)
-scanRunBtn.addEventListener('click', runScan)
+// ── Detail panel ──────────────────────────────────────────────────────────────
 
-document.getElementById('scanTable').addEventListener('click', e => {
-  const btn = e.target.closest('.js-scan-add')
-  if (!btn) return
-  const { mac, type, broadcast, miioId, tuyaDeviceId: devId, tuyaLocalKey: localKey } = btn.dataset
+function openPanel(deviceId) {
+  const device = _devices.find(d => d.id === deviceId)
+  if (!device) return
+  _activeDeviceId = deviceId
 
-  const form = document.getElementById('addDeviceForm')
-  form.querySelector('[name="mac"]').value = fmtMac(mac)
-  form.querySelector('[name="broadcast"]').value = broadcast
-  deviceTypeSel.value = type
-  _applyDeviceType(type)
+  document.querySelectorAll('.admin-device-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.deviceId === deviceId)
+  })
 
-  const opts = accountSel.options
-  let matched = false
-  for (let i = 0; i < opts.length; i++) {
-    if (opts[i].dataset.type === type) { accountSel.selectedIndex = i; matched = true; break }
+  fillDetailPanel(device)
+  panelBackdrop.classList.add('open')
+  detailPanel.classList.add('open')
+}
+
+function closePanel() {
+  _activeDeviceId = null
+  panelBackdrop.classList.remove('open')
+  detailPanel.classList.remove('open')
+  document.querySelectorAll('.admin-device-card.selected').forEach(c => c.classList.remove('selected'))
+}
+
+panelClose.addEventListener('click', closePanel)
+panelBackdrop.addEventListener('click', closePanel)
+
+// ── Panel save ────────────────────────────────────────────────────────────────
+
+panelSaveBtn.addEventListener('click', async () => {
+  if (!_activeDeviceId) return
+  const device = _devices.find(d => d.id === _activeDeviceId)
+  if (!device) return
+
+  panelSaveBtn.disabled = true
+  panelSaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…'
+
+  const errors = []
+  try {
+    // Name
+    const newName = document.getElementById('panelNameInput').value.trim()
+    if (newName !== (device.name ?? '')) {
+      await adminApi.setDeviceName(_activeDeviceId, newName)
+    }
+
+    // Group
+    const newGroup = document.getElementById('panelGroupInput').value.trim() || null
+    if (newGroup !== (device.group_name ?? null)) {
+      await adminApi.setDeviceGroup(_activeDeviceId, newGroup)
+    }
+
+    // Outlet names (strip only)
+    if (device.hw_is_strip) {
+      const inputs = document.querySelectorAll('#panelOutlets .js-outlet-name')
+      const outlet = device.outlets ?? []
+      for (const input of inputs) {
+        const outletId = input.dataset.outletId
+        const original = outlet.find(o => o.outlet_id === outletId)
+        if (original && input.value !== original.name) {
+          try {
+            await adminApi.setOutletName(_activeDeviceId, outletId, input.value)
+          } catch (e) {
+            errors.push(`Outlet ${outletId}: ${e.message}`)
+          }
+        }
+      }
+    }
+
+    await loadDevices()
+    if (errors.length) {
+      flash(`Saved with errors: ${errors.join('; ')}`, false)
+    } else {
+      flash('Changes saved')
+      closePanel()
+    }
+  } catch (err) {
+    flash(err.message || 'Save failed', false)
+  } finally {
+    panelSaveBtn.disabled = false
+    panelSaveBtn.innerHTML = '<i class="bi bi-floppy me-1"></i>Save Changes'
   }
-  if (!matched) accountSel.selectedIndex = 0
-  accountSel.dispatchEvent(new Event('change'))
+})
 
-  if (type === 'miio' && miioId) miioDeviceId.value = miioId
-  if (type === 'tuya') {
-    if (devId) tuyaDeviceId.value = devId
-    if (localKey) tuyaLocalKey.value = localKey
-    tuyaProductId.value = btn.dataset.tuyaProductId || ''
+// ── Panel delete ──────────────────────────────────────────────────────────────
+
+panelDeleteBtn.addEventListener('click', async () => {
+  if (!_activeDeviceId) return
+  if (!await confirmDelete('Delete this device? This cannot be undone.')) return
+  try {
+    await adminApi.deleteDevice(_activeDeviceId)
+    flash('Device deleted')
+    closePanel()
+    await loadDevices()
+  } catch (err) {
+    if (err.status !== 401) flash(err.message, false)
   }
-
-  scanModal.hide()
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('addDeviceModal')).show()
 })
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function loadAll() {
-  await loadAccounts(onUnauth)
-  await loadDevices(onUnauth)
+  await Promise.all([loadAccounts(onUnauth), loadDevices()])
 }
 
 ;(async () => {

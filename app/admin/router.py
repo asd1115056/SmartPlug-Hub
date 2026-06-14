@@ -106,7 +106,8 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
     if not broadcasts:
         raise HTTPException(status_code=503, detail="No usable network interfaces found")
 
-    existing = {normalize_mac(d.mac) for d in await db.get_devices()}
+    existing_rows = await db.get_devices()
+    existing: dict[str, DeviceRow] = {normalize_mac(d.mac): d for d in existing_rows}
 
     results = await asyncio.gather(
         kasa_scan(broadcasts), miio_scan(broadcasts), tuya_scan(broadcasts),
@@ -118,19 +119,23 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
     for r in results:
         if isinstance(r, list):
             for d in r:
-                if d.mac not in existing and d.mac not in seen_macs:
-                    seen_macs.add(d.mac)
-                    found.append(DiscoveredDeviceOut(
-                        mac=d.mac,
-                        type=d.type,
-                        broadcast=d.broadcast,
-                        ip=d.last_known_ip or "",
-                        model=d.hw_model,
-                        miio_id=d.miio_id,
-                        tuya_device_id=d.tuya_device_id,
-                        tuya_local_key=d.tuya_local_key,
-                        tuya_product_id=d.tuya_product_id,
-                    ))
+                if d.mac in seen_macs:
+                    continue
+                seen_macs.add(d.mac)
+                registered = existing.get(d.mac)
+                found.append(DiscoveredDeviceOut(
+                    mac=d.mac,
+                    type=d.type,
+                    broadcast=d.broadcast,
+                    ip=d.last_known_ip or "",
+                    model=d.hw_model,
+                    miio_id=d.miio_id,
+                    tuya_device_id=d.tuya_device_id,
+                    tuya_local_key=d.tuya_local_key,
+                    tuya_product_id=d.tuya_product_id,
+                    is_registered=registered is not None,
+                    registered_name=registered.name or registered.hw_alias if registered else None,
+                ))
     return found
 
 @router.post("/devices", response_model=AdminDeviceOut, status_code=201)

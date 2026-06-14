@@ -71,6 +71,8 @@ class DiscoveredDeviceOut(BaseModel):
     tuya_device_id: str | None = None
     tuya_local_key: str | None = None
     tuya_product_id: str | None = None
+    is_registered: bool = False
+    registered_name: str | None = None
 
 
 class SetPowerRequest(BaseModel):
@@ -103,6 +105,7 @@ class SetNameRequest(BaseModel):
 
 class SetGroupRequest(BaseModel):
     group_name: str | None = None
+
 
 
 # ── Serialization helpers ─────────────────────────────────────────────────────

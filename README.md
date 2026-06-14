@@ -44,12 +44,11 @@ This token is required to access the admin panel at `/admin`.
 
 ### Adding Devices
 
-Devices and accounts are managed through the admin panel — no config files needed.
+Devices and accounts are managed through the admin panel at `/admin` — no config files needed.
 
-1. **Add an account** — TP-Link credentials for Kasa devices that require authentication (newer KLAP-based firmware)
-2. **Add a device** — MAC address, broadcast address, optional group name, optional account
+**Scan Network**: click *Scan* at the top of the admin panel to discover Kasa, MiIO, and Tuya devices on every local network interface. Results are grouped by subnet and show type, model, IP, and MAC. Click *+ Add* on any row to immediately register the device. Click the device card to open its detail panel and set a name, group, or credentials.
 
-**Scan Network** (recommended): click *Scan Network* in the Devices tab to auto-discover Kasa, MiIO, and Tuya devices on every local network interface. Results show type, model, MAC, IP, and broadcast address — click *+ Add* on any row to pre-fill the Add Device form.
+**Accounts**: open the `⋯` menu in the navbar to manage TP-Link accounts. Accounts are used by Kasa devices that require KLAP authentication (newer firmware).
 
 #### Finding your Kasa device MAC and credentials
 
@@ -123,7 +122,7 @@ smartplug-hub/
 │           ├── api.js       # Admin API fetch wrappers
 │           ├── auth.js      # Token login + sessionStorage
 │           ├── accounts.js  # Accounts CRUD UI
-│           └── devices.js   # Devices CRUD + outlets modal
+│           └── devices.js   # Device cards, scan results, detail panel
 └── pyproject.toml
 ```
 
