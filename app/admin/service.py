@@ -2,8 +2,8 @@
 
 import logging
 
-from ..core import AccountInUseError, mac_to_id, normalize_mac
-from ..db import Account, Database, Device as DeviceRow
+from ..core import mac_to_id, normalize_mac
+from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,8 @@ async def add_device(
     svc: DeviceService,
     *,
     group_name: str | None = None,
-    account_id: int | None = None,
+    kasa_username: str | None = None,
+    kasa_password: str | None = None,
     miio_token: str | None = None,
     miio_id: str | None = None,
     tuya_device_id: str | None = None,
@@ -30,7 +31,8 @@ async def add_device(
         type=device_type,
         broadcast=broadcast,
         group_name=group_name,
-        account_id=account_id,
+        kasa_username=kasa_username,
+        kasa_password=kasa_password,
         miio_token=miio_token,
         miio_id=miio_id,
         tuya_device_id=tuya_device_id,
@@ -38,8 +40,7 @@ async def add_device(
         tuya_product_id=tuya_product_id,
     )
     row = await db.add_device(row)
-    accounts = {a.id: a for a in await db.get_accounts() if a.id is not None}
-    svc.add_entry(row, accounts.get(account_id) if account_id else None, {})
+    svc.add_entry(row, {})
     logger.info("Device added: %s (%s)", row.id, row.mac)
     return row
 
@@ -64,6 +65,23 @@ async def set_device_group_name(
     logger.info("Device %s group set to %r", device_id, group_name)
 
 
+async def set_kasa_credentials(
+    device_id: str,
+    username: str | None,
+    password: str | None,
+    db: Database,
+    svc: DeviceService,
+) -> None:
+    await db.set_kasa_credentials(device_id, username, password)
+    row = await db.get_device(device_id)
+    if row:
+        entry = svc._devices.get(device_id)
+        outlet_names = entry.outlet_names if entry else {}
+        await svc.remove_entry(device_id)
+        svc.add_entry(row, outlet_names)
+    logger.info("Device %s kasa credentials updated", device_id)
+
+
 async def set_outlet_name(
     device_id: str, outlet_id: str, name: str, db: Database, svc: DeviceService
 ) -> None:
@@ -74,18 +92,3 @@ async def set_outlet_name(
         await db.set_outlet_name(device_id, outlet_id, name)
         svc.set_outlet_name(device_id, outlet_id, name)
     logger.info("Device %s outlet %s renamed to %r", device_id, outlet_id, name)
-
-
-async def add_account(account_type: str, username: str, password: str, db: Database) -> Account:
-    account = await db.add_account(Account(type=account_type, username=username, password=password))
-    logger.info("Account added: %s (%s)", account.username, account_type)
-    return account
-
-
-async def remove_account(account_id: int, db: Database, svc: DeviceService) -> None:
-    devices = await db.get_devices()
-    bound = [d for d in devices if d.account_id == account_id]
-    if bound:
-        raise AccountInUseError(f"Account {account_id} is used by {len(bound)} device(s)")
-    await db.remove_account(account_id)
-    logger.info("Account removed: %d", account_id)

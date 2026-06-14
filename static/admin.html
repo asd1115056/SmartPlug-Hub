@@ -6,6 +6,7 @@
   <title>SmartPlug Hub — Admin</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -29,222 +30,173 @@
 
 <!-- ══ Admin ══ -->
 <div id="adminView">
+
+  <!-- Navbar -->
   <nav class="navbar navbar-expand navbar-dark bg-dark border-bottom border-secondary">
     <div class="container">
       <span class="navbar-brand">
         <i class="bi bi-plug-fill text-success me-2"></i>SmartPlug Hub — Admin
       </span>
-      <div class="ms-auto d-flex align-items-center gap-2">
+      <div class="d-flex align-items-center gap-2">
         <a href="/" class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-house me-1"></i>Dashboard
         </a>
-        <button id="logoutBtn" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-box-arrow-right me-1"></i>Sign out
-        </button>
+        <div class="position-relative">
+          <button id="menuBtn" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-three-dots-vertical"></i>
+          </button>
+          <div id="menuDropdown" class="admin-dropdown">
+            <div id="logoutBtn" class="admin-dropdown-item danger">
+              <i class="bi bi-box-arrow-right"></i>Sign out
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </nav>
 
+  <!-- Main content -->
   <div class="container py-4">
-    <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-accounts" type="button" role="tab">
-          <i class="bi bi-person-badge me-2"></i>Accounts
+
+    <!-- Scan section -->
+    <div id="scanSection" class="scan-section mb-4">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <div class="fw-semibold">Scan Network</div>
+          <div class="text-muted small">Discover smart plugs on all local interfaces</div>
+        </div>
+        <button id="scanBtn" class="btn btn-primary btn-sm">
+          <i class="bi bi-radar me-1"></i>Scan
         </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-devices" type="button" role="tab">
-          <i class="bi bi-plug me-2"></i>Devices
-        </button>
-      </li>
-    </ul>
-
-    <div class="tab-content">
-
-      <!-- ── Accounts Tab ── -->
-      <div class="tab-pane fade show active" id="tab-accounts" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <h5 class="mb-0">Accounts</h5>
-            <p class="text-muted mb-0">Shared credentials for Kasa and MiIO.</p>
-          </div>
-          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAccountModal">
-            <i class="bi bi-plus-lg me-1"></i>Add Account
-          </button>
-        </div>
-        <div class="card">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0" id="accountsTable">
-              <thead class="table-dark">
-                <tr><th class="text-center" style="width:2.5rem">ID</th><th class="text-center" style="width:5rem">Type</th><th>Username</th><th></th></tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
       </div>
-
-      <!-- ── Devices Tab ── -->
-      <div class="tab-pane fade" id="tab-devices" role="tabpanel">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <h5 class="mb-0">Devices</h5>
-            <p class="text-muted mb-0">Manage registered smart plugs and power strips.</p>
-          </div>
-          <div class="d-flex gap-2">
-            <button id="scanBtn" class="btn btn-outline-secondary">
-              <i class="bi bi-radar me-1"></i>Scan Network
-            </button>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeviceModal">
-              <i class="bi bi-plus-lg me-1"></i>Add Device
-            </button>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" id="devicesTable">
-              <thead class="table-dark">
-                <tr>
-                  <th style="width:1%" class="text-center">Status</th>
-                  <th class="text-center">Type</th>
-                  <th>Name</th>
-                  <th>Group</th>
-                  <th class="text-center">Last IP</th>
-                  <th class="text-center">MAC</th>
-                  <th class="text-center">Outlets</th>
-                  <th></th>
-                </tr>
-            </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
+      <div id="scanResults" class="mt-3" hidden></div>
     </div>
+
+    <!-- Devices -->
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <span class="fw-semibold">Devices <span id="deviceCount" class="badge bg-secondary ms-1">0</span></span>
+      <input id="deviceFilter" type="search" class="form-control form-control-sm"
+        placeholder="Filter by name, MAC, group…" style="width:220px">
+    </div>
+    <div id="deviceCards" class="row g-3"></div>
+
   </div>
 </div>
 
-<!-- ══ Add Account Modal ══ -->
-<div class="modal fade" id="addAccountModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <form id="addAccountForm">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-person-badge me-2"></i>Add Account</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Type</label>
-            <select name="type" class="form-select" required>
-              <option value="kasa">Kasa</option>
-              <option value="miio">MiIO</option>
-              <option value="tuya">Tuya</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Username</label>
-            <input name="username" type="email" class="form-control" placeholder="user@example.com" required>
-          </div>
-          <div class="mb-0">
-            <label class="form-label fw-semibold">Password</label>
-            <input name="password" type="password" class="form-control" required>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Account</button>
-        </div>
-      </form>
+<!-- ══ Panel backdrop ══ -->
+<div id="panelBackdrop" class="panel-backdrop"></div>
+
+<!-- ══ Detail Panel ══ -->
+<div id="detailPanel" class="detail-panel">
+  <div class="panel-head">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <div id="panelName" class="fw-semibold fs-6"></div>
+        <div id="panelStatus" class="mt-1 small text-muted"></div>
+      </div>
+      <button id="panelClose" class="btn btn-sm btn-outline-secondary py-0 px-2">
+        <i class="bi bi-x-lg"></i>
+      </button>
     </div>
   </div>
-</div>
 
-<!-- ══ Add Device Modal ══ -->
-<div class="modal fade" id="addDeviceModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <form id="addDeviceForm">
-        <div class="modal-header">
-          <h5 class="modal-title"><i class="bi bi-plug me-2"></i>Add Device</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-sm-6">
-              <label class="form-label fw-semibold">Type</label>
-              <select name="type" id="deviceTypeSelect" class="form-select" required>
-                <option value="">—</option>
-                <option value="kasa">Kasa</option>
-                <option value="miio">MiIO</option>
-                <option value="tuya" hidden>Tuya</option>
-              </select>
-            </div>
-            <div class="col-sm-6">
-              <label class="form-label fw-semibold">Account</label>
-              <select name="account_id" id="accountSelect" class="form-select">
-                <option value="">— none —</option>
-              </select>
-            </div>
-            <div class="col-sm-6">
-              <label class="form-label fw-semibold">MAC</label>
-              <input name="mac" class="form-control" placeholder="AA:BB:CC:DD:EE:FF" required>
-            </div>
-            <div class="col-sm-6">
-              <label class="form-label fw-semibold">Broadcast</label>
-              <input name="broadcast" class="form-control" placeholder="192.168.1.255" required>
-            </div>
-            <div class="col-sm-6">
-              <label class="form-label fw-semibold">Group <span class="text-muted fw-normal">(optional)</span></label>
-              <input name="group_name" class="form-control" placeholder="Living room">
-            </div>
-            <div id="miioFields" class="col-12 row g-3 mb-0" hidden>
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">MiIO Token</label>
-                <input name="miio_token" id="miioToken" class="form-control font-monospace" placeholder="32-char hex">
-              </div>
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">MiIO Device ID</label>
-                <input name="miio_id" id="miioDeviceId" class="form-control" placeholder="123456789">
-              </div>
-            </div>
-            <div id="tuyaFields" class="col-12 row g-3 mb-0" hidden>
-              <input type="hidden" name="tuya_product_id" id="tuyaProductId">
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">Device ID <span class="text-muted fw-normal">(gwId)</span></label>
-                <input name="tuya_device_id" id="tuyaDeviceId" class="form-control font-monospace" placeholder="a3fb8b8a66d417…">
-              </div>
-              <div class="col-sm-6">
-                <label class="form-label fw-semibold">Local Key</label>
-                <input name="tuya_local_key" id="tuyaLocalKey" class="form-control font-monospace" placeholder="16-char key">
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Device</button>
-        </div>
-      </form>
+  <!-- Name + Group -->
+  <div class="panel-sec">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Name</label>
+      <input id="panelNameInput" class="form-control">
+    </div>
+    <div>
+      <label class="form-label fw-semibold">Group</label>
+      <input id="panelGroupInput" class="form-control">
     </div>
   </div>
-</div>
 
-<!-- ══ Outlets Modal ══ -->
-<div class="modal fade" id="outletsModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="outletsModalTitle"><i class="bi bi-diagram-3 me-2"></i>Outlets</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body" id="outletsModalBody"></div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
+  <!-- Info (read-only) -->
+  <div class="panel-sec">
+    <div class="panel-sec-title">Device Info</div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Model</span>
+      <span id="panelModel" class="panel-info-val"></span>
     </div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Type</span>
+      <span id="panelType"></span>
+    </div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">MAC</span>
+      <span id="panelMac" class="panel-info-val"></span>
+    </div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Last IP</span>
+      <span id="panelIp" class="panel-info-val"></span>
+    </div>
+  </div>
+
+  <!-- Tuya credentials (read-only) -->
+  <div id="panelTuya" class="panel-sec" hidden>
+    <div class="panel-sec-title">Tuya</div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Device ID</span>
+      <span id="panelTuyaDeviceId" class="panel-info-val font-monospace" style="word-break:break-all"></span>
+    </div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Local Key</span>
+      <span id="panelTuyaLocalKey" class="panel-info-val font-monospace" style="word-break:break-all"></span>
+    </div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Product ID</span>
+      <span id="panelTuyaProductId" class="panel-info-val"></span>
+    </div>
+  </div>
+
+  <!-- Kasa credentials (editable) -->
+  <div id="panelKasa" class="panel-sec" hidden>
+    <div class="panel-sec-title">Kasa</div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Username</label>
+      <input id="panelKasaUsername" type="email" class="form-control form-control-sm" autocomplete="off" placeholder="you@example.com">
+    </div>
+    <div>
+      <label class="form-label fw-semibold">Password</label>
+      <input id="panelKasaPassword" type="password" class="form-control form-control-sm" autocomplete="new-password">
+    </div>
+  </div>
+
+  <!-- MiIO credentials (read-only) -->
+  <div id="panelMiio" class="panel-sec" hidden>
+    <div class="panel-sec-title">MiIO</div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Token</span>
+      <span id="panelMiioToken" class="panel-info-val font-monospace" style="word-break:break-all"></span>
+    </div>
+    <div class="panel-info-row">
+      <span class="panel-info-lbl">Device ID</span>
+      <span id="panelMiioId" class="panel-info-val font-monospace"></span>
+    </div>
+  </div>
+
+  <!-- Outlets (strip only) -->
+  <div id="panelOutletsSec" class="panel-sec" hidden>
+    <div class="panel-sec-title">Outlets</div>
+    <div id="panelOutlets"></div>
+    <div class="text-muted small mt-2">
+      <i class="bi bi-info-circle me-1"></i>Outlet names saved with Save Changes below
+    </div>
+  </div>
+
+  <!-- Save -->
+  <div class="panel-sec">
+    <button id="panelSaveBtn" class="btn btn-primary btn-sm w-100">
+      <i class="bi bi-floppy me-1"></i>Save Changes
+    </button>
+  </div>
+
+  <!-- Delete -->
+  <div class="panel-sec">
+    <button id="panelDeleteBtn" class="btn btn-outline-danger btn-sm w-100">
+      <i class="bi bi-trash me-1"></i>Delete Device
+    </button>
   </div>
 </div>
 
@@ -269,46 +221,7 @@
 
 <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
 
-<!-- ══ Scan Network Modal ══ -->
-<div class="modal fade" id="scanModal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-radar me-2"></i>Scan Network</h5>
-        <div class="ms-auto d-flex gap-2 align-items-center">
-          <button id="scanRunBtn" class="btn btn-primary btn-sm">
-            <i class="bi bi-play-fill me-1"></i>Scan
-          </button>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-      </div>
-      <div class="modal-body p-0">
-        <div id="scanModalStatus" class="p-4 text-muted text-center" hidden></div>
-        <div class="table-responsive">
-          <table class="table table-hover table-sm align-middle mb-0" id="scanTable" hidden>
-            <thead class="table-dark">
-              <tr>
-                <th class="text-center" style="width:5rem">Type</th>
-                <th>Model</th>
-                <th>MAC</th>
-                <th class="text-center">IP</th>
-                <th class="text-center">Broadcast</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="scanTableBody"></tbody>
-          </table>
-        </div>
-        <nav id="scanPagination" hidden class="px-3 py-2 border-top d-flex justify-content-between align-items-center">
-          <span id="scanPageInfo" class="text-muted small"></span>
-          <ul class="pagination pagination-sm mb-0"></ul>
-        </nav>
-      </div>
-    </div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script type="module" src="/static/admin.js"></script>
+<script type="module" src="/static/admin.js?v=2"></script>
 </body>
 </html>

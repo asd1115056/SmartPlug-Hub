@@ -36,8 +36,9 @@ class AdminDeviceOut(BaseModel):
     mac: str
     type: str
     group_name: str | None
-    account_id: int | None
     broadcast: str
+    kasa_username: str | None
+    kasa_password: str | None
     miio_token: str | None
     miio_id: str | None
     tuya_device_id: str | None
@@ -53,12 +54,6 @@ class AdminDeviceOut(BaseModel):
     outlets: list[OutletOut]
 
 
-class AccountOut(BaseModel):
-    id: int
-    type: str
-    username: str
-
-
 # ── Request models ────────────────────────────────────────────────────────────
 
 class DiscoveredDeviceOut(BaseModel):
@@ -71,6 +66,8 @@ class DiscoveredDeviceOut(BaseModel):
     tuya_device_id: str | None = None
     tuya_local_key: str | None = None
     tuya_product_id: str | None = None
+    is_registered: bool = False
+    registered_name: str | None = None
 
 
 class SetPowerRequest(BaseModel):
@@ -83,7 +80,8 @@ class AddDeviceRequest(BaseModel):
     type: str
     broadcast: str
     group_name: str | None = None
-    account_id: int | None = None
+    kasa_username: str | None = None
+    kasa_password: str | None = None
     miio_token: str | None = None
     miio_id: str | None = None
     tuya_device_id: str | None = None
@@ -91,10 +89,9 @@ class AddDeviceRequest(BaseModel):
     tuya_product_id: str | None = None
 
 
-class AddAccountRequest(BaseModel):
-    type: str
-    username: str
-    password: str
+class SetKasaCredentialsRequest(BaseModel):
+    username: str | None = None
+    password: str | None = None
 
 
 class SetNameRequest(BaseModel):
@@ -103,6 +100,7 @@ class SetNameRequest(BaseModel):
 
 class SetGroupRequest(BaseModel):
     group_name: str | None = None
+
 
 
 # ── Serialization helpers ─────────────────────────────────────────────────────
@@ -126,7 +124,7 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
     state = entry.state
     return DeviceOut(
         id=entry.config.id,
-        name=entry.name or (state.hw_alias if state else None) or entry.config.mac,
+        name=entry.name or (state.hw_alias if state else None) or f"Unnamed ···{entry.config.mac[-4:]}",
         group_name=entry.group_name,
         type=entry.config.type,
         model=state.hw_model if state else None,
@@ -146,8 +144,9 @@ def build_admin_device_out(row: DeviceRow, entry: DeviceEntry | None) -> AdminDe
         mac=row.mac,
         type=row.type,
         group_name=row.group_name,
-        account_id=row.account_id,
         broadcast=row.broadcast,
+        kasa_username=row.kasa_username,
+        kasa_password=row.kasa_password,
         miio_token=row.miio_token,
         miio_id=row.miio_id,
         tuya_device_id=row.tuya_device_id,

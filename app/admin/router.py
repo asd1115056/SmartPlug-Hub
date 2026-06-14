@@ -1,24 +1,22 @@
-"""Admin API — device and account management."""
+"""Admin API — device management."""
 
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
 
 from ..backends.kasa import scan as kasa_scan
 from ..backends.miio import scan as miio_scan
 from ..backends.tuya import scan as tuya_scan
-from ..core import AccountInUseError, normalize_mac
+from ..core import normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
 from ..network import get_broadcast_addresses
 from ..schemas import (
-    AccountOut,
-    AddAccountRequest,
     AddDeviceRequest,
     AdminDeviceOut,
     DiscoveredDeviceOut,
     SetGroupRequest,
+    SetKasaCredentialsRequest,
     SetNameRequest,
     build_admin_device_out,
 )
@@ -51,43 +49,6 @@ async def login() -> dict:
     return {"ok": True}
 
 
-# ── Accounts ──────────────────────────────────────────────────────────────────
-
-@router.get("/accounts", response_model=list[AccountOut])
-async def list_accounts(db: Database = Depends(_db)) -> list[AccountOut]:
-    accounts = await db.get_accounts()
-    result = []
-    for a in accounts:
-        if a.id is not None:
-            result.append(AccountOut(id=a.id, type=a.type, username=a.username))
-    return result
-
-
-@router.post("/accounts", response_model=AccountOut, status_code=201)
-async def create_account(
-    body: AddAccountRequest,
-    db: Database = Depends(_db),
-) -> AccountOut:
-    try:
-        account = await service.add_account(body.type, body.username, body.password, db)
-    except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    assert account.id is not None
-    return AccountOut(id=account.id, type=account.type, username=account.username)
-
-
-@router.delete("/accounts/{account_id}", status_code=204)
-async def delete_account(
-    account_id: int,
-    db: Database = Depends(_db),
-    svc: DeviceService = Depends(_svc),
-) -> None:
-    try:
-        await service.remove_account(account_id, db, svc)
-    except AccountInUseError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-
-
 # ── Devices ───────────────────────────────────────────────────────────────────
 
 @router.get("/devices", response_model=list[AdminDeviceOut])
@@ -106,7 +67,8 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
     if not broadcasts:
         raise HTTPException(status_code=503, detail="No usable network interfaces found")
 
-    existing = {normalize_mac(d.mac) for d in await db.get_devices()}
+    existing_rows = await db.get_devices()
+    existing: dict[str, DeviceRow] = {normalize_mac(d.mac): d for d in existing_rows}
 
     results = await asyncio.gather(
         kasa_scan(broadcasts), miio_scan(broadcasts), tuya_scan(broadcasts),
@@ -118,20 +80,25 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
     for r in results:
         if isinstance(r, list):
             for d in r:
-                if d.mac not in existing and d.mac not in seen_macs:
-                    seen_macs.add(d.mac)
-                    found.append(DiscoveredDeviceOut(
-                        mac=d.mac,
-                        type=d.type,
-                        broadcast=d.broadcast,
-                        ip=d.last_known_ip or "",
-                        model=d.hw_model,
-                        miio_id=d.miio_id,
-                        tuya_device_id=d.tuya_device_id,
-                        tuya_local_key=d.tuya_local_key,
-                        tuya_product_id=d.tuya_product_id,
-                    ))
+                if d.mac in seen_macs:
+                    continue
+                seen_macs.add(d.mac)
+                registered = existing.get(d.mac)
+                found.append(DiscoveredDeviceOut(
+                    mac=d.mac,
+                    type=d.type,
+                    broadcast=d.broadcast,
+                    ip=d.last_known_ip or "",
+                    model=d.hw_model,
+                    miio_id=d.miio_id,
+                    tuya_device_id=d.tuya_device_id,
+                    tuya_local_key=d.tuya_local_key,
+                    tuya_product_id=d.tuya_product_id,
+                    is_registered=registered is not None,
+                    registered_name=registered.name or registered.hw_alias if registered else None,
+                ))
     return found
+
 
 @router.post("/devices", response_model=AdminDeviceOut, status_code=201)
 async def create_device(
@@ -143,7 +110,8 @@ async def create_device(
         row = await service.add_device(
             body.mac, body.type, body.broadcast, db, svc,
             group_name=body.group_name,
-            account_id=body.account_id,
+            kasa_username=body.kasa_username,
+            kasa_password=body.kasa_password,
             miio_token=body.miio_token,
             miio_id=body.miio_id,
             tuya_device_id=body.tuya_device_id,
@@ -187,6 +155,22 @@ async def set_device_name(
     row = await _require_device(device_id, db)
     await service.set_device_name(device_id, body.name, db, svc)
     row.name = body.name
+    return build_admin_device_out(row, svc._devices.get(device_id))
+
+
+@router.patch("/devices/{device_id}/kasa-credentials", response_model=AdminDeviceOut)
+async def set_kasa_credentials(
+    device_id: str,
+    body: SetKasaCredentialsRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    row = await _require_device(device_id, db)
+    if row.type != "kasa":
+        raise HTTPException(status_code=400, detail="Device is not a Kasa device")
+    await service.set_kasa_credentials(device_id, body.username, body.password, db, svc)
+    row = await db.get_device(device_id)
+    assert row is not None
     return build_admin_device_out(row, svc._devices.get(device_id))
 
 
