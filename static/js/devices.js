@@ -54,10 +54,82 @@ export function renderDevices(devices, searchQuery, activeGroup) {
     return
   }
 
-  container.innerHTML = `<div class="row g-3">${filtered.map(d => `
+  container.innerHTML = `<div class="row g-3 align-items-start">${filtered.map(d => `
     <div class="col-lg-4 col-md-6">
       ${_deviceCard(d)}
     </div>`).join('')}</div>`
+}
+
+function _protocolBadge(type) {
+  return `<span class="protocol-badge type-${esc(type)}">${esc(type)}</span>`
+}
+
+function _deviceHeader(d) {
+  const totalWatts = d.is_online ? _headerWatts(d) : null
+  const wattsHtml = totalWatts !== null
+    ? `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${_fmtWatts(totalWatts)}</div>`
+    : ''
+  const refreshBtn = !d.is_online
+    ? `<button class="btn btn-sm refresh-btn" data-device-id="${d.id}" title="Refresh">
+         <i class="bi bi-arrow-clockwise"></i>
+       </button>`
+    : ''
+  const abs = d.last_updated ? _fmtTime(d.last_updated) : ''
+  const timeLabel = d.is_online ? 'Last updated' : 'Last seen'
+  const timeHtml = d.last_updated
+    ? `<div style="font-size:.72rem;opacity:.4;margin-top:.1rem">
+         <span class="${d.is_online ? 'js-last-updated' : 'js-offline-ago'}"
+           data-ts="${d.last_updated}" title="${abs}">
+           ${timeLabel} ${_fmtAgo(d.last_updated)}
+         </span>
+       </div>`
+    : ''
+  const modelHtml = (d.model || d.type)
+    ? `<div style="font-size:.8rem;margin-top:.15rem;display:flex;align-items:center;gap:.4rem">
+         ${d.model ? `<span style="opacity:.8">${esc(d.model)}</span>` : ''}
+         ${_protocolBadge(d.type)}
+       </div>`
+    : ''
+
+  return `
+    <div class="card-header d-flex justify-content-between align-items-end">
+      <div>
+        <div class="fw-semibold">${esc(d.name)}</div>
+        ${modelHtml}
+        ${timeHtml}
+      </div>
+      <div class="d-flex flex-column align-items-end gap-1">
+        ${wattsHtml}
+        ${refreshBtn}
+      </div>
+    </div>`
+}
+
+function _deviceCard(d) {
+  const stateClass = d.is_online ? 'state-online' : 'state-offline'
+  const body = d.is_strip ? _outletList(d.id, d.outlets, d.is_online) : _singleControlRow(d)
+  return `
+    <div class="card device-card ${stateClass}" data-device-id="${d.id}">
+      ${_deviceHeader(d)}
+      <div class="card-body p-0">${body}</div>
+    </div>`
+}
+
+function _singleControlRow(d) {
+  const onClass      = d.is_on ? 'is-on' : ''
+  const action       = d.is_on ? 'off' : 'on'
+  const disabledAttr = d.is_online ? '' : 'disabled'
+  const hasWatts     = d.watts !== null && d.watts !== undefined
+  const wattsText    = hasWatts ? _fmtWatts(d.watts) : '—'
+  return `
+    <div class="control-row ${onClass}">
+      <span class="row-label">${esc(d.name)}</span>
+      <div class="d-flex align-items-center">
+        <span class="row-watts">${wattsText}</span>
+        <button class="toggle-switch ${onClass}"
+          data-device-id="${d.id}" data-action="${action}" ${disabledAttr}></button>
+      </div>
+    </div>`
 }
 
 function _fmtWatts(w) {
@@ -69,55 +141,6 @@ function _headerWatts(d) {
   if (d.outlets?.some(o => o.watts !== null && o.watts !== undefined))
     return d.outlets.reduce((s, o) => s + (o.watts ?? 0), 0)
   return null
-}
-
-function _deviceCard(d) {
-  const stateClass = d.is_online ? 'state-online' : 'state-offline'
-  const body = d.is_strip ? _outletList(d.id, d.outlets, d.is_online) : _mainToggle(d.id, d.is_on, d.is_online)
-  const refreshBtn = !d.is_online
-    ? `<button class="btn btn-sm refresh-btn" data-device-id="${d.id}" title="Refresh">
-         <i class="bi bi-arrow-clockwise"></i>
-       </button>`
-    : ''
-  const totalWatts = d.is_online ? _headerWatts(d) : null
-  const wattsHtml = totalWatts !== null
-    ? `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${_fmtWatts(totalWatts)}</div>`
-    : ''
-
-  return `
-    <div class="card device-card h-100 ${stateClass}" data-device-id="${d.id}">
-      <div class="card-header d-flex justify-content-between align-items-end">
-        <div>
-          <div class="fw-semibold">${esc(d.name)}</div>
-          ${d.model ? `<div class="device-model">${esc(d.model)}</div>` : ''}
-          ${_lastUpdatedHtml(d)}
-        </div>
-        <div class="d-flex flex-column align-items-end gap-1">
-          ${wattsHtml}
-          ${refreshBtn}
-        </div>
-      </div>
-      <div class="card-body p-0">${body}</div>
-    </div>`
-}
-
-function _mainToggle(deviceId, isOn, isOnline) {
-  const onClass      = isOn ? 'is-on' : ''
-  const action       = isOn ? 'off' : 'on'
-  const disabledAttr = isOnline ? '' : 'disabled'
-  return `
-    <div class="single-device-control">
-      <button class="toggle-switch ${onClass}"
-        data-device-id="${deviceId}" data-action="${action}" ${disabledAttr}></button>
-    </div>`
-}
-
-function _lastUpdatedHtml(d) {
-  if (!d.last_updated) return ''
-  const abs = _fmtTime(d.last_updated)
-  if (!d.is_online) return `
-    <div class="device-model"><span class="js-offline-ago" data-ts="${d.last_updated}" title="${abs}">Last seen ${_fmtAgo(d.last_updated)}</span></div>`
-  return `<div class="device-model"><span class="js-last-updated" data-ts="${d.last_updated}" title="${abs}">Last updated ${_fmtAgo(d.last_updated)}</span></div>`
 }
 
 function _fmtAgo(iso) {
@@ -164,13 +187,14 @@ function _outletList(deviceId, outlets, isOnline) {
     const wattsText = hasWatts ? _fmtWatts(o.watts) : '—'
     const wattsTip  = hasWatts ? '' : ' title="Power monitoring not supported for individual outlets"'
     return `
-      <div class="child-outlet ${onClass}">
-        <span class="outlet-name">
-          ${esc(o.name)}<span class="outlet-watts"${wattsTip}>${wattsText}</span>
-        </span>
-        <button class="toggle-switch ${onClass}"
-          data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
-          data-action="${action}" ${disabledAttr}></button>
+      <div class="control-row ${onClass}">
+        <span class="row-label">${esc(o.name)}</span>
+        <div class="d-flex align-items-center">
+          <span class="row-watts"${wattsTip}>${wattsText}</span>
+          <button class="toggle-switch ${onClass}"
+            data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
+            data-action="${action}" ${disabledAttr}></button>
+        </div>
       </div>`
   }).join('')
 }
