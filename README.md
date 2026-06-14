@@ -68,13 +68,17 @@ MiIO requires a 32-character hex token and a numeric device ID.
 
 #### Finding your Tuya device ID and local key
 
-Tuya requires a **Device ID** (gwId) and a **Local Key** (16-character encryption key). Both are available from the [Tuya IoT Platform](https://iot.tuya.com):
+Tuya requires a **Device ID** (gwId) and a **Local Key** (16-character encryption key).
 
-1. Log in and go to **Cloud → Development → your project → Devices**
-2. Find your device and copy the **Device ID**
-3. Click the device → **Device Logs** tab → copy the **Local Key**
+**Recommended**: use the tinytuya wizard — it fetches both automatically from the Tuya cloud:
 
-> **Note**: Tuya v3.4/v3.5 devices (most post-2021 hardware) do not respond to UDP broadcast scan — add them manually using the Device ID and Local Key obtained above.
+```bash
+uv run python -m tinytuya wizard
+```
+
+You will need a [Tuya IoT Platform](https://iot.tuya.com) developer account with an API Key and API Secret. The wizard writes `devices.json` containing the Device ID (`id`) and Local Key (`key`) for every device linked to your account.
+
+> **Note**: Scan Network pre-fills the Device ID from the UDP discovery response. The Local Key is never transmitted over the network — it must be retrieved via the wizard or the Tuya IoT Platform web UI.
 
 ## Architecture
 
@@ -148,7 +152,10 @@ Tuya devices use **local encrypted LAN protocol** via [tinytuya](https://github.
 - Each command opens a TCP connection to the device's last known IP, sends the encrypted payload, and closes
 - Protocol v3.5 with session key negotiation using the device's local key
 - Requires `tuya_device_id` (gwId) and `tuya_local_key` set on the device record
-- v3.4/v3.5 devices do not respond to UDP broadcast — the device must have a known IP
+
+### Scan Strategy (Tuya)
+
+Tuya scan sends an **encrypted UDP discovery broadcast** on ports 6666, 6667, and 7000 using tinytuya's hardcoded `udpkey`. All Tuya protocol versions (v3.1 through v3.5) respond to this broadcast. The response includes `gwId` (Device ID), `productKey`, and `version` — no credentials needed. The Local Key is not in the response and must be entered manually from the Tuya IoT Platform.
 
 ### Command Queue
 

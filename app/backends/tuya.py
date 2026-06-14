@@ -1,10 +1,17 @@
 """Tuya local-protocol backend — encrypted LAN control via tinytuya."""
 
 import asyncio
+import base64
+import json
 import logging
-from functools import partial
+import select
+import socket
+import struct
+import time
+from dataclasses import dataclass
 
 import tinytuya
+import tinytuya.scanner as _tuya_scanner
 
 from ..core import (
     DeviceBackend,
@@ -14,6 +21,7 @@ from ..core import (
     mac_to_id,
     normalize_mac,
 )
+from ..network import get_interface_pairs, mac_from_ip
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +29,30 @@ _TIMEOUT = 8
 _RETRIES = 2
 _RETRY_DELAY = 0.5
 
-# DPS IDs — verified against target device (category: dlq / 断路器)
-# DPS "1" is read-only physical position feedback; "12" is the remote control switch
-_DPS_SWITCH = "12"
-_DPS_VOLTAGE = "101"            # voltage in V (straight integer, e.g. 242 = 242V)
-_DPS_WATTS_CANDIDATES = ("9", "13", "15", "5")  # skip "19" (bytes) and "21" (bool)
+
+# ── Device support list ───────────────────────────────────────────────────────
+
+@dataclass
+class DpsProfile:
+    switch: str
+    phase_raw: str | None = None  # Raw DPS with V/A/W encoded as 8-byte big-endian
+
+
+# Keyed by product_id (= productKey in UDP response, stored in DeviceConfig.hw_model).
+# Only devices listed here are supported — probe() raises for unknown product_ids.
+SUPPORTED_DEVICES: dict[str, DpsProfile] = {
+    "eev4qfltav8wc87e": DpsProfile(switch="16", phase_raw="6"),  # Breaker (dlq) WIFI
+}
+
+
+def _get_profile(cfg: DeviceConfig) -> DpsProfile:
+    product_id = cfg.hw_model
+    if not product_id or product_id not in SUPPORTED_DEVICES:
+        raise DeviceOfflineError(
+            f"Unsupported Tuya product_id '{product_id}' for {cfg.mac} — "
+            "add it to SUPPORTED_DEVICES in tuya.py"
+        )
+    return SUPPORTED_DEVICES[product_id]
 
 
 class TuyaBackend(DeviceBackend):
@@ -39,8 +66,9 @@ class TuyaBackend(DeviceBackend):
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_credentials(cfg)
+        profile = _get_profile(cfg)
         try:
-            state = await asyncio.to_thread(_sync_probe, cfg, self.ip)
+            state = await asyncio.to_thread(_sync_probe, cfg, self.ip, profile)
             self.ip = cfg.last_known_ip or self.ip
             return state
         except DeviceOfflineError:
@@ -50,8 +78,9 @@ class TuyaBackend(DeviceBackend):
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         _require_credentials(cfg)
+        profile = _get_profile(cfg)
         try:
-            await asyncio.to_thread(_sync_set_power, cfg, self.ip, on)
+            await asyncio.to_thread(_sync_set_power, cfg, self.ip, on, profile)
         except DeviceOfflineError:
             raise
         except Exception as e:
@@ -63,27 +92,47 @@ class TuyaBackend(DeviceBackend):
 
 # ── Sync helpers (run in thread pool) ────────────────────────────────────────
 
-def _sync_probe(cfg: DeviceConfig, cached_ip: str | None) -> DeviceState:
+def _sync_probe(cfg: DeviceConfig, cached_ip: str | None, profile: DpsProfile) -> DeviceState:
     device = _make_device(cfg, cached_ip)
     result = device.status()
     _check_result(result)
     dps: dict = result.get("dps") or {}
-    is_on = bool(dps.get(_DPS_SWITCH, False))
-    watts = _extract_watts(dps)
+    is_on = bool(dps.get(profile.switch, False))
+    watts = _extract_watts(dps, profile)
     return DeviceState(
-        hw_alias=None,
-        hw_model=None,
-        hw_is_strip=False,
-        is_on=is_on,
-        children=[],
-        watts=watts,
+        hw_alias=None, hw_model=None, hw_is_strip=False,
+        is_on=is_on, children=[], watts=watts,
     )
 
 
-def _sync_set_power(cfg: DeviceConfig, cached_ip: str | None, on: bool) -> None:
+def _sync_set_power(cfg: DeviceConfig, cached_ip: str | None, on: bool, profile: DpsProfile) -> None:
     device = _make_device(cfg, cached_ip)
-    result = device.set_value(_DPS_SWITCH, on)
+    result = device.set_value(profile.switch, on)
     _check_result(result)
+
+
+def _extract_watts(dps: dict, profile: DpsProfile) -> float | None:
+    if not profile.phase_raw:
+        return None
+    raw_b64 = dps.get(profile.phase_raw)
+    if not isinstance(raw_b64, str):
+        return None
+    try:
+        return _decode_phase_a(raw_b64)[2]
+    except Exception:
+        return None
+
+
+def _decode_phase_a(raw_b64: str) -> tuple[float, float, float]:
+    """Decode 8-byte big-endian phase_a blob → (voltage V, current A, power W).
+
+    Format confirmed by HA core PR #63519 and tuya-local issue #1429.
+    """
+    raw = base64.b64decode(raw_b64)
+    voltage = struct.unpack(">H", raw[0:2])[0] / 10.0
+    current = struct.unpack(">I", b"\x00" + raw[2:5])[0] / 1000.0
+    power_kw = struct.unpack(">I", b"\x00" + raw[5:8])[0] / 1000.0
+    return voltage, current, power_kw * 1000.0
 
 
 def _make_device(cfg: DeviceConfig, cached_ip: str | None) -> tinytuya.Device:
@@ -111,23 +160,6 @@ def _check_result(result: dict | None) -> None:
         raise DeviceOfflineError(f"Tuya error {code}: {err}")
 
 
-def _extract_watts(dps: dict) -> float | None:
-    for key in _DPS_WATTS_CANDIDATES:
-        val = dps.get(key)
-        # Skip bool and non-numeric types — bool is a subclass of int so check first
-        if val is None or isinstance(val, bool) or isinstance(val, (bytes, str)):
-            continue
-        try:
-            w = float(val)
-            if w == 0:
-                continue
-            # Some devices report in tenths of a watt
-            return w / 10.0 if w > 2000 else w
-        except (TypeError, ValueError):
-            pass
-    return None
-
-
 # ── Credential validation ─────────────────────────────────────────────────────
 
 def _require_credentials(cfg: DeviceConfig) -> None:
@@ -139,28 +171,89 @@ def _require_credentials(cfg: DeviceConfig) -> None:
 
 # ── Network scan ──────────────────────────────────────────────────────────────
 
-async def scan(broadcasts: list[str]) -> list[DeviceConfig]:
-    """Discover Tuya devices via UDP broadcast (v3.1/v3.3 only)."""
-    return await asyncio.to_thread(_sync_scan, broadcasts)
+_UDP_PORTS = (6666, 6667, 7000)
+_SCAN_TIMEOUT = 5.0
 
 
-def _sync_scan(broadcasts: list[str]) -> list[DeviceConfig]:
-    raw = tinytuya.deviceScan(verbose=False, maxretry=6, poll=False)
-    results: list[DeviceConfig] = []
-    for ip, info in raw.items():
-        mac = normalize_mac(info.get("mac", ""))
-        if not mac:
-            continue
-        version = str(info.get("version", "3.1"))
-        results.append(DeviceConfig(
-            id=mac_to_id(mac),
-            mac=mac,
-            type="tuya",
-            broadcast=broadcasts[0] if broadcasts else "255.255.255.255",
-            last_known_ip=ip,
-            tuya_device_id=info.get("gwId"),
-            tuya_local_key=None,    # not available from broadcast
-            hw_model=info.get("productKey"),
-        ))
-    return results
+async def scan(broadcasts: list[str], timeout: float = _SCAN_TIMEOUT) -> list[DeviceConfig]:
+    """Discover Tuya devices via encrypted UDP discovery on all local interfaces."""
+    iface_pairs = get_interface_pairs()
+    seen: dict[str, DeviceConfig] = {}
+    for cfg in await asyncio.to_thread(_sync_discover, iface_pairs, timeout):
+        seen.setdefault(cfg.mac, cfg)
+    return list(seen.values())
+
+
+def _sync_discover(iface_pairs: list[tuple[str, str]], timeout: float) -> list[DeviceConfig]:
+    own_ips = {local_ip for local_ip, _ in iface_pairs}
+    socks: list[socket.socket] = []
+    for port in _UDP_PORTS:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("0.0.0.0", port))
+        s.setblocking(False)
+        socks.append(s)
+
+    _tuya_scanner.send_discovery_request(
+        {local_ip: {"broadcast": brd} for local_ip, brd in iface_pairs}
+    )
+
+    found: dict[str, DeviceConfig] = {}
+    deadline = time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            ready, _, _ = select.select(socks, [], [], max(0.0, remaining))
+            for s in ready:
+                try:
+                    data, (ip, _) = s.recvfrom(4096)
+                except OSError:
+                    continue
+                if ip in own_ips or ip in found:
+                    continue
+                payload = _decode_broadcast(data)
+                if not payload:
+                    continue
+                gwid = payload.get("gwId") or payload.get("devId")
+                if not gwid:
+                    continue
+                mac = mac_from_ip(ip)
+                if not mac:
+                    continue
+                mac = normalize_mac(mac)
+                found[ip] = DeviceConfig(
+                    id=mac_to_id(mac), mac=mac, type="tuya",
+                    broadcast=_iface_broadcast_for(ip, iface_pairs),
+                    last_known_ip=ip,
+                    tuya_device_id=gwid,
+                    hw_model=payload.get("productKey"),
+                )
+    finally:
+        for s in socks:
+            s.close()
+
+    return list(found.values())
+
+
+def _decode_broadcast(data: bytes) -> dict | None:
+    try:
+        msg = tinytuya.unpack_message(data, hmac_key=tinytuya.udpkey)
+        return json.loads(msg.payload)
+    except Exception:
+        pass
+    try:
+        # fallback for legacy v3.1 plaintext format
+        return json.loads(_tuya_scanner.decrypt_udp(data))
+    except Exception:
+        return None
+
+
+def _iface_broadcast_for(ip: str, iface_pairs: list[tuple[str, str]]) -> str:
+    """Return broadcast of the interface subnet that contains ip."""
+    import ipaddress
+    ip_int = int(ipaddress.IPv4Address(ip))
+    for local_ip, broadcast in iface_pairs:
+        if int(ipaddress.IPv4Address(local_ip)) <= ip_int <= int(ipaddress.IPv4Address(broadcast)):
+            return broadcast
+    return iface_pairs[0][1] if iface_pairs else "255.255.255.255"
 

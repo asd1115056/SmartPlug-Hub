@@ -6,8 +6,8 @@ import subprocess
 import time
 
 
-def get_broadcast_addresses() -> list[str]:
-    """Return directed broadcast address for every active non-loopback IPv4 interface."""
+def get_interface_pairs() -> list[tuple[str, str]]:
+    """Return (local_ip, broadcast) for every active non-loopback IPv4 interface."""
     result = []
     try:
         out = subprocess.check_output(
@@ -17,18 +17,21 @@ def get_broadcast_addresses() -> list[str]:
         )
     except (subprocess.SubprocessError, FileNotFoundError):
         return result
-
     for line in out.splitlines():
         m = re.search(r"inet\s+(\S+)\s+brd\s+(\S+)", line)
         if not m:
             continue
-        ip_str = m.group(1).split("/")[0]
+        local_ip = m.group(1).split("/")[0]
         broadcast = m.group(2)
-        # skip loopback (127.x) and link-local (169.254.x)
-        if ip_str.startswith("127.") or ip_str.startswith("169.254."):
+        if local_ip.startswith("127.") or local_ip.startswith("169.254."):
             continue
-        result.append(broadcast)
+        result.append((local_ip, broadcast))
     return result
+
+
+def get_broadcast_addresses() -> list[str]:
+    """Return directed broadcast address for every active non-loopback IPv4 interface."""
+    return [brd for _, brd in get_interface_pairs()]
 
 
 def mac_from_ip(ip: str) -> str | None:
