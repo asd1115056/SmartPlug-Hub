@@ -50,13 +50,16 @@ class DeviceState:
 class DeviceConfig:
     id: str
     mac: str
-    type: str           # "kasa" | "miio"
+    type: str           # "kasa" | "miio" | "tuya"
     broadcast: str
     last_known_ip: str | None
     username: str | None = None     # Kasa
     password: str | None = None     # Kasa
     miio_token: str | None = None
     miio_id: str | None = None
+    tuya_device_id: str | None = None
+    tuya_local_key: str | None = None
+    tuya_product_id: str | None = None
     hw_model: str | None = None     # populated during scan; None for stored configs
 
 

@@ -1,6 +1,6 @@
 # SmartPlug Hub
 
-A web-based controller for smart plugs and power strips. Supports multiple protocols (Kasa, MiIO) through a unified API and admin panel.
+A web-based controller for smart plugs and power strips. Supports multiple protocols (Kasa, MiIO, Tuya) through a unified API and admin panel.
 
 ## Requirements
 
@@ -49,7 +49,7 @@ Devices and accounts are managed through the admin panel — no config files nee
 1. **Add an account** — TP-Link credentials for Kasa devices that require authentication (newer KLAP-based firmware)
 2. **Add a device** — MAC address, broadcast address, optional group name, optional account
 
-**Scan Network** (recommended): click *Scan Network* in the Devices tab to auto-discover all Kasa and MiIO devices on every local network interface. Results show type, model, MAC, IP, and broadcast address — click *+ Add* on any row to pre-fill the Add Device form.
+**Scan Network** (recommended): click *Scan Network* in the Devices tab to auto-discover Kasa, MiIO, and Tuya devices on every local network interface. Results show type, model, MAC, IP, and broadcast address — click *+ Add* on any row to pre-fill the Add Device form.
 
 #### Finding your Kasa device MAC and credentials
 
@@ -66,6 +66,20 @@ MiIO requires a 32-character hex token and a numeric device ID.
 - **Token**: visible in plaintext on **unprovisioned** devices via UDP discovery. For already-provisioned devices (token shows as `ffffffffffffffffffffffffffffffff`), use [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) to retrieve it.
 - **Device ID**: returned alongside the token during discovery.
 
+#### Finding your Tuya device ID and local key
+
+Tuya requires a **Device ID** (gwId) and a **Local Key** (16-character encryption key).
+
+**Recommended**: use the tinytuya wizard — it fetches both automatically from the Tuya cloud:
+
+```bash
+uv run python -m tinytuya wizard
+```
+
+You will need a [Tuya IoT Platform](https://iot.tuya.com) developer account with an API Key and API Secret. The wizard writes `devices.json` containing the Device ID (`id`) and Local Key (`key`) for every device linked to your account.
+
+> **Note**: Scan Network pre-fills the Device ID from the UDP discovery response. The Local Key is never transmitted over the network — it must be retrieved via the wizard or the Tuya IoT Platform web UI.
+
 ## Architecture
 
 ### Module Structure
@@ -75,7 +89,8 @@ smartplug-hub/
 ├── app/
 │   ├── backends/
 │   │   ├── kasa.py          # Kasa backend — persistent TCP, reconnects on demand
-│   │   └── miio.py          # MiIO backend — stateless UDP
+│   │   ├── miio.py          # MiIO backend — stateless UDP
+│   │   └── tuya.py          # Tuya backend — local encrypted LAN (tinytuya)
 │   ├── admin/
 │   │   ├── auth.py          # Bearer token authentication
 │   │   ├── router.py        # Admin API routes
@@ -129,6 +144,18 @@ MiIO devices use **stateless UDP** — each command is an independent encrypted 
 - Every command opens a UDP socket, sends the request, and closes immediately
 - On first contact: try last known IP → broadcast discover
 - On failure: mark offline (use `POST /refresh` to trigger rediscovery)
+
+### Connection Strategy (Tuya)
+
+Tuya devices use **local encrypted LAN protocol** via [tinytuya](https://github.com/jasonacox/tinytuya):
+
+- Each command opens a TCP connection to the device's last known IP, sends the encrypted payload, and closes
+- Protocol v3.5 with session key negotiation using the device's local key
+- Requires `tuya_device_id` (gwId) and `tuya_local_key` set on the device record
+
+### Scan Strategy (Tuya)
+
+Tuya scan sends an **encrypted UDP discovery broadcast** on ports 6666, 6667, and 7000 using tinytuya's hardcoded `udpkey`. All Tuya protocol versions (v3.1 through v3.5) respond to this broadcast. The response includes `gwId` (Device ID), `productKey`, and `version` — no credentials needed. The Local Key is not in the response and must be entered manually from the Tuya IoT Platform.
 
 ### Command Queue
 

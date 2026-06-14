@@ -111,12 +111,20 @@ const accountSel      = document.getElementById('accountSelect')
 const deviceTypeSel   = document.getElementById('deviceTypeSelect')
 const miioToken       = document.getElementById('miioToken')
 const miioDeviceId    = document.getElementById('miioDeviceId')
+const tuyaDeviceId    = document.getElementById('tuyaDeviceId')
+const tuyaLocalKey    = document.getElementById('tuyaLocalKey')
+const tuyaProductId   = document.getElementById('tuyaProductId')
 
 function _applyDeviceType(type) {
   const isMiio = type === 'miio'
+  const isTuya = type === 'tuya'
   document.getElementById('miioFields').hidden = !isMiio
   miioToken.required = isMiio
   miioDeviceId.required = isMiio
+  document.getElementById('tuyaFields').hidden = !isTuya
+  tuyaDeviceId.required = isTuya
+  tuyaLocalKey.required = isTuya
+  if (!isTuya) tuyaProductId.value = ''
 }
 
 deviceTypeSel.addEventListener('change', () => _applyDeviceType(deviceTypeSel.value))
@@ -125,6 +133,7 @@ accountSel.addEventListener('change', () => {
   const type = accountSel.options[accountSel.selectedIndex]?.dataset.type
   if (type) { deviceTypeSel.value = type; _applyDeviceType(type) }
 })
+
 
 document.getElementById('addDeviceForm').addEventListener('submit', async e => {
   e.preventDefault()
@@ -136,6 +145,9 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
       broadcast: f.broadcast.value, account_id: accountId,
       group_name: f.group_name.value || null,
       miio_token: f.miio_token?.value || null, miio_id: f.miio_id?.value || null,
+      tuya_device_id: f.tuya_device_id?.value || null,
+      tuya_local_key: f.tuya_local_key?.value || null,
+      tuya_product_id: f.tuya_product_id?.value || null,
     })
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     f.reset()
@@ -271,7 +283,11 @@ function _renderScanPage() {
         data-mac="${esc(d.mac)}"
         data-type="${esc(d.type)}"
         data-broadcast="${esc(d.broadcast)}"
-        data-miio-id="${esc(d.miio_id ?? '')}">
+        data-model="${esc(d.model ?? '')}"
+        data-miio-id="${esc(d.miio_id ?? '')}"
+        data-tuya-device-id="${esc(d.tuya_device_id ?? '')}"
+        data-tuya-local-key="${esc(d.tuya_local_key ?? '')}"
+        data-tuya-product-id="${esc(d.tuya_product_id ?? '')}">
         <i class="bi bi-plus-lg me-1"></i>Add
       </button>
     </td>
@@ -332,7 +348,7 @@ scanRunBtn.addEventListener('click', runScan)
 document.getElementById('scanTable').addEventListener('click', e => {
   const btn = e.target.closest('.js-scan-add')
   if (!btn) return
-  const { mac, type, broadcast, miioId } = btn.dataset
+  const { mac, type, broadcast, miioId, tuyaDeviceId: devId, tuyaLocalKey: localKey } = btn.dataset
 
   const form = document.getElementById('addDeviceForm')
   form.querySelector('[name="mac"]').value = fmtMac(mac)
@@ -349,6 +365,11 @@ document.getElementById('scanTable').addEventListener('click', e => {
   accountSel.dispatchEvent(new Event('change'))
 
   if (type === 'miio' && miioId) miioDeviceId.value = miioId
+  if (type === 'tuya') {
+    if (devId) tuyaDeviceId.value = devId
+    if (localKey) tuyaLocalKey.value = localKey
+    tuyaProductId.value = btn.dataset.tuyaProductId || ''
+  }
 
   scanModal.hide()
   bootstrap.Modal.getOrCreateInstance(document.getElementById('addDeviceModal')).show()

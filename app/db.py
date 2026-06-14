@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class Account(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    type: str                           # "kasa" | "miio"
+    type: str                           # "kasa" | "miio" | "tuya"
     username: str
     password: str
 
@@ -24,7 +24,7 @@ class Device(SQLModel, table=True):
     id: str = Field(primary_key=True)   # 8-char mac hash
     mac: str = Field(unique=True, index=True)
     account_id: int | None = Field(default=None, foreign_key="account.id")
-    type: str                           # "kasa" | "miio"
+    type: str                           # "kasa" | "miio" | "tuya"
     broadcast: str
     group_name: str | None = None
 
@@ -34,6 +34,11 @@ class Device(SQLModel, table=True):
     # MiIO connection credentials
     miio_token: str | None = None
     miio_id: str | None = None
+
+    # Tuya connection credentials
+    tuya_device_id: str | None = None     # gwId from Tuya IoT Platform
+    tuya_local_key: str | None = None     # 16-char local encryption key
+    tuya_product_id: str | None = None    # product_id → DPS profile lookup
 
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from ..backends.kasa import scan as kasa_scan
 from ..backends.miio import scan as miio_scan
+from ..backends.tuya import scan as tuya_scan
 from ..core import AccountInUseError, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
@@ -108,7 +109,8 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
     existing = {normalize_mac(d.mac) for d in await db.get_devices()}
 
     results = await asyncio.gather(
-        kasa_scan(broadcasts), miio_scan(broadcasts), return_exceptions=True
+        kasa_scan(broadcasts), miio_scan(broadcasts), tuya_scan(broadcasts),
+        return_exceptions=True,
     )
 
     seen_macs: set[str] = set()
@@ -125,9 +127,11 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
                         ip=d.last_known_ip or "",
                         model=d.hw_model,
                         miio_id=d.miio_id,
+                        tuya_device_id=d.tuya_device_id,
+                        tuya_local_key=d.tuya_local_key,
+                        tuya_product_id=d.tuya_product_id,
                     ))
     return found
-
 
 @router.post("/devices", response_model=AdminDeviceOut, status_code=201)
 async def create_device(
@@ -142,6 +146,9 @@ async def create_device(
             account_id=body.account_id,
             miio_token=body.miio_token,
             miio_id=body.miio_id,
+            tuya_device_id=body.tuya_device_id,
+            tuya_local_key=body.tuya_local_key,
+            tuya_product_id=body.tuya_product_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))

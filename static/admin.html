@@ -141,6 +141,7 @@
             <select name="type" class="form-select" required>
               <option value="kasa">Kasa</option>
               <option value="miio">MiIO</option>
+              <option value="tuya">Tuya</option>
             </select>
           </div>
           <div class="mb-3">
@@ -178,6 +179,7 @@
                 <option value="">—</option>
                 <option value="kasa">Kasa</option>
                 <option value="miio">MiIO</option>
+                <option value="tuya" hidden>Tuya</option>
               </select>
             </div>
             <div class="col-sm-6">
@@ -206,6 +208,17 @@
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">MiIO Device ID</label>
                 <input name="miio_id" id="miioDeviceId" class="form-control" placeholder="123456789">
+              </div>
+            </div>
+            <div id="tuyaFields" class="col-12 row g-3 mb-0" hidden>
+              <input type="hidden" name="tuya_product_id" id="tuyaProductId">
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">Device ID <span class="text-muted fw-normal">(gwId)</span></label>
+                <input name="tuya_device_id" id="tuyaDeviceId" class="form-control font-monospace" placeholder="a3fb8b8a66d417…">
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">Local Key</label>
+                <input name="tuya_local_key" id="tuyaLocalKey" class="form-control font-monospace" placeholder="16-char key">
               </div>
             </div>
           </div>
