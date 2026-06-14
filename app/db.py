@@ -129,13 +129,13 @@ class Database:
                 await session.commit()
 
     async def set_kasa_credentials(
-        self, device_id: str, username: str | None, password: str | None
+        self, device_id: str, kasa_username: str | None, kasa_password: str | None
     ) -> None:
         async with AsyncSession(self._engine) as session:
             device = await session.get(Device, device_id)
             if device:
-                device.kasa_username = username
-                device.kasa_password = password
+                device.kasa_username = kasa_username
+                device.kasa_password = kasa_password
                 session.add(device)
                 await session.commit()
 

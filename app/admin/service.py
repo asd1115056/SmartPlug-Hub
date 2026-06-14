@@ -67,12 +67,12 @@ async def set_device_group_name(
 
 async def set_kasa_credentials(
     device_id: str,
-    username: str | None,
-    password: str | None,
+    kasa_username: str | None,
+    kasa_password: str | None,
     db: Database,
     svc: DeviceService,
 ) -> None:
-    await db.set_kasa_credentials(device_id, username, password)
+    await db.set_kasa_credentials(device_id, kasa_username, kasa_password)
     row = await db.get_device(device_id)
     if row:
         entry = svc._devices.get(device_id)

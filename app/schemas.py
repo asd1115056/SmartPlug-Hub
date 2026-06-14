@@ -90,8 +90,8 @@ class AddDeviceRequest(BaseModel):
 
 
 class SetKasaCredentialsRequest(BaseModel):
-    username: str | None = None
-    password: str | None = None
+    kasa_username: str | None = None
+    kasa_password: str | None = None
 
 
 class SetMiioCredentialsRequest(BaseModel):

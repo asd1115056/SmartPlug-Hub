@@ -204,7 +204,7 @@ async def set_kasa_credentials(
     row = await _require_device(device_id, db)
     if row.type != "kasa":
         raise HTTPException(status_code=400, detail="Device is not a Kasa device")
-    await service.set_kasa_credentials(device_id, body.username, body.password, db, svc)
+    await service.set_kasa_credentials(device_id, body.kasa_username, body.kasa_password, db, svc)
     row = await db.get_device(device_id)
     assert row is not None
     return build_admin_device_out(row, svc._devices.get(device_id))
