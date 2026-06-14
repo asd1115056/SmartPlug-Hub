@@ -46,10 +46,6 @@
             <i class="bi bi-three-dots-vertical"></i>
           </button>
           <div id="menuDropdown" class="admin-dropdown">
-            <div id="accountsBtn" class="admin-dropdown-item">
-              <i class="bi bi-person-badge"></i>Accounts
-            </div>
-            <div class="admin-dropdown-divider"></div>
             <div id="logoutBtn" class="admin-dropdown-item danger">
               <i class="bi bi-box-arrow-right"></i>Sign out
             </div>
@@ -154,6 +150,19 @@
     </div>
   </div>
 
+  <!-- Kasa credentials (editable) -->
+  <div id="panelKasa" class="panel-sec" hidden>
+    <div class="panel-sec-title">Kasa</div>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Username</label>
+      <input id="panelKasaUsername" type="email" class="form-control form-control-sm" autocomplete="off" placeholder="you@example.com">
+    </div>
+    <div>
+      <label class="form-label fw-semibold">Password</label>
+      <input id="panelKasaPassword" type="password" class="form-control form-control-sm" autocomplete="new-password">
+    </div>
+  </div>
+
   <!-- MiIO credentials (read-only) -->
   <div id="panelMiio" class="panel-sec" hidden>
     <div class="panel-sec-title">MiIO</div>
@@ -188,37 +197,6 @@
     <button id="panelDeleteBtn" class="btn btn-outline-danger btn-sm w-100">
       <i class="bi bi-trash me-1"></i>Delete Device
     </button>
-  </div>
-</div>
-
-<!-- ══ Accounts Modal ══ -->
-<div class="modal fade" id="accountsModal" tabindex="-1">
-  <div class="modal-dialog" style="max-width:480px">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-person-badge me-2"></i>Accounts</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div id="accountsList" class="px-4 pt-3 pb-2"></div>
-        <div class="border-top border-secondary px-4 py-3">
-          <div class="panel-sec-title mb-2">Add Account</div>
-          <form id="addAccountForm">
-            <div class="d-flex gap-2 flex-wrap">
-              <select name="type" class="form-select form-select-sm" style="width:90px;flex-shrink:0" required>
-                <option value="kasa">kasa</option>
-                <option value="miio">miio</option>
-              </select>
-              <input name="username" type="email" class="form-control form-control-sm" placeholder="Username" style="flex:1;min-width:130px" required>
-              <input name="password" type="password" class="form-control form-control-sm" placeholder="Password" style="flex:1;min-width:100px" required>
-              <button type="submit" class="btn btn-sm btn-primary flex-shrink-0">
-                <i class="bi bi-plus-lg"></i>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 

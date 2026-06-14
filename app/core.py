@@ -17,13 +17,6 @@ class DeviceNotFoundError(DeviceError):
     """device_id does not exist in the runtime registry."""
 
 
-class AccountError(Exception):
-    """Base for account-level errors."""
-
-class AccountInUseError(AccountError):
-    """Removing an account that still has devices bound to it."""
-
-
 # ── Runtime models (RAM only) ─────────────────────────────────────────────────
 
 @dataclass

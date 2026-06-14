@@ -202,6 +202,16 @@ export function fillDetailPanel(device) {
   document.getElementById('panelMac').textContent = _formatMac(device.mac)
   document.getElementById('panelIp').textContent = device.last_known_ip ?? '—'
 
+  // Kasa credentials (editable)
+  const kasaSec = document.getElementById('panelKasa')
+  if (device.type === 'kasa') {
+    document.getElementById('panelKasaUsername').value = device.kasa_username ?? ''
+    document.getElementById('panelKasaPassword').value = device.kasa_password ?? ''
+    kasaSec.hidden = false
+  } else {
+    kasaSec.hidden = true
+  }
+
   // Tuya credentials (read-only)
   const tuyaSec = document.getElementById('panelTuya')
   if (device.type === 'tuya') {

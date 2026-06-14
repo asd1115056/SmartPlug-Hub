@@ -1,6 +1,5 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
-import { loadAccounts } from './js/admin/accounts.js'
 import { renderDeviceCards, renderScanResults, fillDetailPanel, confirmDelete } from './js/admin/devices.js'
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -10,21 +9,20 @@ let _activeDeviceId = null
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
-const loginView   = document.getElementById('loginView')
-const adminView   = document.getElementById('adminView')
-const loginBtn    = document.getElementById('loginBtn')
-const loginErr    = document.getElementById('loginErr')
-const tokenInput  = document.getElementById('tokenInput')
-const logoutBtn   = document.getElementById('logoutBtn')
-const menuBtn     = document.getElementById('menuBtn')
+const loginView    = document.getElementById('loginView')
+const adminView    = document.getElementById('adminView')
+const loginBtn     = document.getElementById('loginBtn')
+const loginErr     = document.getElementById('loginErr')
+const tokenInput   = document.getElementById('tokenInput')
+const logoutBtn    = document.getElementById('logoutBtn')
+const menuBtn      = document.getElementById('menuBtn')
 const menuDropdown = document.getElementById('menuDropdown')
-const accountsBtn = document.getElementById('accountsBtn')
-const scanBtn     = document.getElementById('scanBtn')
+const scanBtn      = document.getElementById('scanBtn')
 const deviceFilter = document.getElementById('deviceFilter')
-const panelBackdrop = document.getElementById('panelBackdrop')
-const detailPanel   = document.getElementById('detailPanel')
-const panelClose    = document.getElementById('panelClose')
-const panelSaveBtn  = document.getElementById('panelSaveBtn')
+const panelBackdrop  = document.getElementById('panelBackdrop')
+const detailPanel    = document.getElementById('detailPanel')
+const panelClose     = document.getElementById('panelClose')
+const panelSaveBtn   = document.getElementById('panelSaveBtn')
 const panelDeleteBtn = document.getElementById('panelDeleteBtn')
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -62,7 +60,7 @@ function showLogin(err) {
 function showAdmin() {
   loginView.style.display = 'none'
   adminView.style.display = 'block'
-  loadAll()
+  loadDevices()
 }
 
 function onUnauth() {
@@ -102,43 +100,6 @@ menuBtn.addEventListener('click', e => {
 document.addEventListener('click', closeMenu)
 menuDropdown.addEventListener('click', e => e.stopPropagation())
 
-accountsBtn.addEventListener('click', () => {
-  closeMenu()
-  bootstrap.Modal.getOrCreateInstance(document.getElementById('accountsModal')).show()
-})
-
-// ── Accounts modal ────────────────────────────────────────────────────────────
-
-document.getElementById('accountsModal').addEventListener('show.bs.modal', () => {
-  loadAccounts(onUnauth)
-})
-
-document.getElementById('accountsList').addEventListener('click', async e => {
-  const btn = e.target.closest('.js-delete-account')
-  if (!btn) return
-  if (!await confirmDelete('Delete this account?')) return
-  try {
-    await adminApi.deleteAccount(btn.dataset.id)
-    flash('Account deleted')
-    await loadAccounts(onUnauth)
-  } catch (err) {
-    if (err.status !== 401) flash(err.message, false)
-  }
-})
-
-document.getElementById('addAccountForm').addEventListener('submit', async e => {
-  e.preventDefault()
-  const f = e.target
-  try {
-    await adminApi.addAccount({ type: f.type.value, username: f.username.value, password: f.password.value })
-    f.reset()
-    flash('Account added')
-    await loadAccounts(onUnauth)
-  } catch (err) {
-    if (err.status !== 401) flash(err.message, false)
-  }
-})
-
 // ── Devices ───────────────────────────────────────────────────────────────────
 
 async function loadDevices() {
@@ -173,7 +134,6 @@ scanBtn.addEventListener('click', async () => {
     const discovered = await adminApi.scanNetwork()
     renderScanResults(discovered, handleScanAdd)
   } catch (err) {
-    const resultsEl = document.getElementById('scanResults')
     resultsEl.innerHTML = `<p class="text-danger mb-0 mt-2">${esc(err.message || 'Scan failed')}</p>`
     resultsEl.hidden = false
   } finally {
@@ -197,7 +157,6 @@ async function handleScanAdd(deviceData) {
     flash('Device added')
     await loadDevices()
     openPanel(row.id)
-    // Mark as added in scan results
     const btn = document.querySelector(`.js-scan-add[data-mac="${deviceData.mac}"]`)
     if (btn) {
       const scanRow = btn.closest('.scan-row')
@@ -265,6 +224,16 @@ panelSaveBtn.addEventListener('click', async () => {
       await adminApi.setDeviceGroup(_activeDeviceId, newGroup)
     }
 
+    // Kasa credentials (kasa only)
+    const kasaSec = document.getElementById('panelKasa')
+    if (!kasaSec.hidden) {
+      const newUsername = document.getElementById('panelKasaUsername').value.trim() || null
+      const newPassword = document.getElementById('panelKasaPassword').value || null
+      if (newUsername !== (device.kasa_username ?? null) || newPassword !== (device.kasa_password ?? null)) {
+        await adminApi.setKasaCredentials(_activeDeviceId, newUsername, newPassword)
+      }
+    }
+
     // Outlet names (strip only)
     if (device.hw_is_strip) {
       const inputs = document.querySelectorAll('#panelOutlets .js-outlet-name')
@@ -313,10 +282,6 @@ panelDeleteBtn.addEventListener('click', async () => {
 })
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-
-async function loadAll() {
-  await Promise.all([loadAccounts(onUnauth), loadDevices()])
-}
 
 ;(async () => {
   if (getToken() && await verifyToken()) { showAdmin() }

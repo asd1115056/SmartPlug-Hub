@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from .command_queue import DeviceQueue
 from .core import DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceState
-from .db import Account, Database, Device as DeviceRow
+from .db import Database, Device as DeviceRow
 from .backends.kasa import KasaBackend
 from .backends.miio import MiioBackend
 from .backends.tuya import TuyaBackend
@@ -46,12 +46,10 @@ class DeviceService:
 
     async def start(self) -> None:
         rows = await self._db.get_devices()
-        accounts = {a.id: a for a in await self._db.get_accounts() if a.id is not None}
         outlet_names = await self._db.get_all_outlet_names()
 
         for row in rows:
-            account = accounts.get(row.account_id) if row.account_id else None
-            self._devices[row.id] = _make_entry(row, account, outlet_names.get(row.id, {}))
+            self._devices[row.id] = _make_entry(row, outlet_names.get(row.id, {}))
 
         self._poll_task = asyncio.create_task(self._poll_loop())
         by_type = {}
@@ -118,10 +116,8 @@ class DeviceService:
 
     # ── Admin helpers (called after DB writes are committed) ──────────────────
 
-    def add_entry(
-        self, row: DeviceRow, account: Account | None, outlet_names: dict[str, str]
-    ) -> None:
-        entry = _make_entry(row, account, outlet_names)
+    def add_entry(self, row: DeviceRow, outlet_names: dict[str, str]) -> None:
+        entry = _make_entry(row, outlet_names)
         self._devices[row.id] = entry
         asyncio.create_task(self._probe_one(row.id, entry))
         self._broadcast()
@@ -217,15 +213,15 @@ class DeviceService:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_config(row: DeviceRow, account: Account | None) -> DeviceConfig:
+def _make_config(row: DeviceRow) -> DeviceConfig:
     return DeviceConfig(
         id=row.id,
         mac=row.mac,
         type=row.type,
         broadcast=row.broadcast,
         last_known_ip=row.last_known_ip,
-        username=account.username if account else None,
-        password=account.password if account else None,
+        username=row.kasa_username,
+        password=row.kasa_password,
         miio_token=row.miio_token,
         miio_id=row.miio_id,
         tuya_device_id=row.tuya_device_id,
@@ -244,10 +240,8 @@ def _make_backend(device_type: str) -> DeviceBackend:
     raise ValueError(f"Unknown device type: {device_type!r}")
 
 
-def _make_entry(
-    row: DeviceRow, account: Account | None, outlet_names: dict[str, str]
-) -> DeviceEntry:
-    config = _make_config(row, account)
+def _make_entry(row: DeviceRow, outlet_names: dict[str, str]) -> DeviceEntry:
+    config = _make_config(row)
     backend = _make_backend(row.type)
     return DeviceEntry(
         config=config,

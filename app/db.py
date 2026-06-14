@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import Field, SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -13,23 +13,18 @@ logger = logging.getLogger(__name__)
 
 # ── Tables ────────────────────────────────────────────────────────────────────
 
-class Account(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    type: str                           # "kasa" | "miio" | "tuya"
-    username: str
-    password: str
-
-
 class Device(SQLModel, table=True):
     id: str = Field(primary_key=True)   # 8-char mac hash
     mac: str = Field(unique=True, index=True)
-    account_id: int | None = Field(default=None, foreign_key="account.id")
     type: str                           # "kasa" | "miio" | "tuya"
     broadcast: str
     group_name: str | None = None
 
-    # User intent — only written by rename API
     name: str | None = None             # null = fall back to hw_alias for display
+
+    # Kasa connection credentials
+    kasa_username: str | None = None
+    kasa_password: str | None = None
 
     # MiIO connection credentials
     miio_token: str | None = None
@@ -38,7 +33,7 @@ class Device(SQLModel, table=True):
     # Tuya connection credentials
     tuya_device_id: str | None = None     # gwId from Tuya IoT Platform
     tuya_local_key: str | None = None     # 16-char local encryption key
-    tuya_product_id: str | None = None    # product_id → DPS profile lookup
+    tuya_product_id: str | None = None
 
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None
@@ -75,35 +70,15 @@ class Database:
     async def initialize(self) -> None:
         async with self._engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
+            # Migrate existing DBs that predate per-device kasa credentials
+            for col in ('kasa_username', 'kasa_password'):
+                try:
+                    await conn.execute(text(f'ALTER TABLE device ADD COLUMN {col} TEXT'))
+                except Exception:
+                    pass  # Column already exists (fresh installs have it from create_all)
 
     async def close(self) -> None:
         await self._engine.dispose()
-
-    # ── Account ───────────────────────────────────────────────────────────────
-
-    async def get_accounts(self) -> list[Account]:
-        async with AsyncSession(self._engine) as session:
-            return list((await session.exec(select(Account))).all())
-
-    async def add_account(self, account: Account) -> Account:
-        async with AsyncSession(self._engine) as session:
-            dup = await session.exec(
-                select(Account).where(Account.username == account.username,
-                                      Account.type == account.type)
-            )
-            if dup.first():
-                raise ValueError(f"Account '{account.username}' ({account.type}) already exists")
-            session.add(account)
-            await session.commit()
-            await session.refresh(account)
-            return account
-
-    async def remove_account(self, account_id: int) -> None:
-        async with AsyncSession(self._engine) as session:
-            account = await session.get(Account, account_id)
-            if account:
-                await session.delete(account)
-                await session.commit()
 
     # ── Device ────────────────────────────────────────────────────────────────
 
@@ -150,6 +125,17 @@ class Database:
             device = await session.get(Device, device_id)
             if device:
                 device.group_name = group_name
+                session.add(device)
+                await session.commit()
+
+    async def set_kasa_credentials(
+        self, device_id: str, username: str | None, password: str | None
+    ) -> None:
+        async with AsyncSession(self._engine) as session:
+            device = await session.get(Device, device_id)
+            if device:
+                device.kasa_username = username
+                device.kasa_password = password
                 session.add(device)
                 await session.commit()
 

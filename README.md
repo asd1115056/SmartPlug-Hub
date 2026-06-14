@@ -48,15 +48,13 @@ Devices and accounts are managed through the admin panel at `/admin` — no conf
 
 **Scan Network**: click *Scan* at the top of the admin panel to discover Kasa, MiIO, and Tuya devices on every local network interface. Results are grouped by subnet and show type, model, IP, and MAC. Click *+ Add* on any row to immediately register the device. Click the device card to open its detail panel and set a name, group, or credentials.
 
-**Accounts**: open the `⋯` menu in the navbar to manage TP-Link accounts. Accounts are used by Kasa devices that require KLAP authentication (newer firmware).
-
 #### Finding your Kasa device MAC and credentials
 
 ```bash
 uv run kasa discover
 ```
 
-Newer Kasa devices (EP25, KP125M, etc.) require TP-Link account credentials. Older models (HS103, KP303, etc.) work without authentication.
+Newer Kasa devices (EP25, KP125M, etc.) require TP-Link account credentials — enter them in the device's **Kasa** section in the detail panel. Older models (HS103, KP303, etc.) work without authentication.
 
 #### Finding your MiIO device token and ID
 
