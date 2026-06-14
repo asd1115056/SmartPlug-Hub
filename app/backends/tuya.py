@@ -74,6 +74,8 @@ class TuyaBackend(DeviceBackend):
         profile = _get_profile(cfg)
         if not cfg.last_known_ip and not self.ip:
             self.ip = await _discover_ip(cfg)
+            if not self.ip:
+                raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
         try:
             state = await asyncio.to_thread(_sync_probe, cfg, self.ip, profile)
             self.ip = cfg.last_known_ip or self.ip
@@ -88,6 +90,8 @@ class TuyaBackend(DeviceBackend):
         profile = _get_profile(cfg)
         if not cfg.last_known_ip and not self.ip:
             self.ip = await _discover_ip(cfg)
+            if not self.ip:
+                raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
         try:
             await asyncio.to_thread(_sync_set_power, cfg, self.ip, on, profile)
         except DeviceOfflineError:
