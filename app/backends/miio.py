@@ -79,6 +79,9 @@ class MiioBackend(DeviceBackend):
         self.ip: str | None = None
         self._model: str | None = None   # cached after first miIO.info call
 
+    def is_configured(self, cfg: DeviceConfig) -> bool:
+        return bool(cfg.miio_token and _TOKEN_RE.match(cfg.miio_token))
+
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_token(cfg)
         if not self.ip:

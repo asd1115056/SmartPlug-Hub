@@ -185,6 +185,8 @@ class DeviceService:
                 pass
 
     async def _probe_one(self, device_id: str, entry: DeviceEntry) -> None:
+        if not entry.backend.is_configured(entry.config):
+            return
         if entry.queue.is_active():
             logger.debug("Skipping %s — command in progress", device_id)
             return

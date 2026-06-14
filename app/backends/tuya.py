@@ -66,6 +66,9 @@ class TuyaBackend(DeviceBackend):
     def __init__(self) -> None:
         self.ip: str | None = None
 
+    def is_configured(self, cfg: DeviceConfig) -> bool:
+        return bool(cfg.tuya_device_id and cfg.tuya_local_key)
+
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_credentials(cfg)
         profile = _get_profile(cfg)
