@@ -79,9 +79,9 @@ function _protocolBadge(type) {
 
 function _deviceHeader(d) {
   const totalWatts = d.is_online ? _headerWatts(d) : null
-  const wattsHtml = totalWatts !== null
-    ? `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${_fmtWatts(totalWatts)}</div>`
-    : ''
+  const wattsHtml = !d.is_online
+    ? ''
+    : `<div class="device-watts"><i class="bi bi-lightning-charge-fill me-1"></i>${totalWatts !== null ? _fmtWatts(totalWatts) : '— W'}</div>`
   const refreshBtn = !d.is_online
     ? `<button class="btn btn-sm refresh-btn" data-device-id="${d.id}" title="Refresh">
          <i class="bi bi-arrow-clockwise"></i>
@@ -133,7 +133,7 @@ function _singleControlRow(d) {
   const action       = d.is_on ? 'off' : 'on'
   const disabledAttr = d.is_online ? '' : 'disabled'
   const hasWatts     = d.watts !== null && d.watts !== undefined
-  const wattsText    = hasWatts ? _fmtWatts(d.watts) : '—'
+  const wattsText    = hasWatts ? _fmtWatts(d.watts) : '— W'
   return `
     <div class="control-row ${onClass}">
       <span class="row-label">${esc(d.name)}</span>
@@ -197,7 +197,7 @@ function _outletList(deviceId, outlets, isOnline) {
     const onClass   = o.is_on ? 'is-on' : ''
     const action    = o.is_on ? 'off' : 'on'
     const hasWatts  = o.watts !== null && o.watts !== undefined
-    const wattsText = hasWatts ? _fmtWatts(o.watts) : '—'
+    const wattsText = hasWatts ? _fmtWatts(o.watts) : '— W'
     const wattsTip  = hasWatts ? '' : ' title="Power monitoring not supported for individual outlets"'
     return `
       <div class="outlet-row ${onClass}">
