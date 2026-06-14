@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import ipaddress
 import json
 import logging
 import select
@@ -38,7 +39,7 @@ class DpsProfile:
     phase_raw: str | None = None  # Raw DPS with V/A/W encoded as 8-byte big-endian
 
 
-# Keyed by product_id (= productKey in UDP response, stored in DeviceConfig.hw_model).
+# Keyed by product_id (= productKey in UDP response, stored in DeviceConfig.tuya_product_id).
 # Only devices listed here are supported — probe() raises for unknown product_ids.
 SUPPORTED_DEVICES: dict[str, DpsProfile] = {
     "eev4qfltav8wc87e": DpsProfile(switch="16", phase_raw="6"),  # Breaker (dlq) WIFI
@@ -113,10 +114,15 @@ def _sync_probe(cfg: DeviceConfig, cached_ip: str | None, profile: DpsProfile) -
     )
 
 
-def _sync_set_power(cfg: DeviceConfig, cached_ip: str | None, on: bool, profile: DpsProfile) -> None:
+def _sync_set_power(
+    cfg: DeviceConfig, cached_ip: str | None, on: bool, profile: DpsProfile
+) -> None:
     device = _make_device(cfg, cached_ip)
-    result = device.set_value(profile.switch, on)
-    _check_result(result)
+    try:
+        result = device.set_value(profile.switch, on)
+        _check_result(result)
+    finally:
+        device.close()
 
 
 def _fetch_watts(device: tinytuya.Device, profile: DpsProfile) -> float | None:
@@ -134,10 +140,8 @@ def _fetch_watts(device: tinytuya.Device, profile: DpsProfile) -> float | None:
 
 
 def _decode_phase_a(raw_b64: str) -> tuple[float, float, float]:
-    """Decode 8-byte big-endian phase_a blob → (voltage V, current A, power W).
-
-    Format confirmed by HA core PR #63519 and tuya-local issue #1429.
-    """
+    """Decode 8-byte big-endian phase_a blob → (voltage V, current A, power W)."""
+    # Format confirmed by HA core PR #63519 and tuya-local issue #1429
     raw = base64.b64decode(raw_b64)
     voltage = struct.unpack(">H", raw[0:2])[0] / 10.0
     current = struct.unpack(">I", b"\x00" + raw[2:5])[0] / 1000.0
@@ -269,7 +273,6 @@ def _decode_broadcast(data: bytes) -> dict | None:
 
 def _iface_broadcast_for(ip: str, iface_pairs: list[tuple[str, str]]) -> str:
     """Return broadcast of the interface subnet that contains ip."""
-    import ipaddress
     ip_int = int(ipaddress.IPv4Address(ip))
     for local_ip, broadcast in iface_pairs:
         if int(ipaddress.IPv4Address(local_ip)) <= ip_int <= int(ipaddress.IPv4Address(broadcast)):

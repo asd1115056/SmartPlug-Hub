@@ -348,7 +348,7 @@ scanRunBtn.addEventListener('click', runScan)
 document.getElementById('scanTable').addEventListener('click', e => {
   const btn = e.target.closest('.js-scan-add')
   if (!btn) return
-  const { mac, type, broadcast, miioId, tuyaDeviceId: tdid, tuyaLocalKey: tlk } = btn.dataset
+  const { mac, type, broadcast, miioId, tuyaDeviceId: devId, tuyaLocalKey: localKey } = btn.dataset
 
   const form = document.getElementById('addDeviceForm')
   form.querySelector('[name="mac"]').value = fmtMac(mac)
@@ -366,8 +366,8 @@ document.getElementById('scanTable').addEventListener('click', e => {
 
   if (type === 'miio' && miioId) miioDeviceId.value = miioId
   if (type === 'tuya') {
-    if (tdid) tuyaDeviceId.value = tdid
-    if (tlk) tuyaLocalKey.value = tlk
+    if (devId) tuyaDeviceId.value = devId
+    if (localKey) tuyaLocalKey.value = localKey
     tuyaProductId.value = btn.dataset.tuyaProductId || ''
   }
 
