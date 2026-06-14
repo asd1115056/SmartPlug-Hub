@@ -1,37 +1,40 @@
 """Network utilities — interface enumeration and ARP-based MAC resolution."""
 
-import re
+import fcntl
 import socket
-import subprocess
 import time
+
+_SIOCGIFADDR    = 0x8915
+_SIOCGIFBRDADDR = 0x8919
+_IFREQ_SIZE     = 40   # sizeof(struct ifreq) on Linux x86_64
+_IFNAMSIZ       = 16
 
 
 def get_interface_pairs() -> list[tuple[str, str]]:
     """Return (local_ip, broadcast) for every active non-loopback IPv4 interface."""
     result = []
     try:
-        out = subprocess.check_output(
-            ["ip", "-o", "-4", "addr", "show"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        )
-    except (subprocess.SubprocessError, FileNotFoundError):
+        names = [name for _, name in socket.if_nameindex()]
+    except OSError:
         return result
-    for line in out.splitlines():
-        m = re.search(r"inet\s+(\S+)\s+brd\s+(\S+)", line)
-        if not m:
-            continue
-        local_ip = m.group(1).split("/")[0]
-        broadcast = m.group(2)
-        if local_ip.startswith("127.") or local_ip.startswith("169.254."):
-            continue
-        result.append((local_ip, broadcast))
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            for name in names:
+                req = name.encode()[:_IFNAMSIZ - 1].ljust(_IFREQ_SIZE, b'\x00')
+                try:
+                    ip = socket.inet_ntoa(fcntl.ioctl(sock, _SIOCGIFADDR, req)[20:24])
+                except OSError:
+                    continue
+                if ip.startswith('127.') or ip.startswith('169.254.'):
+                    continue
+                try:
+                    brd = socket.inet_ntoa(fcntl.ioctl(sock, _SIOCGIFBRDADDR, req)[20:24])
+                except OSError:
+                    continue
+                result.append((ip, brd))
+    except OSError:
+        pass
     return result
-
-
-def get_broadcast_addresses() -> list[str]:
-    """Return directed broadcast address for every active non-loopback IPv4 interface."""
-    return [brd for _, brd in get_interface_pairs()]
 
 
 def mac_from_ip(ip: str) -> str | None:

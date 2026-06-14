@@ -178,7 +178,7 @@ async def _discover(cfg: DeviceConfig) -> str | None:
     return None
 
 
-async def scan(broadcasts: list[str], timeout: float = 3.0) -> list[DeviceConfig]:
+async def scan(iface_pairs: list[tuple[str, str]], timeout: float = 3.0) -> list[DeviceConfig]:
     """Discover all Kasa devices across multiple broadcast addresses."""
     seen: dict[str, DeviceConfig] = {}
 
@@ -189,7 +189,7 @@ async def scan(broadcasts: list[str], timeout: float = 3.0) -> list[DeviceConfig
                 broadcast=broadcast, last_known_ip=ip, hw_model=model,
             ))
 
-    await asyncio.gather(*(_one(b) for b in broadcasts), return_exceptions=True)
+    await asyncio.gather(*(_one(brd) for _, brd in iface_pairs), return_exceptions=True)
     return list(seen.values())
 
 
