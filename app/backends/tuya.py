@@ -35,6 +35,7 @@ _RETRY_DELAY = 0.5
 
 @dataclass
 class DpsProfile:
+    model: str
     switch: str
     phase_raw: str | None = None  # Raw DPS with V/A/W encoded as 8-byte big-endian
 
@@ -42,7 +43,7 @@ class DpsProfile:
 # Keyed by product_id (= productKey in UDP response, stored in DeviceConfig.tuya_product_id).
 # Only devices listed here are supported — probe() raises for unknown product_ids.
 SUPPORTED_DEVICES: dict[str, DpsProfile] = {
-    "eev4qfltav8wc87e": DpsProfile(switch="16", phase_raw="6"),  # Breaker (dlq) WIFI
+    "eev4qfltav8wc87e": DpsProfile(model="Breaker WIFI (dlq)", switch="16", phase_raw="6"),
 }
 
 
@@ -109,7 +110,7 @@ def _sync_probe(cfg: DeviceConfig, cached_ip: str | None, profile: DpsProfile) -
     finally:
         device.close()
     return DeviceState(
-        hw_alias=None, hw_model=None, hw_is_strip=False,
+        hw_alias=None, hw_model=profile.model, hw_is_strip=False,
         is_on=is_on, children=[], watts=watts,
     )
 
