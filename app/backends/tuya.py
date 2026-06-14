@@ -98,11 +98,15 @@ class TuyaBackend(DeviceBackend):
 
 def _sync_probe(cfg: DeviceConfig, cached_ip: str | None, profile: DpsProfile) -> DeviceState:
     device = _make_device(cfg, cached_ip)
-    result = device.status()
-    _check_result(result)
-    dps: dict = result.get("dps") or {}
-    is_on = bool(dps.get(profile.switch, False))
-    watts = _extract_watts(dps, profile)
+    device.set_socketPersistent(True)
+    try:
+        result = device.status()
+        _check_result(result)
+        dps: dict = result.get("dps") or {}
+        is_on = bool(dps.get(profile.switch, False))
+        watts = _fetch_watts(device, profile)
+    finally:
+        device.close()
     return DeviceState(
         hw_alias=None, hw_model=None, hw_is_strip=False,
         is_on=is_on, children=[], watts=watts,
@@ -115,13 +119,15 @@ def _sync_set_power(cfg: DeviceConfig, cached_ip: str | None, on: bool, profile:
     _check_result(result)
 
 
-def _extract_watts(dps: dict, profile: DpsProfile) -> float | None:
+def _fetch_watts(device: tinytuya.Device, profile: DpsProfile) -> float | None:
+    """Request phase_raw DPS via updatedps; return watts or None on any failure."""
     if not profile.phase_raw:
         return None
-    raw_b64 = dps.get(profile.phase_raw)
-    if not isinstance(raw_b64, str):
-        return None
     try:
+        result = device.updatedps(index=[profile.phase_raw])
+        raw_b64 = (result or {}).get("dps", {}).get(profile.phase_raw)
+        if not isinstance(raw_b64, str):
+            return None
         return _decode_phase_a(raw_b64)[2]
     except Exception:
         return None
