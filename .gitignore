@@ -17,3 +17,9 @@ config/settings.toml
 data/smartplug.db
 data/smartplug.db-shm
 data/smartplug.db-wal
+
+# tinytuya wizard output (contains device Local Keys)
+devices.json
+tuya-raw.json
+tinytuya.json
+snapshot.json
