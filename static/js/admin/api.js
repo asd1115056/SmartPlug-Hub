@@ -17,6 +17,9 @@ export function setKasaCredentials(id, username, password) {
 export function setMiioCredentials(id, token) {
   return authFetch('PATCH', `${BASE}/devices/${id}/miio-credentials`, { token })
 }
+export function setTuyaCredentials(id, device_id, local_key, product_id) {
+  return authFetch('PATCH', `${BASE}/devices/${id}/tuya-credentials`, { device_id, local_key, product_id })
+}
 export function setOutletName(deviceId, outletId, name) {
   return authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
 }

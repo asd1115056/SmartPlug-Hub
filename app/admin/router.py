@@ -18,6 +18,7 @@ from ..schemas import (
     SetGroupRequest,
     SetKasaCredentialsRequest,
     SetMiioCredentialsRequest,
+    SetTuyaCredentialsRequest,
     SetNameRequest,
     build_admin_device_out,
 )
@@ -170,6 +171,24 @@ async def set_miio_credentials(
     if row.type != "miio":
         raise HTTPException(status_code=400, detail="Device is not a MiIO device")
     await service.set_miio_credentials(device_id, body.token, db, svc)
+    row = await db.get_device(device_id)
+    assert row is not None
+    return build_admin_device_out(row, svc._devices.get(device_id))
+
+
+@router.patch("/devices/{device_id}/tuya-credentials", response_model=AdminDeviceOut)
+async def set_tuya_credentials(
+    device_id: str,
+    body: SetTuyaCredentialsRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    row = await _require_device(device_id, db)
+    if row.type != "tuya":
+        raise HTTPException(status_code=400, detail="Device is not a Tuya device")
+    await service.set_tuya_credentials(
+        device_id, body.device_id, body.local_key, body.product_id, db, svc
+    )
     row = await db.get_device(device_id)
     assert row is not None
     return build_admin_device_out(row, svc._devices.get(device_id))

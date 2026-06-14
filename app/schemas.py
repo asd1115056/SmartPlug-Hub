@@ -98,6 +98,12 @@ class SetMiioCredentialsRequest(BaseModel):
     token: str | None = None
 
 
+class SetTuyaCredentialsRequest(BaseModel):
+    device_id: str | None = None
+    local_key: str | None = None
+    product_id: str | None = None
+
+
 class SetNameRequest(BaseModel):
     name: str
 

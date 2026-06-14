@@ -212,12 +212,12 @@ export function fillDetailPanel(device) {
     kasaSec.hidden = true
   }
 
-  // Tuya credentials (read-only)
+  // Tuya credentials (editable)
   const tuyaSec = document.getElementById('panelTuya')
   if (device.type === 'tuya') {
-    document.getElementById('panelTuyaDeviceId').textContent = device.tuya_device_id ?? '—'
-    document.getElementById('panelTuyaLocalKey').textContent = device.tuya_local_key ?? '—'
-    document.getElementById('panelTuyaProductId').textContent = device.tuya_product_id ?? '—'
+    document.getElementById('panelTuyaDeviceId').value = device.tuya_device_id ?? ''
+    document.getElementById('panelTuyaLocalKey').value = device.tuya_local_key ?? ''
+    document.getElementById('panelTuyaProductId').value = device.tuya_product_id ?? ''
     tuyaSec.hidden = false
   } else {
     tuyaSec.hidden = true

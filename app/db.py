@@ -149,6 +149,22 @@ class Database:
                 session.add(device)
                 await session.commit()
 
+    async def set_tuya_credentials(
+        self,
+        device_id: str,
+        device_id_val: str | None,
+        local_key: str | None,
+        product_id: str | None,
+    ) -> None:
+        async with AsyncSession(self._engine) as session:
+            device = await session.get(Device, device_id)
+            if device:
+                device.tuya_device_id = device_id_val
+                device.tuya_local_key = local_key
+                device.tuya_product_id = product_id
+                session.add(device)
+                await session.commit()
+
     async def update_device_hw(
         self,
         device_id: str,

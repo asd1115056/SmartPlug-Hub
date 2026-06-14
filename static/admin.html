@@ -133,20 +133,23 @@
     </div>
   </div>
 
-  <!-- Tuya credentials (read-only) -->
+  <!-- Tuya credentials (editable) -->
   <div id="panelTuya" class="panel-sec" hidden>
     <div class="panel-sec-title">Tuya</div>
-    <div class="panel-info-row">
-      <span class="panel-info-lbl">Device ID</span>
-      <span id="panelTuyaDeviceId" class="panel-info-val font-monospace" style="word-break:break-all"></span>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Device ID</label>
+      <input id="panelTuyaDeviceId" type="text" class="form-control form-control-sm font-monospace"
+             autocomplete="off" placeholder="gwId from Tuya IoT Platform">
     </div>
-    <div class="panel-info-row">
-      <span class="panel-info-lbl">Local Key</span>
-      <span id="panelTuyaLocalKey" class="panel-info-val font-monospace" style="word-break:break-all"></span>
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Local Key</label>
+      <input id="panelTuyaLocalKey" type="text" class="form-control form-control-sm font-monospace"
+             autocomplete="off" placeholder="16-char local encryption key">
     </div>
-    <div class="panel-info-row">
-      <span class="panel-info-lbl">Product ID</span>
-      <span id="panelTuyaProductId" class="panel-info-val"></span>
+    <div>
+      <label class="form-label fw-semibold">Product ID</label>
+      <input id="panelTuyaProductId" type="text" class="form-control form-control-sm font-monospace"
+             autocomplete="off" placeholder="productKey">
     </div>
   </div>
 

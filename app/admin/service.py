@@ -98,6 +98,24 @@ async def set_miio_credentials(
     logger.info("Device %s miio credentials updated", device_id)
 
 
+async def set_tuya_credentials(
+    device_id: str,
+    tuya_device_id: str | None,
+    local_key: str | None,
+    product_id: str | None,
+    db: Database,
+    svc: DeviceService,
+) -> None:
+    await db.set_tuya_credentials(device_id, tuya_device_id, local_key, product_id)
+    row = await db.get_device(device_id)
+    if row:
+        entry = svc._devices.get(device_id)
+        outlet_names = entry.outlet_names if entry else {}
+        await svc.remove_entry(device_id)
+        svc.add_entry(row, outlet_names)
+    logger.info("Device %s tuya credentials updated", device_id)
+
+
 async def set_outlet_name(
     device_id: str, outlet_id: str, name: str, db: Database, svc: DeviceService
 ) -> None:

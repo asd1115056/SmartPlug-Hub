@@ -224,6 +224,21 @@ panelSaveBtn.addEventListener('click', async () => {
       await adminApi.setDeviceGroup(_activeDeviceId, newGroup)
     }
 
+    // Tuya credentials (tuya only)
+    const tuyaSec = document.getElementById('panelTuya')
+    if (!tuyaSec.hidden) {
+      const newDeviceId = document.getElementById('panelTuyaDeviceId').value.trim() || null
+      const newLocalKey = document.getElementById('panelTuyaLocalKey').value.trim() || null
+      const newProductId = document.getElementById('panelTuyaProductId').value.trim() || null
+      if (
+        newDeviceId !== (device.tuya_device_id ?? null) ||
+        newLocalKey !== (device.tuya_local_key ?? null) ||
+        newProductId !== (device.tuya_product_id ?? null)
+      ) {
+        await adminApi.setTuyaCredentials(_activeDeviceId, newDeviceId, newLocalKey, newProductId)
+      }
+    }
+
     // MiIO credentials (miio only)
     const miioSec = document.getElementById('panelMiio')
     if (!miioSec.hidden) {
