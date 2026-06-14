@@ -54,10 +54,23 @@ export function renderDevices(devices, searchQuery, activeGroup) {
     return
   }
 
-  container.innerHTML = `<div class="row g-3 align-items-start">${filtered.map(d => `
-    <div class="col-lg-4 col-md-6">
-      ${_deviceCard(d)}
-    </div>`).join('')}</div>`
+  const singles = filtered.filter(d => !d.is_strip)
+  const strips  = filtered.filter(d => d.is_strip)
+  const showLabels = singles.length > 0 && strips.length > 0
+
+  let html = ''
+  if (singles.length) {
+    html += showLabels ? '<div class="section-label">Single plugs</div>' : ''
+    html += `<div class="row g-3 ${strips.length ? 'mb-4' : ''}">${singles.map(d => `
+      <div class="col-12 col-md-6">${_deviceCard(d)}</div>`).join('')}</div>`
+  }
+  if (strips.length) {
+    html += showLabels ? '<div class="section-label mt-2">Power strips</div>' : ''
+    html += `<div class="row g-3">${strips.map(d => `
+      <div class="col-12 col-md-6">${_deviceCard(d)}</div>`).join('')}</div>`
+  }
+
+  container.innerHTML = html
 }
 
 function _protocolBadge(type) {
@@ -187,14 +200,12 @@ function _outletList(deviceId, outlets, isOnline) {
     const wattsText = hasWatts ? _fmtWatts(o.watts) : '—'
     const wattsTip  = hasWatts ? '' : ' title="Power monitoring not supported for individual outlets"'
     return `
-      <div class="control-row ${onClass}">
-        <span class="row-label">${esc(o.name)}</span>
-        <div class="d-flex align-items-center">
-          <span class="row-watts"${wattsTip}>${wattsText}</span>
-          <button class="toggle-switch ${onClass}"
-            data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
-            data-action="${action}" ${disabledAttr}></button>
-        </div>
+      <div class="outlet-row ${onClass}">
+        <span class="outlet-name">${esc(o.name)}</span>
+        <span class="outlet-watts"${wattsTip}>${wattsText}</span>
+        <button class="toggle-switch ${onClass}"
+          data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
+          data-action="${action}" ${disabledAttr}></button>
       </div>`
   }).join('')
 }

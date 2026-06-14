@@ -129,6 +129,31 @@
 
 .control-row.is-on { background: rgba(25, 135, 84, .15); }
 
+/* Section labels (only shown when both types present) */
+.section-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #6c757d;
+  margin-bottom: .6rem;
+}
+
+/* Strip outlet rows */
+.outlet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .85rem 1.25rem;
+  border-bottom: 1px solid #373b3e;
+  background: #2b3035;
+}
+.outlet-row:last-child { border-bottom: none; }
+.outlet-row.is-on { background: rgba(25, 135, 84, .15); }
+.outlet-name { flex: 1; font-weight: 500; color: #e0e0e0; }
+.outlet-watts { color: #adb5bd; min-width: 72px; text-align: right; }
+
 .row-label {
   font-weight: 500;
   color: #e0e0e0;
