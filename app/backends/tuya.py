@@ -135,7 +135,8 @@ def _fetch_watts(device: tinytuya.Device, profile: DpsProfile) -> float | None:
         if not isinstance(raw_b64, str):
             return None
         return _decode_phase_a(raw_b64)[2]
-    except Exception:
+    except Exception as e:
+        logger.debug("phase_a fetch failed: %s", e)
         return None
 
 
