@@ -36,7 +36,12 @@ function renderDevices(devices) {
       : '<span class="text-muted">—</span>'
     return `<tr>
       <td class="text-center">${statusDot}</td>
-      <td class="text-center"><span class="badge bg-secondary">${d.type}</span></td>
+      <td class="text-center">
+        <span class="badge bg-secondary">${d.type}</span>
+        ${d.type === 'tuya' && d.tuya_product_id
+          ? `<br><small class="text-muted font-monospace" style="font-size:.65rem">${esc(d.tuya_product_id)}</small>`
+          : ''}
+      </td>
       <td>
         <span id="name-view-${d.id}" class="editable-field" data-id="${d.id}" data-field="name">
           <span class="field-value">${esc(d.name ?? d.hw_alias ?? d.mac)}</span><i class="bi bi-pencil edit-pencil ms-1"></i>
