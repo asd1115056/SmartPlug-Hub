@@ -53,6 +53,10 @@ def _svc(request: Request) -> DeviceService:
     return request.app.state.device_service
 
 
+def _db(request: Request) -> Database:
+    return request.app.state.db
+
+
 # ── HTML pages ────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -85,7 +89,16 @@ async def set_power(
     device_id: str,
     body: SetPowerRequest,
     svc: DeviceService = Depends(_svc),
+    db: Database = Depends(_db),
 ) -> DeviceOut:
+    if body.outlet_id is not None:
+        required_token = await db.get_outlet_token(device_id, body.outlet_id)
+    else:
+        row = await db.get_device(device_id)
+        required_token = row.device_token if row else None
+    if required_token is not None and body.token != required_token:
+        detail = "Token required" if body.token is None else "Invalid token"
+        raise HTTPException(status_code=403, detail=detail)
     try:
         await svc.set_power(device_id, body.outlet_id, body.on)
     except DeviceNotFoundError:

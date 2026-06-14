@@ -181,12 +181,22 @@
     </div>
   </div>
 
+  <!-- Device token (non-strip only) -->
+  <div id="panelDeviceTokenSec" class="panel-sec" hidden>
+    <div class="panel-sec-title">Access Token</div>
+    <div class="input-group input-group-sm">
+      <span class="input-group-text"><i class="bi bi-key"></i></span>
+      <input id="panelDeviceToken" class="form-control font-monospace" type="text"
+        placeholder="Token to require for on/off (blank = no restriction)" autocomplete="off">
+    </div>
+  </div>
+
   <!-- Outlets (strip only) -->
   <div id="panelOutletsSec" class="panel-sec" hidden>
     <div class="panel-sec-title">Outlets</div>
     <div id="panelOutlets"></div>
     <div class="text-muted small mt-2">
-      <i class="bi bi-info-circle me-1"></i>Outlet names saved with Save Changes below
+      <i class="bi bi-info-circle me-1"></i>Names and tokens saved with Save Changes below
     </div>
   </div>
 

@@ -6,15 +6,17 @@ export async function getDevices() {
   return res.json()
 }
 
-export async function setPower(deviceId, outletId, on) {
+export async function setPower(deviceId, outletId, on, token = null) {
   const res = await fetch(`${BASE}/devices/${encodeURIComponent(deviceId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ outlet_id: outletId ?? null, on }),
+    body: JSON.stringify({ outlet_id: outletId ?? null, on, token }),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `HTTP ${res.status}`)
+    const data = await res.json().catch(() => ({}))
+    const err = new Error(data.detail || `HTTP ${res.status}`)
+    err.status = res.status
+    throw err
   }
   return res.json()
 }

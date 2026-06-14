@@ -233,13 +233,29 @@ export function fillDetailPanel(device) {
     miioSec.hidden = true
   }
 
+  // Device token (non-strip only)
+  const deviceTokenSec = document.getElementById('panelDeviceTokenSec')
+  if (!device.hw_is_strip) {
+    document.getElementById('panelDeviceToken').value = device.device_token ?? ''
+    deviceTokenSec.hidden = false
+  } else {
+    deviceTokenSec.hidden = true
+  }
+
   // Outlets (strip only)
   const outletsSec = document.getElementById('panelOutletsSec')
   if (device.hw_is_strip && device.outlets?.length) {
     document.getElementById('panelOutlets').innerHTML = device.outlets.map((o, i) => `
-      <div class="input-group input-group-sm mb-2">
-        <span class="input-group-text text-muted font-monospace" style="width:2.2rem">${i}</span>
-        <input class="form-control js-outlet-name" data-outlet-id="${esc(o.outlet_id)}" value="${esc(o.name)}">
+      <div class="mb-2">
+        <div class="input-group input-group-sm mb-1">
+          <span class="input-group-text text-muted font-monospace" style="width:2.2rem">${i}</span>
+          <input class="form-control js-outlet-name" data-outlet-id="${esc(o.outlet_id)}" value="${esc(o.name)}" placeholder="Name">
+        </div>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text text-muted"><i class="bi bi-key"></i></span>
+          <input class="form-control js-outlet-token font-monospace" data-outlet-id="${esc(o.outlet_id)}"
+            value="${esc(o.token ?? '')}" placeholder="Token (blank = no restriction)" autocomplete="off">
+        </div>
       </div>`).join('')
     outletsSec.hidden = false
   } else {

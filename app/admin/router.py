@@ -15,9 +15,11 @@ from ..schemas import (
     AddDeviceRequest,
     AdminDeviceOut,
     DiscoveredDeviceOut,
+    SetDeviceTokenRequest,
     SetGroupRequest,
     SetKasaCredentialsRequest,
     SetMiioCredentialsRequest,
+    SetOutletTokenRequest,
     SetTuyaCredentialsRequest,
     SetNameRequest,
     build_admin_device_out,
@@ -60,7 +62,11 @@ async def list_devices(
 ) -> list[AdminDeviceOut]:
     rows = await db.get_devices()
     entries = {e.config.id: e for e in svc.get_devices()}
-    return [build_admin_device_out(row, entries.get(row.id)) for row in rows]
+    all_outlet_tokens = await db.get_all_outlet_tokens()
+    return [
+        build_admin_device_out(row, entries.get(row.id), all_outlet_tokens.get(row.id, {}))
+        for row in rows
+    ]
 
 
 @router.post("/scan", response_model=list[DiscoveredDeviceOut])
@@ -224,3 +230,37 @@ async def set_outlet_name(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return build_admin_device_out(row, svc._devices.get(device_id))
+
+
+@router.patch("/devices/{device_id}/token", response_model=AdminDeviceOut)
+async def set_device_token(
+    device_id: str,
+    body: SetDeviceTokenRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    await _require_device(device_id, db)
+    token = body.token or None
+    await db.set_device_token(device_id, token)
+    svc.set_device_token(device_id, token)
+    row = await db.get_device(device_id)
+    assert row is not None
+    return build_admin_device_out(row, svc._devices.get(device_id))
+
+
+@router.patch("/devices/{device_id}/outlets/{outlet_id}/token", response_model=AdminDeviceOut)
+async def set_outlet_token(
+    device_id: str,
+    outlet_id: str,
+    body: SetOutletTokenRequest,
+    db: Database = Depends(_db),
+    svc: DeviceService = Depends(_svc),
+) -> AdminDeviceOut:
+    await _require_device(device_id, db)
+    token = body.token or None
+    await db.set_outlet_token(device_id, outlet_id, token)
+    svc.set_outlet_token(device_id, outlet_id, token)
+    row = await db.get_device(device_id)
+    assert row is not None
+    outlet_tokens = (await db.get_all_outlet_tokens()).get(device_id, {})
+    return build_admin_device_out(row, svc._devices.get(device_id), outlet_tokens)

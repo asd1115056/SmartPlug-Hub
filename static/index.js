@@ -48,19 +48,29 @@ function detectChanges(prev, next) {
   }
 }
 
-async function handleToggle(deviceId, outletId, action) {
+async function handleToggle(deviceId, outletId, action, token = null) {
   pending.add(deviceId)
   document.querySelector(`.device-card[data-device-id="${deviceId}"]`)?.classList.add('loading')
 
+  let retryToken = null
   try {
-    const updated = await setPower(deviceId, outletId, action === 'on')
+    const updated = await setPower(deviceId, outletId, action === 'on', token)
     devices = devices.map(d => d.id === updated.id ? updated : d)
   } catch (e) {
-    const name = devices.find(d => d.id === deviceId)?.name ?? deviceId
-    showToast(`${e.message}: ${name}`, 'danger')
+    if (e.status === 403) {
+      const prompt = token ? 'Invalid token. Try again:' : 'Token required:'
+      retryToken = window.prompt(prompt, '')
+    } else {
+      const name = devices.find(d => d.id === deviceId)?.name ?? deviceId
+      showToast(`${e.message}: ${name}`, 'danger')
+    }
   } finally {
     pending.delete(deviceId)
     render()
+  }
+
+  if (retryToken !== null) {
+    await handleToggle(deviceId, outletId, action, retryToken)
   }
 }
 
@@ -84,7 +94,14 @@ async function handleRefresh(deviceId) {
 document.getElementById('devices-container').addEventListener('click', e => {
   const toggle = e.target.closest('.toggle-switch:not([disabled])')
   if (toggle) {
-    handleToggle(toggle.dataset.deviceId, toggle.dataset.outletId ?? null, toggle.dataset.action)
+    const { deviceId, outletId, action, hasToken } = toggle.dataset
+    if (hasToken) {
+      const token = window.prompt('Token required:')
+      if (token === null) return
+      handleToggle(deviceId, outletId ?? null, action, token)
+    } else {
+      handleToggle(deviceId, outletId ?? null, action)
+    }
     return
   }
   const refresh = e.target.closest('.refresh-btn')

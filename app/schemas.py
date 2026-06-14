@@ -15,6 +15,7 @@ class OutletOut(BaseModel):
     name: str
     is_on: bool
     watts: float | None
+    has_token: bool = False
 
 
 class DeviceOut(BaseModel):
@@ -29,6 +30,15 @@ class DeviceOut(BaseModel):
     last_updated: datetime | None
     outlets: list[OutletOut]
     watts: float | None
+    has_token: bool = False
+
+
+class AdminOutletOut(BaseModel):
+    outlet_id: str
+    name: str
+    is_on: bool
+    watts: float | None
+    token: str | None
 
 
 class AdminDeviceOut(BaseModel):
@@ -49,9 +59,10 @@ class AdminDeviceOut(BaseModel):
     hw_model: str | None
     hw_is_strip: bool
     last_known_ip: str | None
+    device_token: str | None
     is_online: bool
     is_on: bool | None
-    outlets: list[OutletOut]
+    outlets: list[AdminOutletOut]
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -73,6 +84,7 @@ class DiscoveredDeviceOut(BaseModel):
 class SetPowerRequest(BaseModel):
     outlet_id: str | None = None
     on: bool
+    token: str | None = None
 
 
 class AddDeviceRequest(BaseModel):
@@ -113,22 +125,53 @@ class SetGroupRequest(BaseModel):
     group_name: str | None = None
 
 
+class SetOutletTokenRequest(BaseModel):
+    token: str | None = None
+
+
+class SetDeviceTokenRequest(BaseModel):
+    token: str | None = None
+
+
 
 # ── Serialization helpers ─────────────────────────────────────────────────────
+
+def _outlet_name(entry: DeviceEntry, child) -> str:
+    if entry.backend.can_rename_outlet:
+        return child.hw_alias or child.outlet_id
+    return entry.outlet_names.get(child.outlet_id) or child.hw_alias or child.outlet_id
+
 
 def _build_outlets(entry: DeviceEntry) -> list[OutletOut]:
     if not entry.state:
         return []
-    result = []
-    for child in entry.state.children:
-        if entry.backend.can_rename_outlet:
-            name = child.hw_alias or child.outlet_id
-        else:
-            name = entry.outlet_names.get(child.outlet_id) or child.hw_alias or child.outlet_id
-        result.append(
-            OutletOut(outlet_id=child.outlet_id, name=name, is_on=child.is_on, watts=child.watts)
+    return [
+        OutletOut(
+            outlet_id=c.outlet_id,
+            name=_outlet_name(entry, c),
+            is_on=c.is_on,
+            watts=c.watts,
+            has_token=c.outlet_id in entry.outlet_tokens,
         )
-    return result
+        for c in entry.state.children
+    ]
+
+
+def _build_admin_outlets(
+    entry: DeviceEntry, outlet_tokens: dict[str, str]
+) -> list[AdminOutletOut]:
+    if not entry.state:
+        return []
+    return [
+        AdminOutletOut(
+            outlet_id=c.outlet_id,
+            name=_outlet_name(entry, c),
+            is_on=c.is_on,
+            watts=c.watts,
+            token=outlet_tokens.get(c.outlet_id),
+        )
+        for c in entry.state.children
+    ]
 
 
 def build_device_out(entry: DeviceEntry) -> DeviceOut:
@@ -145,10 +188,15 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
         last_updated=entry.last_updated,
         outlets=_build_outlets(entry),
         watts=state.watts if state else None,
+        has_token=entry.device_token is not None,
     )
 
 
-def build_admin_device_out(row: DeviceRow, entry: DeviceEntry | None) -> AdminDeviceOut:
+def build_admin_device_out(
+    row: DeviceRow,
+    entry: DeviceEntry | None,
+    outlet_tokens: dict[str, str] | None = None,
+) -> AdminDeviceOut:
     state = entry.state if entry else None
     return AdminDeviceOut(
         id=row.id,
@@ -168,7 +216,8 @@ def build_admin_device_out(row: DeviceRow, entry: DeviceEntry | None) -> AdminDe
         hw_model=row.hw_model,
         hw_is_strip=row.hw_is_strip,
         last_known_ip=row.last_known_ip,
+        device_token=row.device_token,
         is_online=entry.is_online if entry else False,
         is_on=state.is_on if state else None,
-        outlets=_build_outlets(entry) if entry else [],
+        outlets=_build_admin_outlets(entry, outlet_tokens or {}) if entry else [],
     )
