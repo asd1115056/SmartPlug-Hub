@@ -187,7 +187,7 @@ async def set_tuya_credentials(
     if row.type != "tuya":
         raise HTTPException(status_code=400, detail="Device is not a Tuya device")
     await service.set_tuya_credentials(
-        device_id, body.device_id, body.local_key, body.product_id, db, svc
+        device_id, body.tuya_device_id, body.tuya_local_key, body.tuya_product_id, db, svc
     )
     row = await db.get_device(device_id)
     assert row is not None

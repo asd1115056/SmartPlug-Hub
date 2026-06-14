@@ -102,12 +102,12 @@ async def set_miio_credentials(
 async def set_tuya_credentials(
     device_id: str,
     tuya_device_id: str | None,
-    local_key: str | None,
-    product_id: str | None,
+    tuya_local_key: str | None,
+    tuya_product_id: str | None,
     db: Database,
     svc: DeviceService,
 ) -> None:
-    await db.set_tuya_credentials(device_id, tuya_device_id, local_key, product_id)
+    await db.set_tuya_credentials(device_id, tuya_device_id, tuya_local_key, tuya_product_id)
     row = await db.get_device(device_id)
     if row:
         entry = svc._devices.get(device_id)

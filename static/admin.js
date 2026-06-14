@@ -227,15 +227,15 @@ panelSaveBtn.addEventListener('click', async () => {
     // Tuya credentials (tuya only)
     const tuyaSec = document.getElementById('panelTuya')
     if (!tuyaSec.hidden) {
-      const newDeviceId = document.getElementById('panelTuyaDeviceId').value.trim() || null
-      const newLocalKey = document.getElementById('panelTuyaLocalKey').value.trim() || null
-      const newProductId = document.getElementById('panelTuyaProductId').value.trim() || null
+      const newTuyaDeviceId = document.getElementById('panelTuyaDeviceId').value.trim() || null
+      const newTuyaLocalKey = document.getElementById('panelTuyaLocalKey').value.trim() || null
+      const newTuyaProductId = document.getElementById('panelTuyaProductId').value.trim() || null
       if (
-        newDeviceId !== (device.tuya_device_id ?? null) ||
-        newLocalKey !== (device.tuya_local_key ?? null) ||
-        newProductId !== (device.tuya_product_id ?? null)
+        newTuyaDeviceId !== (device.tuya_device_id ?? null) ||
+        newTuyaLocalKey !== (device.tuya_local_key ?? null) ||
+        newTuyaProductId !== (device.tuya_product_id ?? null)
       ) {
-        await adminApi.setTuyaCredentials(_activeDeviceId, newDeviceId, newLocalKey, newProductId)
+        await adminApi.setTuyaCredentials(_activeDeviceId, newTuyaDeviceId, newTuyaLocalKey, newTuyaProductId)
       }
     }
 

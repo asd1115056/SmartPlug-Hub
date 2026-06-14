@@ -100,9 +100,9 @@ class SetMiioCredentialsRequest(BaseModel):
 
 
 class SetTuyaCredentialsRequest(BaseModel):
-    device_id: str | None = None
-    local_key: str | None = None
-    product_id: str | None = None
+    tuya_device_id: str | None = None
+    tuya_local_key: str | None = None
+    tuya_product_id: str | None = None
 
 
 class SetNameRequest(BaseModel):
