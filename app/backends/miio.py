@@ -1,10 +1,11 @@
-"""MiIO protocol backend — stateless UDP, hardcoded for cuco.plug.wp12 (WP12)."""
+"""MiIO protocol backend — stateless UDP, device-profile driven."""
 
 import asyncio
 import logging
 import re
 import socket
 import time
+from dataclasses import dataclass
 from functools import partial
 
 from miio.exceptions import DeviceException
@@ -27,21 +28,45 @@ _MIIO_PORT = 54321
 _HELLO = bytes.fromhex("21310020" + "ff" * 28)
 _TOKEN_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 
-# MiOT property map for cuco.plug.wp12 (verified from miot-spec.org)
-_MAIN_SIID = 2
-_OUTLET_SIIDS = [3, 4, 5, 6, 7, 8]    # physical outlets 1–6
-_USB_SIID = 9
 
-# siid → (outlet_id, display name); drives both status parsing and power control
-_SIID_MAP: dict[int, tuple[str, str]] = {
-    **{siid: (str(i + 1), f"Outlet {i + 1}") for i, siid in enumerate(_OUTLET_SIIDS)},
-    _USB_SIID: ("usb", "USB"),
+# ── Device support table ──────────────────────────────────────────────────────
+
+@dataclass
+class MiotProfile:
+    """MiOT property map for one device model."""
+    model: str
+    main_siid: int
+    outlet_siids: list[int]     # physical outlets in order
+    usb_siid: int | None        # None if model has no USB port
+    power_siid: int | None      # service siid for power consumption
+    power_piid: int | None      # property piid for electric-power (W)
+
+    def siid_map(self) -> dict[int, tuple[str, str]]:
+        """Return {siid: (outlet_id, display_name)} for all switchable outlets."""
+        result: dict[int, tuple[str, str]] = {
+            siid: (str(i + 1), f"Outlet {i + 1}")
+            for i, siid in enumerate(self.outlet_siids)
+        }
+        if self.usb_siid is not None:
+            result[self.usb_siid] = ("usb", "USB")
+        return result
+
+
+# Keyed by model string returned by miIO.info (e.g. "cuco.plug.wp12").
+# Only devices listed here are supported — probe() raises for unknown models.
+SUPPORTED_DEVICES: dict[str, MiotProfile] = {
+    "cuco.plug.wp12": MiotProfile(
+        model="cuco.plug.wp12",
+        main_siid=2,
+        outlet_siids=[3, 4, 5, 6, 7, 8],
+        usb_siid=9,
+        power_siid=11,
+        power_piid=4,
+    ),
 }
-_OUTLET_ID_TO_SIID: dict[str, int] = {oid: siid for siid, (oid, _) in _SIID_MAP.items()}
 
-_POWER_SIID = 11   # power consumption service
-_POWER_PIID = 4    # electric-power (W, instantaneous)
 
+# ── Backend ───────────────────────────────────────────────────────────────────
 
 class MiioBackend(DeviceBackend):
     # MiIO does not support hardware rename — labels live in DB only
@@ -52,6 +77,7 @@ class MiioBackend(DeviceBackend):
 
     def __init__(self) -> None:
         self.ip: str | None = None
+        self._model: str | None = None   # cached after first miIO.info call
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_token(cfg)
@@ -59,7 +85,8 @@ class MiioBackend(DeviceBackend):
             logger.info("Probing %s at %s", cfg.id, cfg.last_known_ip or cfg.broadcast)
             if cfg.last_known_ip:
                 try:
-                    state = await _get_status(cfg.last_known_ip, cfg)
+                    profile = await self._resolve_profile(cfg.last_known_ip, cfg)
+                    state = await _get_status(cfg.last_known_ip, cfg, profile)
                     self.ip = cfg.last_known_ip
                     return state
                 except DeviceOfflineError:
@@ -70,16 +97,35 @@ class MiioBackend(DeviceBackend):
             if not ip:
                 raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
             self.ip = ip
-        return await _get_status(self.ip, cfg)
+        profile = await self._resolve_profile(self.ip, cfg)
+        return await _get_status(self.ip, cfg, profile)
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         _require_token(cfg)
         if not self.ip:
             raise DeviceOfflineError(f"{cfg.mac}: IP unknown")
-        await _set_power(self.ip, cfg, on, outlet_id)
+        profile = await self._resolve_profile(self.ip, cfg)
+        await _set_power(self.ip, cfg, on, outlet_id, profile)
 
     async def close(self) -> None:
         pass  # UDP — nothing to close
+
+    async def _resolve_profile(self, ip: str, cfg: DeviceConfig) -> MiotProfile:
+        """Return the MiotProfile for this device, detecting via miIO.info if needed."""
+        model = cfg.hw_model or self._model
+        if model and model in SUPPORTED_DEVICES:
+            return SUPPORTED_DEVICES[model]
+
+        # First contact or unknown model — ask the device
+        loop = asyncio.get_running_loop()
+        model = await loop.run_in_executor(None, partial(_fetch_model_sync, ip, cfg))
+        if model not in SUPPORTED_DEVICES:
+            raise DeviceOfflineError(
+                f"Unsupported miio model '{model}' for {cfg.mac} — "
+                "add it to SUPPORTED_DEVICES in miio.py"
+            )
+        self._model = model
+        return SUPPORTED_DEVICES[model]
 
 
 # ── Discovery ─────────────────────────────────────────────────────────────────
@@ -149,12 +195,29 @@ async def scan(broadcasts: list[str], timeout: float = 3.0) -> list[DeviceConfig
 
 # ── Status / control ──────────────────────────────────────────────────────────
 
-def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
+def _fetch_model_sync(ip: str, cfg: DeviceConfig) -> str:
+    """Call miIO.info on the device and return the model string."""
     device = MiotDevice(ip=ip, token=cfg.miio_token)
-    props = (
-        [{"did": cfg.miio_id, "siid": s, "piid": 1} for s in _OUTLET_SIIDS + [_USB_SIID]]
-        + [{"did": cfg.miio_id, "siid": _POWER_SIID, "piid": _POWER_PIID}]
-    )
+    try:
+        raw = device.send("miIO.info", [])
+        info = raw[0] if isinstance(raw, list) else raw
+        model = info.get("model") if isinstance(info, dict) else None
+    except DeviceException as e:
+        raise DeviceOfflineError(f"{cfg.mac} unreachable during model probe: {e}") from e
+    if not model:
+        raise DeviceOfflineError(f"{cfg.mac}: miIO.info returned no model string")
+    return model
+
+
+def _get_status_sync(ip: str, cfg: DeviceConfig, profile: MiotProfile) -> DeviceState:
+    device = MiotDevice(ip=ip, token=cfg.miio_token)
+    siid_map = profile.siid_map()
+    all_outlet_siids = list(siid_map.keys())
+
+    props = [{"did": cfg.miio_id, "siid": s, "piid": 1} for s in all_outlet_siids]
+    if profile.power_siid is not None and profile.power_piid is not None:
+        props.append({"did": cfg.miio_id, "siid": profile.power_siid, "piid": profile.power_piid})
+
     try:
         results = device.send("get_properties", props)
     except DeviceException as e:
@@ -163,19 +226,21 @@ def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
     ok = [r for r in results if r.get("code") == 0]
     switch_values = {r["siid"]: bool(r["value"]) for r in ok if r.get("piid") == 1}
     power_result = next(
-        (r for r in ok if r.get("siid") == _POWER_SIID and r.get("piid") == _POWER_PIID), None
+        (r for r in ok
+         if r.get("siid") == profile.power_siid and r.get("piid") == profile.power_piid),
+        None,
     )
     watts = float(power_result["value"]) if power_result else None
 
     children = [
         ChildState(outlet_id=oid, hw_alias=alias, is_on=switch_values[siid])
-        for siid, (oid, alias) in sorted(_SIID_MAP.items())
+        for siid, (oid, alias) in sorted(siid_map.items())
         if siid in switch_values
     ]
 
     return DeviceState(
         hw_alias=cfg.mac,
-        hw_model="WP12",
+        hw_model=profile.model,
         hw_is_strip=True,
         is_on=any(c.is_on for c in children),
         children=children,
@@ -183,18 +248,23 @@ def _get_status_sync(ip: str, cfg: DeviceConfig) -> DeviceState:
     )
 
 
-async def _get_status(ip: str, cfg: DeviceConfig) -> DeviceState:
+async def _get_status(ip: str, cfg: DeviceConfig, profile: MiotProfile) -> DeviceState:
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, partial(_get_status_sync, ip, cfg))
+    return await loop.run_in_executor(None, partial(_get_status_sync, ip, cfg, profile))
 
 
-def _set_power_sync(ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None) -> None:
+def _set_power_sync(
+    ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None, profile: MiotProfile
+) -> None:
+    siid_map = profile.siid_map()
+    outlet_id_to_siid = {oid: siid for siid, (oid, _) in siid_map.items()}
+
     if outlet_id is None:
-        siid = _MAIN_SIID
-    elif outlet_id in _OUTLET_ID_TO_SIID:
-        siid = _OUTLET_ID_TO_SIID[outlet_id]
+        siid = profile.main_siid
+    elif outlet_id in outlet_id_to_siid:
+        siid = outlet_id_to_siid[outlet_id]
     else:
-        raise DeviceOfflineError(f"Unknown outlet_id '{outlet_id}'")
+        raise DeviceOfflineError(f"Unknown outlet_id '{outlet_id}' for {profile.model}")
 
     device = MiotDevice(ip=ip, token=cfg.miio_token)
     try:
@@ -204,9 +274,11 @@ def _set_power_sync(ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None)
         raise DeviceOfflineError(f"{cfg.mac} set_power failed: {e}") from e
 
 
-async def _set_power(ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None) -> None:
+async def _set_power(
+    ip: str, cfg: DeviceConfig, on: bool, outlet_id: str | None, profile: MiotProfile
+) -> None:
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, partial(_set_power_sync, ip, cfg, on, outlet_id))
+    await loop.run_in_executor(None, partial(_set_power_sync, ip, cfg, on, outlet_id, profile))
 
 
 def _require_token(cfg: DeviceConfig) -> None:

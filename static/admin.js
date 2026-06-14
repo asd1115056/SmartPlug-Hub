@@ -224,6 +224,15 @@ panelSaveBtn.addEventListener('click', async () => {
       await adminApi.setDeviceGroup(_activeDeviceId, newGroup)
     }
 
+    // MiIO credentials (miio only)
+    const miioSec = document.getElementById('panelMiio')
+    if (!miioSec.hidden) {
+      const newToken = document.getElementById('panelMiioToken').value.trim() || null
+      if (newToken !== (device.miio_token ?? null)) {
+        await adminApi.setMiioCredentials(_activeDeviceId, newToken)
+      }
+    }
+
     // Kasa credentials (kasa only)
     const kasaSec = document.getElementById('panelKasa')
     if (!kasaSec.hidden) {

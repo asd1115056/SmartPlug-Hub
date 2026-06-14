@@ -224,6 +224,7 @@ def _make_config(row: DeviceRow) -> DeviceConfig:
         password=row.kasa_password,
         miio_token=row.miio_token,
         miio_id=row.miio_id,
+        hw_model=row.hw_model,
         tuya_device_id=row.tuya_device_id,
         tuya_local_key=row.tuya_local_key,
         tuya_product_id=row.tuya_product_id,

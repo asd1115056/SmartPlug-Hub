@@ -94,6 +94,10 @@ class SetKasaCredentialsRequest(BaseModel):
     password: str | None = None
 
 
+class SetMiioCredentialsRequest(BaseModel):
+    token: str | None = None
+
+
 class SetNameRequest(BaseModel):
     name: str
 

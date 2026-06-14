@@ -14,6 +14,9 @@ export function setDeviceGroup(id, group_name) {
 export function setKasaCredentials(id, username, password) {
   return authFetch('PATCH', `${BASE}/devices/${id}/kasa-credentials`, { username, password })
 }
+export function setMiioCredentials(id, token) {
+  return authFetch('PATCH', `${BASE}/devices/${id}/miio-credentials`, { token })
+}
 export function setOutletName(deviceId, outletId, name) {
   return authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
 }

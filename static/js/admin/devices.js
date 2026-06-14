@@ -226,7 +226,7 @@ export function fillDetailPanel(device) {
   // MiIO credentials (read-only)
   const miioSec = document.getElementById('panelMiio')
   if (device.type === 'miio') {
-    document.getElementById('panelMiioToken').textContent = device.miio_token ?? '—'
+    document.getElementById('panelMiioToken').value = device.miio_token ?? ''
     document.getElementById('panelMiioId').textContent = device.miio_id ?? '—'
     miioSec.hidden = false
   } else {
