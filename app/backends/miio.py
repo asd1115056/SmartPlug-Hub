@@ -59,7 +59,7 @@ SUPPORTED_DEVICES: dict[str, MiotProfile] = {
         model="cuco.plug.wp12",
         main_siid=2,
         outlet_siids=[3, 4, 5, 6, 7, 8],
-        usb_siid=9,
+        usb_siid=None,
         power_siid=11,
         power_piid=4,
     ),
