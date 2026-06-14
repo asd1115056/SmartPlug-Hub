@@ -230,6 +230,7 @@ def _make_config(row: DeviceRow, account: Account | None) -> DeviceConfig:
         miio_id=row.miio_id,
         tuya_device_id=row.tuya_device_id,
         tuya_local_key=row.tuya_local_key,
+        tuya_product_id=row.tuya_product_id,
     )
 
 

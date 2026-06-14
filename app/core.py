@@ -59,6 +59,7 @@ class DeviceConfig:
     miio_id: str | None = None
     tuya_device_id: str | None = None
     tuya_local_key: str | None = None
+    tuya_product_id: str | None = None
     hw_model: str | None = None     # populated during scan; None for stored configs
 
 

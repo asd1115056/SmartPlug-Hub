@@ -38,6 +38,7 @@ class Device(SQLModel, table=True):
     # Tuya connection credentials
     tuya_device_id: str | None = None     # gwId from Tuya IoT Platform
     tuya_local_key: str | None = None     # 16-char local encryption key
+    tuya_product_id: str | None = None    # product_id → DPS profile lookup
 
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None

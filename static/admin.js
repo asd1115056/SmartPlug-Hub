@@ -113,6 +113,7 @@ const miioToken       = document.getElementById('miioToken')
 const miioDeviceId    = document.getElementById('miioDeviceId')
 const tuyaDeviceId    = document.getElementById('tuyaDeviceId')
 const tuyaLocalKey    = document.getElementById('tuyaLocalKey')
+const tuyaProductId   = document.getElementById('tuyaProductId')
 
 function _applyDeviceType(type) {
   const isMiio = type === 'miio'
@@ -123,6 +124,7 @@ function _applyDeviceType(type) {
   document.getElementById('tuyaFields').hidden = !isTuya
   tuyaDeviceId.required = isTuya
   tuyaLocalKey.required = isTuya
+  if (!isTuya) tuyaProductId.value = ''
 }
 
 deviceTypeSel.addEventListener('change', () => _applyDeviceType(deviceTypeSel.value))
@@ -145,6 +147,7 @@ document.getElementById('addDeviceForm').addEventListener('submit', async e => {
       miio_token: f.miio_token?.value || null, miio_id: f.miio_id?.value || null,
       tuya_device_id: f.tuya_device_id?.value || null,
       tuya_local_key: f.tuya_local_key?.value || null,
+      tuya_product_id: f.tuya_product_id?.value || null,
     })
     bootstrap.Modal.getInstance(document.getElementById('addDeviceModal')).hide()
     f.reset()
@@ -280,9 +283,11 @@ function _renderScanPage() {
         data-mac="${esc(d.mac)}"
         data-type="${esc(d.type)}"
         data-broadcast="${esc(d.broadcast)}"
+        data-model="${esc(d.model ?? '')}"
         data-miio-id="${esc(d.miio_id ?? '')}"
         data-tuya-device-id="${esc(d.tuya_device_id ?? '')}"
-        data-tuya-local-key="${esc(d.tuya_local_key ?? '')}">
+        data-tuya-local-key="${esc(d.tuya_local_key ?? '')}"
+        data-tuya-product-id="${esc(d.tuya_product_id ?? '')}">
         <i class="bi bi-plus-lg me-1"></i>Add
       </button>
     </td>
@@ -363,6 +368,7 @@ document.getElementById('scanTable').addEventListener('click', e => {
   if (type === 'tuya') {
     if (tdid) tuyaDeviceId.value = tdid
     if (tlk) tuyaLocalKey.value = tlk
+    tuyaProductId.value = btn.dataset.tuyaProductId || ''
   }
 
   scanModal.hide()

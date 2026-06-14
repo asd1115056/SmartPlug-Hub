@@ -179,7 +179,6 @@
                 <option value="">—</option>
                 <option value="kasa">Kasa</option>
                 <option value="miio">MiIO</option>
-                <option value="tuya">Tuya</option>
               </select>
             </div>
             <div class="col-sm-6">
@@ -211,6 +210,7 @@
               </div>
             </div>
             <div id="tuyaFields" class="col-12 row g-3 mb-0" hidden>
+              <input type="hidden" name="tuya_product_id" id="tuyaProductId">
               <div class="col-sm-6">
                 <label class="form-label fw-semibold">Device ID <span class="text-muted fw-normal">(gwId)</span></label>
                 <input name="tuya_device_id" id="tuyaDeviceId" class="form-control font-monospace" placeholder="a3fb8b8a66d417…">

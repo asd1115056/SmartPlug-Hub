@@ -46,7 +46,7 @@ SUPPORTED_DEVICES: dict[str, DpsProfile] = {
 
 
 def _get_profile(cfg: DeviceConfig) -> DpsProfile:
-    product_id = cfg.hw_model
+    product_id = cfg.tuya_product_id
     if not product_id or product_id not in SUPPORTED_DEVICES:
         raise DeviceOfflineError(
             f"Unsupported Tuya product_id '{product_id}' for {cfg.mac} — "
@@ -226,7 +226,7 @@ def _sync_discover(iface_pairs: list[tuple[str, str]], timeout: float) -> list[D
                     broadcast=_iface_broadcast_for(ip, iface_pairs),
                     last_known_ip=ip,
                     tuya_device_id=gwid,
-                    hw_model=payload.get("productKey"),
+                    tuya_product_id=payload.get("productKey"),
                 )
     finally:
         for s in socks:

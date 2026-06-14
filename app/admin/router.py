@@ -129,6 +129,7 @@ async def scan_network(db: Database = Depends(_db)) -> list[DiscoveredDeviceOut]
                         miio_id=d.miio_id,
                         tuya_device_id=d.tuya_device_id,
                         tuya_local_key=d.tuya_local_key,
+                        tuya_product_id=d.tuya_product_id,
                     ))
     return found
 
@@ -147,6 +148,7 @@ async def create_device(
             miio_id=body.miio_id,
             tuya_device_id=body.tuya_device_id,
             tuya_local_key=body.tuya_local_key,
+            tuya_product_id=body.tuya_product_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
