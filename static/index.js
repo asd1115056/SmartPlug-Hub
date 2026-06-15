@@ -101,8 +101,10 @@ async function handleToggle(deviceId, outletId, action, token = null) {
       showToast(`${e.message}: ${name}`, 'danger')
     }
   } finally {
-    pending.delete(deviceId)
-    render()
+    if (!retryToken) {
+      pending.delete(deviceId)
+      render()
+    }
   }
 
   if (retryToken) {
