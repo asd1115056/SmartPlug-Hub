@@ -87,6 +87,17 @@ async def set_power(
     svc: DeviceService = Depends(_svc),
 ) -> DeviceOut:
     try:
+        entry = svc.get_device(device_id)
+    except DeviceNotFoundError:
+        raise HTTPException(status_code=404, detail="Device not found")
+    if body.outlet_id is not None:
+        required_token = entry.outlet_tokens.get(body.outlet_id)
+    else:
+        required_token = entry.device_token
+    if required_token is not None and body.token != required_token:
+        detail = "Token required" if body.token is None else "Invalid token"
+        raise HTTPException(status_code=403, detail=detail)
+    try:
         await svc.set_power(device_id, body.outlet_id, body.on)
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")

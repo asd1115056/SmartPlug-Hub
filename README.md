@@ -95,7 +95,7 @@ smartplug-hub/
 │   ├── __main__.py          # Entry point (uv run smartplug-hub)
 │   ├── command_queue.py     # Per-device command serialization with session lifecycle
 │   ├── core.py              # DeviceBackend ABC, DeviceConfig, DeviceState, exceptions
-│   ├── db.py                # SQLite layer (devices, accounts, outlet names)
+│   ├── db.py                # SQLite layer (devices, outlet names, outlet tokens)
 │   ├── device_service.py    # Runtime state: polling, command dispatch, SSE broadcast
 │   ├── logging.py           # Rich handler + library log suppression
 │   ├── main.py              # FastAPI app, public API, SSE, lifespan
@@ -193,16 +193,17 @@ All public endpoints are under `/api/v1/`. Admin endpoints are under `/api/v1/ad
   "is_strip": true,
   "is_online": true,
   "is_on": true,
+  "has_token": false,
   "last_updated": "2024-01-15T10:30:00+00:00",
   "watts": 42.5,
   "outlets": [
-    { "outlet_id": "abc123", "name": "Outlet 1", "is_on": true, "watts": 42.5 },
-    { "outlet_id": "def456", "name": "Outlet 2", "is_on": false, "watts": 0.0 }
+    { "outlet_id": "abc123", "name": "Outlet 1", "is_on": true, "watts": 42.5, "has_token": true },
+    { "outlet_id": "def456", "name": "Outlet 2", "is_on": false, "watts": 0.0, "has_token": false }
   ]
 }
 ```
 
-`GET /api/v1/devices` returns a flat array of device objects. `is_on`, `outlets`, and `watts` are `null` until the first successful poll. `watts` is instantaneous power in watts; `null` if the device does not support energy monitoring.
+`GET /api/v1/devices` returns a flat array of device objects. `is_on`, `outlets`, and `watts` are `null` until the first successful poll. `watts` is instantaneous power in watts; `null` if the device does not support energy monitoring. `has_token` indicates whether a token is required to control the device or outlet.
 
 ### PATCH /api/v1/devices/{id}
 
@@ -211,17 +212,18 @@ Control a device or a single outlet. Blocks until the operation completes (or fa
 Request body:
 
 ```json
-{ "outlet_id": "abc123", "on": true }
+{ "outlet_id": "abc123", "on": true, "token": "secret" }
 ```
 
-| Field       | Required | Description                                              |
-|-------------|----------|----------------------------------------------------------|
-| `on`        | Yes      | `true` to turn on, `false` to turn off                   |
-| `outlet_id` | No       | Outlet ID for power strips; omit to control whole device |
+| Field       | Required | Description                                                  |
+|-------------|----------|--------------------------------------------------------------|
+| `on`        | Yes      | `true` to turn on, `false` to turn off                       |
+| `outlet_id` | No       | Outlet ID for power strips; omit to control whole device     |
+| `token`     | No       | Required if the device or outlet has an access token set     |
 
 Response (200): updated device object.
 
-Error codes: `404` device not found, `503` device offline.
+Error codes: `403` missing or invalid token, `404` device not found, `503` device offline.
 
 ### POST /api/v1/devices/{id}/refresh
 
@@ -232,6 +234,19 @@ Returns the updated device object. Returns `503` if the device is still unreacha
 ### GET /api/v1/events
 
 Server-Sent Events stream. Each event is a JSON array of all device objects (same shape as `GET /api/v1/devices`). A `: keepalive` comment is sent every 5 seconds when idle.
+
+### Access Tokens (Admin)
+
+Devices and individual outlets can be protected with an optional access token. When set, every `PATCH /api/v1/devices/{id}` request must include the correct `token` field or the server returns `403`.
+
+Tokens are managed via the admin panel or the following admin API endpoints (require `Authorization: Bearer <admin-token>`):
+
+| Method  | Path                                            | Description                        |
+|---------|-------------------------------------------------|------------------------------------|
+| `PATCH` | `/api/v1/admin/devices/{id}/token`              | Set or clear the device token      |
+| `PATCH` | `/api/v1/admin/devices/{id}/outlets/{oid}/token`| Set or clear an outlet token       |
+
+Request body for both: `{ "token": "secret" }` — send `null` or omit to clear.
 
 ### Device ID
 

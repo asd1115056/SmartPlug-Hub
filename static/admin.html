@@ -181,12 +181,21 @@
     </div>
   </div>
 
+  <!-- Device token (non-strip only) -->
+  <div id="panelDeviceTokenSec" class="panel-sec" hidden>
+    <div>
+      <label class="form-label fw-semibold">Access Token</label>
+      <input id="panelDeviceToken" class="form-control form-control-sm font-monospace" type="text"
+        placeholder="blank = no restriction" autocomplete="off">
+    </div>
+  </div>
+
   <!-- Outlets (strip only) -->
   <div id="panelOutletsSec" class="panel-sec" hidden>
     <div class="panel-sec-title">Outlets</div>
     <div id="panelOutlets"></div>
     <div class="text-muted small mt-2">
-      <i class="bi bi-info-circle me-1"></i>Outlet names saved with Save Changes below
+      <i class="bi bi-info-circle me-1"></i>Names and tokens saved with Save Changes below
     </div>
   </div>
 
@@ -224,7 +233,7 @@
   </div>
 </div>
 
-<div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+<div class="toast-container position-fixed top-0 start-50 translate-middle-x p-3" id="toastContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script type="module" src="/static/admin.js?v=2"></script>

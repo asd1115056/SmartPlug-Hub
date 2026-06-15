@@ -35,6 +35,8 @@ class Device(SQLModel, table=True):
     tuya_local_key: str | None = None     # 16-char local encryption key
     tuya_product_id: str | None = None
 
+    device_token: str | None = None       # optional on/off protection token
+
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None
     hw_model: str | None = None
@@ -46,6 +48,13 @@ class Outlet(SQLModel, table=True):
     device_id: str = Field(foreign_key="device.id", primary_key=True)
     outlet_id: str = Field(primary_key=True)  # Kasa: child.device_id / MiIO: str(index)
     name: str                           # only exists when user has explicitly renamed this outlet
+
+
+class OutletToken(SQLModel, table=True):
+    __tablename__ = "outlet_token"
+    device_id: str = Field(foreign_key="device.id", primary_key=True)
+    outlet_id: str = Field(primary_key=True)
+    token: str
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -70,8 +79,7 @@ class Database:
     async def initialize(self) -> None:
         async with self._engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
-            # Migrate existing DBs that predate per-device kasa credentials
-            for col in ('kasa_username', 'kasa_password'):
+            for col in ('kasa_username', 'kasa_password', 'device_token'):
                 try:
                     await conn.execute(text(f'ALTER TABLE device ADD COLUMN {col} TEXT'))
                 except Exception:
@@ -102,11 +110,10 @@ class Database:
 
     async def remove_device(self, device_id: str) -> None:
         async with AsyncSession(self._engine) as session:
-            outlets = await session.exec(
-                select(Outlet).where(Outlet.device_id == device_id)
-            )
-            for outlet in outlets.all():
+            for outlet in (await session.exec(select(Outlet).where(Outlet.device_id == device_id))).all():
                 await session.delete(outlet)
+            for ot in (await session.exec(select(OutletToken).where(OutletToken.device_id == device_id))).all():
+                await session.delete(ot)
             device = await session.get(Device, device_id)
             if device:
                 await session.delete(device)
@@ -206,3 +213,38 @@ class Database:
             else:
                 session.add(Outlet(device_id=device_id, outlet_id=outlet_id, name=name))
             await session.commit()
+
+    async def get_outlet_token(self, device_id: str, outlet_id: str) -> str | None:
+        async with AsyncSession(self._engine) as session:
+            row = await session.get(OutletToken, (device_id, outlet_id))
+            return row.token if row else None
+
+    async def get_all_outlet_tokens(self) -> dict[str, dict[str, str]]:
+        """Return {device_id: {outlet_id: token}} for all outlet tokens."""
+        async with AsyncSession(self._engine) as session:
+            rows = (await session.exec(select(OutletToken))).all()
+            result: dict[str, dict[str, str]] = {}
+            for row in rows:
+                result.setdefault(row.device_id, {})[row.outlet_id] = row.token
+            return result
+
+    async def set_outlet_token(self, device_id: str, outlet_id: str, token: str | None) -> None:
+        async with AsyncSession(self._engine) as session:
+            existing = await session.get(OutletToken, (device_id, outlet_id))
+            if token is None:
+                if existing:
+                    await session.delete(existing)
+            elif existing:
+                existing.token = token
+                session.add(existing)
+            else:
+                session.add(OutletToken(device_id=device_id, outlet_id=outlet_id, token=token))
+            await session.commit()
+
+    async def set_device_token(self, device_id: str, token: str | None) -> None:
+        async with AsyncSession(self._engine) as session:
+            device = await session.get(Device, device_id)
+            if device:
+                device.device_token = token
+                session.add(device)
+                await session.commit()

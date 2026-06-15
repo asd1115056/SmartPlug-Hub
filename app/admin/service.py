@@ -77,8 +77,9 @@ async def set_kasa_credentials(
     if row:
         entry = svc._devices.get(device_id)
         outlet_names = entry.outlet_names if entry else {}
+        outlet_tokens = entry.outlet_tokens if entry else {}
         await svc.remove_entry(device_id)
-        svc.add_entry(row, outlet_names)
+        svc.add_entry(row, outlet_names, outlet_tokens)
     logger.info("Device %s kasa credentials updated", device_id)
 
 
@@ -94,8 +95,9 @@ async def set_miio_credentials(
     if row:
         entry = svc._devices.get(device_id)
         outlet_names = entry.outlet_names if entry else {}
+        outlet_tokens = entry.outlet_tokens if entry else {}
         await svc.remove_entry(device_id)
-        svc.add_entry(row, outlet_names)
+        svc.add_entry(row, outlet_names, outlet_tokens)
     logger.info("Device %s miio credentials updated", device_id)
 
 
@@ -112,8 +114,9 @@ async def set_tuya_credentials(
     if row:
         entry = svc._devices.get(device_id)
         outlet_names = entry.outlet_names if entry else {}
+        outlet_tokens = entry.outlet_tokens if entry else {}
         await svc.remove_entry(device_id)
-        svc.add_entry(row, outlet_names)
+        svc.add_entry(row, outlet_names, outlet_tokens)
     logger.info("Device %s tuya credentials updated", device_id)
 
 

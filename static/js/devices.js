@@ -134,13 +134,15 @@ function _singleControlRow(d) {
   const disabledAttr = d.is_online ? '' : 'disabled'
   const hasWatts     = d.watts !== null && d.watts !== undefined
   const wattsText    = hasWatts ? _fmtWatts(d.watts) : '— W'
+  const lockIcon     = `<i class="bi bi-lock-fill me-1" style="font-size:.8rem;opacity:.75;visibility:${d.has_token ? 'visible' : 'hidden'}"></i>`
   return `
     <div class="control-row ${onClass}">
-      <span class="row-label">${esc(d.name)}</span>
+      <span class="row-label">${lockIcon}${esc(d.name)}</span>
       <div class="d-flex align-items-center">
         <span class="row-watts">${wattsText}</span>
         <button class="toggle-switch ${onClass}"
-          data-device-id="${d.id}" data-action="${action}" ${disabledAttr}></button>
+          data-device-id="${d.id}" data-action="${action}"
+          data-has-token="${d.has_token ? '1' : ''}" ${disabledAttr}></button>
       </div>
     </div>`
 }
@@ -199,13 +201,14 @@ function _outletList(deviceId, outlets, isOnline) {
     const hasWatts  = o.watts !== null && o.watts !== undefined
     const wattsText = hasWatts ? _fmtWatts(o.watts) : '— W'
     const wattsTip  = hasWatts ? '' : ' title="Power monitoring not supported for individual outlets"'
+    const lockIcon  = `<i class="bi bi-lock-fill me-1" style="font-size:.8rem;opacity:.75;visibility:${o.has_token ? 'visible' : 'hidden'}"></i>`
     return `
       <div class="outlet-row ${onClass}">
-        <span class="outlet-name">${esc(o.name)}</span>
+        <span class="outlet-name">${lockIcon}${esc(o.name)}</span>
         <span class="outlet-watts"${wattsTip}>${wattsText}</span>
         <button class="toggle-switch ${onClass}"
           data-device-id="${deviceId}" data-outlet-id="${esc(o.outlet_id)}"
-          data-action="${action}" ${disabledAttr}></button>
+          data-action="${action}" data-has-token="${o.has_token ? '1' : ''}" ${disabledAttr}></button>
       </div>`
   }).join('')
 }

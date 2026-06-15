@@ -20,16 +20,17 @@ export function showToast(msg, type = 'danger') {
   const icon = ICONS[type] ?? ICONS.danger
 
   const el = document.createElement('div')
-  el.className = `toast ${COLOR[type] ?? COLOR.danger} border-0`
+  el.className = `toast rounded-pill ${COLOR[type] ?? COLOR.danger} border-0`
   el.setAttribute('role', 'alert')
   el.innerHTML = `
-    <div class="d-flex align-items-center">
-      <span class="toast-icon"><i class="bi ${icon}"></i></span>
-      <div class="toast-body">${esc(msg)}</div>
-      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    <div class="d-flex align-items-center gap-2 px-3 py-2">
+      <i class="bi ${icon} flex-shrink-0"></i>
+      <span class="toast-body p-0">${esc(msg)}</span>
+      <button type="button" class="btn-close btn-close-white flex-shrink-0 ms-auto" style="font-size:.7rem" data-bs-dismiss="toast"></button>
     </div>`
   container.appendChild(el)
-  const toast = new bootstrap.Toast(el, { delay: 5000 })
+  const delay = (type === 'success' || type === 'info') ? 2500 : 5000
+  const toast = new bootstrap.Toast(el, { delay })
   toast.show()
   el.addEventListener('hidden.bs.toast', () => el.remove())
 

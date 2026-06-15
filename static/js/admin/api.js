@@ -23,5 +23,11 @@ export function setTuyaCredentials(id, tuya_device_id, tuya_local_key, tuya_prod
 export function setOutletName(deviceId, outletId, name) {
   return authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/name`, { name })
 }
+export function setOutletToken(deviceId, outletId, token) {
+  return authFetch('PATCH', `${BASE}/devices/${deviceId}/outlets/${outletId}/token`, { token })
+}
+export function setDeviceToken(id, token) {
+  return authFetch('PATCH', `${BASE}/devices/${id}/token`, { token })
+}
 
 export function scanNetwork() { return authFetch('POST', `${BASE}/scan`) }

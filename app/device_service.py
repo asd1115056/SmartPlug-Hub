@@ -30,6 +30,8 @@ class DeviceEntry:
     is_online: bool
     last_updated: datetime | None   # UTC timestamp of last successful state update
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
+    outlet_tokens: dict[str, str]   # outlet_id → access token (only set outlets)
+    device_token: str | None        # access token for whole-device on/off
 
 
 # ── Service ───────────────────────────────────────────────────────────────────
@@ -47,9 +49,14 @@ class DeviceService:
     async def start(self) -> None:
         rows = await self._db.get_devices()
         outlet_names = await self._db.get_all_outlet_names()
+        outlet_tokens = await self._db.get_all_outlet_tokens()
 
         for row in rows:
-            self._devices[row.id] = _make_entry(row, outlet_names.get(row.id, {}))
+            self._devices[row.id] = _make_entry(
+                row,
+                outlet_names.get(row.id, {}),
+                outlet_tokens.get(row.id, {}),
+            )
 
         self._poll_task = asyncio.create_task(self._poll_loop())
         by_type = {}
@@ -116,8 +123,13 @@ class DeviceService:
 
     # ── Admin helpers (called after DB writes are committed) ──────────────────
 
-    def add_entry(self, row: DeviceRow, outlet_names: dict[str, str]) -> None:
-        entry = _make_entry(row, outlet_names)
+    def add_entry(
+        self,
+        row: DeviceRow,
+        outlet_names: dict[str, str],
+        outlet_tokens: dict[str, str] | None = None,
+    ) -> None:
+        entry = _make_entry(row, outlet_names, outlet_tokens or {})
         self._devices[row.id] = entry
         asyncio.create_task(self._probe_one(row.id, entry))
         self._broadcast()
@@ -144,6 +156,21 @@ class DeviceService:
         entry = self._devices.get(device_id)
         if entry:
             entry.outlet_names[outlet_id] = name
+            self._broadcast()
+
+    def set_outlet_token(self, device_id: str, outlet_id: str, token: str | None) -> None:
+        entry = self._devices.get(device_id)
+        if entry:
+            if token is None:
+                entry.outlet_tokens.pop(outlet_id, None)
+            else:
+                entry.outlet_tokens[outlet_id] = token
+            self._broadcast()
+
+    def set_device_token(self, device_id: str, token: str | None) -> None:
+        entry = self._devices.get(device_id)
+        if entry:
+            entry.device_token = token
             self._broadcast()
 
     # ── Internal ─────────────────────────────────────────────────────────────
@@ -243,7 +270,11 @@ def _make_backend(device_type: str) -> DeviceBackend:
     raise ValueError(f"Unknown device type: {device_type!r}")
 
 
-def _make_entry(row: DeviceRow, outlet_names: dict[str, str]) -> DeviceEntry:
+def _make_entry(
+    row: DeviceRow,
+    outlet_names: dict[str, str],
+    outlet_tokens: dict[str, str] | None = None,
+) -> DeviceEntry:
     config = _make_config(row)
     backend = _make_backend(row.type)
     return DeviceEntry(
@@ -256,4 +287,6 @@ def _make_entry(row: DeviceRow, outlet_names: dict[str, str]) -> DeviceEntry:
         is_online=False,
         last_updated=None,
         outlet_names=outlet_names,
+        outlet_tokens=outlet_tokens or {},
+        device_token=row.device_token,
     )

@@ -259,18 +259,41 @@ panelSaveBtn.addEventListener('click', async () => {
       }
     }
 
-    // Outlet names (strip only)
+    // Device token (non-strip only)
+    const deviceTokenSec = document.getElementById('panelDeviceTokenSec')
+    if (!deviceTokenSec.hidden) {
+      const newDeviceToken = document.getElementById('panelDeviceToken').value.trim() || null
+      if (newDeviceToken !== (device.device_token ?? null)) {
+        await adminApi.setDeviceToken(_activeDeviceId, newDeviceToken)
+      }
+    }
+
+    // Outlet names + tokens (strip only)
     if (device.hw_is_strip) {
-      const inputs = document.querySelectorAll('#panelOutlets .js-outlet-name')
-      const outlet = device.outlets ?? []
-      for (const input of inputs) {
+      const outlets = device.outlets ?? []
+
+      for (const input of document.querySelectorAll('#panelOutlets .js-outlet-name')) {
         const outletId = input.dataset.outletId
-        const original = outlet.find(o => o.outlet_id === outletId)
+        const original = outlets.find(o => o.outlet_id === outletId)
         if (original && input.value !== original.name) {
           try {
             await adminApi.setOutletName(_activeDeviceId, outletId, input.value)
           } catch (e) {
-            errors.push(`Outlet ${outletId}: ${e.message}`)
+            errors.push(`Outlet ${outletId} name: ${e.message}`)
+          }
+        }
+      }
+
+      for (const input of document.querySelectorAll('#panelOutlets .js-outlet-token')) {
+        const outletId = input.dataset.outletId
+        const original = outlets.find(o => o.outlet_id === outletId)
+        const newToken = input.value.trim() || null
+        const oldToken = original?.token ?? null
+        if (newToken !== oldToken) {
+          try {
+            await adminApi.setOutletToken(_activeDeviceId, outletId, newToken)
+          } catch (e) {
+            errors.push(`Outlet ${outletId} token: ${e.message}`)
           }
         }
       }
