@@ -58,7 +58,7 @@ function detectChanges(prev, next) {
 
     if (old.is_online !== d.is_online) {
       showToast(
-        d.is_online ? `Back online: ${d.name}` : `Went offline: ${d.name}`,
+        d.is_online ? `${d.name} is back online` : `${d.name} went offline`,
         d.is_online ? 'success' : 'warning',
       )
       continue
@@ -70,11 +70,11 @@ function detectChanges(prev, next) {
       for (const o of d.outlets) {
         const prevO = old.outlets.find(p => p.outlet_id === o.outlet_id)
         if (prevO && prevO.is_on !== o.is_on) {
-          showToast(`${o.is_on ? 'On' : 'Off'}: ${d.name} / ${o.name}`, 'info')
+          showToast(`${d.name} / ${o.name} turned ${o.is_on ? 'on' : 'off'}`, 'info')
         }
       }
     } else if (old.is_on !== null && old.is_on !== d.is_on && d.is_on !== null) {
-      showToast(`${d.is_on ? 'On' : 'Off'}: ${d.name}`, 'info')
+      showToast(`${d.name} turned ${d.is_on ? 'on' : 'off'}`, 'info')
     }
   }
 }
@@ -90,7 +90,7 @@ async function handleToggle(deviceId, outletId, action, token = null) {
     const label = outletId
       ? `${updated.name} / ${updated.outlets.find(o => o.outlet_id === outletId)?.name ?? outletId}`
       : updated.name
-    showToast(`${action === 'on' ? 'On' : 'Off'}: ${label}`, 'success')
+    showToast(`${label} turned ${action}`, 'success')
   } catch (e) {
     if (e.status === 403) {
       const isRetry = token !== null
