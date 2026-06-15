@@ -58,8 +58,8 @@ async function handleToggle(deviceId, outletId, action, token = null) {
     devices = devices.map(d => d.id === updated.id ? updated : d)
   } catch (e) {
     if (e.status === 403) {
-      const prompt = token ? 'Invalid token. Try again:' : 'Token required:'
-      retryToken = window.prompt(prompt, '')
+      const msg = token ? 'Invalid token. Try again:' : 'Token required:'
+      retryToken = window.prompt(msg, '')?.trim() ?? null
     } else {
       const name = devices.find(d => d.id === deviceId)?.name ?? deviceId
       showToast(`${e.message}: ${name}`, 'danger')
@@ -69,7 +69,7 @@ async function handleToggle(deviceId, outletId, action, token = null) {
     render()
   }
 
-  if (retryToken !== null) {
+  if (retryToken) {
     await handleToggle(deviceId, outletId, action, retryToken)
   }
 }
