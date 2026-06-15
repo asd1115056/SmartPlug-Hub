@@ -241,7 +241,7 @@ async def set_device_token(
     svc: DeviceService = Depends(_svc),
 ) -> AdminDeviceOut:
     await _require_device(device_id, db)
-    token = body.token or None
+    token = body.token.strip() if body.token else None
     await db.set_device_token(device_id, token)
     svc.set_device_token(device_id, token)
     row = await db.get_device(device_id)
@@ -258,7 +258,7 @@ async def set_outlet_token(
     svc: DeviceService = Depends(_svc),
 ) -> AdminDeviceOut:
     await _require_device(device_id, db)
-    token = body.token or None
+    token = body.token.strip() if body.token else None
     await db.set_outlet_token(device_id, outlet_id, token)
     svc.set_outlet_token(device_id, outlet_id, token)
     row = await db.get_device(device_id)
