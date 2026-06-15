@@ -229,7 +229,8 @@ async def set_outlet_name(
         await service.set_outlet_name(device_id, outlet_id, body.name, db, svc)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    return build_admin_device_out(row, svc._devices.get(device_id))
+    outlet_tokens = (await db.get_all_outlet_tokens()).get(device_id, {})
+    return build_admin_device_out(row, svc._devices.get(device_id), outlet_tokens)
 
 
 @router.patch("/devices/{device_id}/token", response_model=AdminDeviceOut)
