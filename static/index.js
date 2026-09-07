@@ -2,6 +2,7 @@ import { setPower, refreshDevice } from './js/api.js'
 import { connectSSE } from './js/sse.js'
 import { showToast, initNotifBell } from './js/notifications.js'
 import { renderDevices, renderTabs } from './js/devices.js'
+import { getCachedToken, setCachedToken, clearCachedToken } from './js/token-cache.js'
 
 function promptToken(msg, isError = false) {
   return new Promise(resolve => {
@@ -86,6 +87,7 @@ async function handleToggle(deviceId, outletId, action, token = null) {
   let retryToken = null
   try {
     const updated = await setPower(deviceId, outletId, action === 'on', token)
+    if (token) setCachedToken(deviceId, outletId, token)
     devices = devices.map(d => d.id === updated.id ? updated : d)
     const label = outletId
       ? `${updated.name} / ${updated.outlets.find(o => o.outlet_id === outletId)?.name ?? outletId}`
@@ -93,6 +95,7 @@ async function handleToggle(deviceId, outletId, action, token = null) {
     showToast(`${label} turned ${action}`, 'success')
   } catch (e) {
     if (e.status === 403) {
+      if (token) clearCachedToken(deviceId, outletId)
       const isRetry = token !== null
       const msg = isRetry ? 'Invalid token — try again' : 'Enter the token to control this device'
       retryToken = await promptToken(msg, isRetry)
@@ -134,6 +137,11 @@ document.getElementById('devices-container').addEventListener('click', async e =
   if (toggle) {
     const { deviceId, outletId, action, hasToken } = toggle.dataset
     if (hasToken) {
+      const cached = getCachedToken(deviceId, outletId ?? null)
+      if (cached) {
+        handleToggle(deviceId, outletId ?? null, action, cached)
+        return
+      }
       const token = await promptToken('Enter the token to control this device')
       if (!token) return
       handleToggle(deviceId, outletId ?? null, action, token)
