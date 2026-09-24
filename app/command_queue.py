@@ -3,18 +3,22 @@
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from .core import DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState
 
 logger = logging.getLogger(__name__)
 
+Action = Callable[[DeviceBackend, DeviceConfig], Awaitable[Any]]
+
 
 @dataclass
 class Command:
-    outlet_id: str | None
-    on: bool
-    future: asyncio.Future[DeviceState]
+    action: Action
+    future: asyncio.Future[Any]
+    dedup_key: tuple[str | None, bool] | None
 
 
 class DeviceQueue:
@@ -31,16 +35,31 @@ class DeviceQueue:
         self._last_cmd_time: float = 0.0
 
     def submit(self, outlet_id: str | None, on: bool) -> asyncio.Future[DeviceState]:
-        """Enqueue a command and return a future. Deduplicates identical pending commands."""
+        """Enqueue a power command and return a future. Deduplicates identical pending commands."""
+        dedup_key = (outlet_id, on)
         for cmd in self._pending:
-            if cmd.outlet_id == outlet_id and cmd.on == on:
+            if cmd.dedup_key == dedup_key:
                 return cmd.future
 
-        future: asyncio.Future[DeviceState] = asyncio.get_running_loop().create_future()
-        cmd = Command(outlet_id=outlet_id, on=on, future=future)
+        async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
+            await backend.set_power(config, outlet_id, on)
+            return await backend.probe(config)
+
+        logger.debug("[%s] command queued outlet=%s on=%s", self._device_id, outlet_id, on)
+        return self._enqueue(action, dedup_key)
+
+    def run(self, action: Action) -> asyncio.Future[Any]:
+        """Enqueue an arbitrary backend operation, serialized against power commands and polling."""
+        logger.debug("[%s] operation queued", self._device_id)
+        return self._enqueue(action, dedup_key=None)
+
+    def _enqueue(
+        self, action: Action, dedup_key: tuple[str | None, bool] | None,
+    ) -> asyncio.Future[Any]:
+        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
+        cmd = Command(action=action, future=future, dedup_key=dedup_key)
         self._pending.append(cmd)
         self._queue.put_nowait(cmd)
-        logger.debug("[%s] command queued outlet=%s on=%s", self._device_id, outlet_id, on)
 
         if self._processor is None or self._processor.done():
             self._processor = asyncio.create_task(self._run())
@@ -111,16 +130,23 @@ class DeviceQueue:
                 return None
 
     async def _execute(self, cmd: Command) -> None:
-        logger.debug("[%s] executing outlet=%s on=%s", self._device_id, cmd.outlet_id, cmd.on)
+        logger.debug("[%s] executing command", self._device_id)
         self._executing = True
         try:
-            await self._backend.set_power(self._config, cmd.outlet_id, cmd.on)
-            state = await self._backend.probe(self._config)
+            result = await cmd.action(self._backend, self._config)
             if not cmd.future.done():
-                cmd.future.set_result(state)
+                cmd.future.set_result(result)
             logger.debug("[%s] command completed", self._device_id)
+        except asyncio.CancelledError:
+            logger.info("[%s] command cancelled — connection closed underneath it", self._device_id)
+            if not cmd.future.done():
+                cmd.future.cancel()
+            raise
         except DeviceOfflineError as e:
             logger.info("[%s] device offline: %s", self._device_id, e)
+            if not cmd.future.done():
+                cmd.future.set_exception(e)
+        except ValueError as e:
             if not cmd.future.done():
                 cmd.future.set_exception(e)
         except Exception as e:

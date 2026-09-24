@@ -129,8 +129,10 @@ smartplug-hub/
 Kasa devices use **short-term persistent TCP connections** managed per device:
 
 - Connects on the first command (not at startup)
-- Consecutive commands reuse the existing connection
-- After 60 seconds of idle, the connection is automatically closed
+- Back-to-back commands reuse the existing connection
+- After 20 seconds of idle, the connection is deterministically closed — well under the
+  60s poll interval, so polling always re-establishes a fresh connection each cycle
+  instead of holding one open indefinitely
 - On first contact or after failure: try last known IP → broadcast discover → mark offline
 - Use `POST /api/v1/devices/{id}/refresh` to trigger rediscovery for an offline device
 
@@ -156,11 +158,13 @@ Tuya scan sends an **encrypted UDP discovery broadcast** on ports 6666, 6667, an
 
 ### Command Queue
 
-Each device has its own `DeviceQueue` that serializes commands and manages the backend session lifecycle:
+Each device has its own `DeviceQueue` that serializes *every* backend operation for that
+device — power commands, hardware rename, forced refresh, and the periodic background
+poll all go through the same queue, so exactly one is ever talking to the device at a time:
 
-- Deduplicates identical pending commands (e.g. two rapid "turn on" clicks)
+- Deduplicates identical pending power commands (e.g. two rapid "turn on" clicks)
 - Rate-limits commands per backend (`command_interval`)
-- For stateful backends (Kasa): holds the TCP connection open between commands
+- For stateful backends (Kasa): holds the TCP connection open between back-to-back operations
 - After each command, re-reads device state and broadcasts via SSE
 
 ### Real-time Updates (SSE)
