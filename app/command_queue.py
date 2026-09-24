@@ -137,8 +137,16 @@ class DeviceQueue:
             if not cmd.future.done():
                 cmd.future.set_result(result)
             logger.debug("[%s] command completed", self._device_id)
+        except asyncio.CancelledError:
+            logger.info("[%s] command cancelled — connection closed underneath it", self._device_id)
+            if not cmd.future.done():
+                cmd.future.cancel()
+            raise
         except DeviceOfflineError as e:
             logger.info("[%s] device offline: %s", self._device_id, e)
+            if not cmd.future.done():
+                cmd.future.set_exception(e)
+        except ValueError as e:
             if not cmd.future.done():
                 cmd.future.set_exception(e)
         except Exception as e:

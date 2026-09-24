@@ -234,6 +234,8 @@ async def set_outlet_name(
         raise HTTPException(status_code=404, detail=str(e))
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except asyncio.CancelledError:
+        raise HTTPException(status_code=409, detail="Interrupted by a concurrent device refresh")
     outlet_tokens = (await db.get_all_outlet_tokens()).get(device_id, {})
     return build_admin_device_out(row, svc._devices.get(device_id), outlet_tokens)
 
