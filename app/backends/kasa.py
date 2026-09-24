@@ -43,9 +43,9 @@ class KasaBackend(DeviceBackend):
             await device.update()
             self.ip = device.host
             return _build_state(device)
-        except Exception:
+        except Exception as e:
             await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         device = await self._get_device(cfg)
@@ -60,9 +60,9 @@ class KasaBackend(DeviceBackend):
                 await (device.turn_on() if on else device.turn_off())
         except ValueError:
             raise
-        except Exception:
+        except Exception as e:
             await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
 
     async def rename_outlet(self, cfg: DeviceConfig, outlet_id: str, name: str) -> None:
         device = await self._get_device(cfg)
@@ -76,18 +76,18 @@ class KasaBackend(DeviceBackend):
             await target.set_alias(name)
         except ValueError:
             raise
-        except Exception:
+        except Exception as e:
             await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
 
     async def rename_device(self, cfg: DeviceConfig, name: str) -> None:
         # TODO: verify set_alias on strip (HS300 untested) and cloud sync on single plug
         device = await self._get_device(cfg)
         try:
             await device.set_alias(name)
-        except Exception:
+        except Exception as e:
             await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}")
+            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
 
     async def close(self) -> None:
         await self._drop()

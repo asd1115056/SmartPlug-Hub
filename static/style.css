@@ -200,6 +200,14 @@
 
 /* === Toast === */
 
+.toast-container .toast {
+  max-width: min(350px, calc(100vw - 2rem));
+}
+
+.toast-body {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
 
 /* === Notification Bell === */
 
