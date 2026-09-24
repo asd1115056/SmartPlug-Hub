@@ -98,13 +98,23 @@ class DeviceService:
         self._update_state(device_id, entry, state)
         return state
 
+    async def rename_outlet(self, device_id: str, outlet_id: str, name: str) -> None:
+        """Push a hardware alias change — serialized against power commands and polling."""
+        entry = self._get_entry(device_id)
+
+        async def action(backend: DeviceBackend, config: DeviceConfig) -> None:
+            await backend.rename_outlet(config, outlet_id, name)
+
+        await entry.queue.run(action)
+
     async def refresh(self, device_id: str) -> DeviceState:
         """Force-close and rediscover — skips cached IPs to handle IP changes."""
         entry = self._get_entry(device_id)
         await entry.queue.close()
         entry.backend.ip = None
+        config = replace(entry.config, last_known_ip=None)
         try:
-            state = await entry.backend.probe(replace(entry.config, last_known_ip=None))
+            state = await entry.queue.run(lambda backend, _cfg: backend.probe(config))
         except DeviceOfflineError:
             self._mark_offline(device_id, entry)
             raise
@@ -218,7 +228,7 @@ class DeviceService:
             logger.debug("Skipping %s — command in progress", device_id)
             return
         try:
-            state = await entry.backend.probe(entry.config)
+            state = await entry.queue.run(lambda backend, config: backend.probe(config))
         except DeviceOfflineError as e:
             if entry.is_online:
                 logger.warning("Device %s unreachable: %s", device_id, e)

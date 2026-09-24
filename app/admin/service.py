@@ -125,7 +125,7 @@ async def set_outlet_name(
 ) -> None:
     entry = svc.get_device(device_id)
     if entry.backend.can_rename_outlet:
-        await entry.backend.rename_outlet(entry.config, outlet_id, name)
+        await svc.rename_outlet(device_id, outlet_id, name)
     else:
         await db.set_outlet_name(device_id, outlet_id, name)
         svc.set_outlet_name(device_id, outlet_id, name)

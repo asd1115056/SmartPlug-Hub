@@ -23,7 +23,11 @@ _RETRY_DELAY = 0.5
 class KasaBackend(DeviceBackend):
     can_rename_outlet = True
     can_rename_device = True
-    session_timeout = 60.0
+    # Every DeviceQueue operation (power, rename, refresh, and the periodic poll
+    # in device_service.POLL_INTERVAL) resets this idle timer. Must stay well
+    # below POLL_INTERVAL (60s) so the connection is deterministically closed
+    # and re-established each poll cycle, not held open indefinitely by polling.
+    session_timeout = 20.0
     command_interval = 0.5
 
     def __init__(self) -> None:
