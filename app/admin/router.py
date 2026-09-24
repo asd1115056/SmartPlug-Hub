@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ..backends.kasa import scan as kasa_scan
 from ..backends.miio import scan as miio_scan
 from ..backends.tuya import scan as tuya_scan
-from ..core import normalize_mac
+from ..core import DeviceOfflineError, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
 from ..network import get_interface_pairs
@@ -161,7 +161,10 @@ async def set_device_name(
     svc: DeviceService = Depends(_svc),
 ) -> AdminDeviceOut:
     row = await _require_device(device_id, db)
-    await service.set_device_name(device_id, body.name, db, svc)
+    try:
+        await service.set_device_name(device_id, body.name, db, svc)
+    except DeviceOfflineError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     row.name = body.name
     return build_admin_device_out(row, svc._devices.get(device_id))
 
@@ -229,6 +232,8 @@ async def set_outlet_name(
         await service.set_outlet_name(device_id, outlet_id, body.name, db, svc)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except DeviceOfflineError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     outlet_tokens = (await db.get_all_outlet_tokens()).get(device_id, {})
     return build_admin_device_out(row, svc._devices.get(device_id), outlet_tokens)
 
