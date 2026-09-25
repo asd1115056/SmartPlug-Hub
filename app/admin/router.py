@@ -62,11 +62,7 @@ async def list_devices(
 ) -> list[AdminDeviceOut]:
     rows = await db.get_devices()
     entries = {e.config.id: e for e in svc.get_devices()}
-    all_outlet_tokens = await db.get_all_outlet_tokens()
-    return [
-        build_admin_device_out(row, entries.get(row.id), all_outlet_tokens.get(row.id, {}))
-        for row in rows
-    ]
+    return [build_admin_device_out(row, entries.get(row.id)) for row in rows]
 
 
 @router.post("/scan", response_model=list[DiscoveredDeviceOut])
@@ -239,8 +235,7 @@ async def set_outlet_name(
         raise HTTPException(status_code=502, detail=str(e))
     except asyncio.CancelledError:
         raise HTTPException(status_code=409, detail="Interrupted by a concurrent device refresh")
-    outlet_tokens = (await db.get_all_outlet_tokens()).get(device_id, {})
-    return build_admin_device_out(row, svc._devices.get(device_id), outlet_tokens)
+    return build_admin_device_out(row, svc._devices.get(device_id))
 
 
 @router.patch("/devices/{device_id}/token", response_model=AdminDeviceOut)
@@ -273,5 +268,4 @@ async def set_outlet_token(
     svc.set_outlet_token(device_id, outlet_id, token)
     row = await db.get_device(device_id)
     assert row is not None
-    outlet_tokens = (await db.get_all_outlet_tokens()).get(device_id, {})
-    return build_admin_device_out(row, svc._devices.get(device_id), outlet_tokens)
+    return build_admin_device_out(row, svc._devices.get(device_id))
