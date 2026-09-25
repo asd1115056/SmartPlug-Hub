@@ -157,9 +157,7 @@ def _build_outlets(entry: DeviceEntry) -> list[OutletOut]:
     ]
 
 
-def _build_admin_outlets(
-    entry: DeviceEntry, outlet_tokens: dict[str, str]
-) -> list[AdminOutletOut]:
+def _build_admin_outlets(entry: DeviceEntry) -> list[AdminOutletOut]:
     if not entry.state:
         return []
     return [
@@ -168,7 +166,7 @@ def _build_admin_outlets(
             name=_outlet_name(entry, c),
             is_on=c.is_on,
             watts=c.watts,
-            token=outlet_tokens.get(c.outlet_id),
+            token=entry.outlet_tokens.get(c.outlet_id),
         )
         for c in entry.state.children
     ]
@@ -195,7 +193,6 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
 def build_admin_device_out(
     row: DeviceRow,
     entry: DeviceEntry | None,
-    outlet_tokens: dict[str, str] | None = None,
 ) -> AdminDeviceOut:
     state = entry.state if entry else None
     return AdminDeviceOut(
@@ -219,5 +216,5 @@ def build_admin_device_out(
         device_token=row.device_token,
         is_online=entry.is_online if entry else False,
         is_on=state.is_on if state else None,
-        outlets=_build_admin_outlets(entry, outlet_tokens or {}) if entry else [],
+        outlets=_build_admin_outlets(entry) if entry else [],
     )
