@@ -6,11 +6,11 @@ import logging
 from kasa import Credentials, Device, Module
 from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
-from kasa.exceptions import AuthenticationError
+from kasa.exceptions import AuthenticationError, KasaException
 
 from ..core import (
-    ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState,
-    mac_to_id, normalize_mac,
+    ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceRejectedError,
+    DeviceState, mac_to_id, normalize_mac,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,9 @@ class KasaBackend(DeviceBackend):
         except ValueError:
             raise
         except Exception as e:
+            if _is_rejection(e):
+                # The device answered, so the connection is healthy — keep it open
+                raise DeviceRejectedError(f"{cfg.mac} rejected outlet rename: {e}") from e
             await self._drop()
             raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
 
@@ -202,6 +205,12 @@ async def _safe_close(device: Device) -> None:
         await device.disconnect()
     except Exception as e:
         logger.debug("Disconnect error (ignored): %s", e)
+
+
+def _is_rejection(e: Exception) -> bool:
+    # IotDevice._query_helper raises a bare KasaException when the device replies with a
+    # non-zero err_code; transport failures use subclasses (TimeoutError, _ConnectionError).
+    return type(e) is KasaException
 
 
 def _mac_ok(device: Device, expected_mac: str) -> bool:

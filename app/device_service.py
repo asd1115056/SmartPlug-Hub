@@ -102,10 +102,18 @@ class DeviceService:
         """Push a hardware alias change — serialized against power commands and polling."""
         entry = self._get_entry(device_id)
 
-        async def action(backend: DeviceBackend, config: DeviceConfig) -> None:
+        async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
             await backend.rename_outlet(config, outlet_id, name)
+            # Outlet names are read from entry.state, so re-probe or the UI shows the old
+            # alias until the next poll
+            return await backend.probe(config)
 
-        await entry.queue.run(action)
+        try:
+            state = await entry.queue.run(action)
+        except DeviceOfflineError:
+            self._mark_offline(device_id, entry)
+            raise
+        self._update_state(device_id, entry, state)
 
     async def refresh(self, device_id: str) -> DeviceState:
         """Force-close and rediscover — skips cached IPs to handle IP changes."""
