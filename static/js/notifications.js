@@ -1,3 +1,5 @@
+import { esc } from './common.js'
+
 const ICONS = {
   success: 'bi-check-circle-fill',
   warning: 'bi-exclamation-triangle-fill',
@@ -104,8 +106,3 @@ function _formatTime(iso) {
   } catch { return '' }
 }
 
-function esc(str) {
-  const d = document.createElement('div')
-  d.textContent = str ?? ''
-  return d.innerHTML
-}
