@@ -123,13 +123,16 @@ class DeviceService:
         self._update_state(device_id, entry, state)
 
     async def refresh(self, device_id: str) -> DeviceState:
-        """Force-close and rediscover — skips cached IPs to handle IP changes."""
+        """Drop the connection and cached IPs, then rediscover — queued like any operation."""
         entry = self._get_entry(device_id)
-        await entry.queue.close()
-        entry.backend.ip = None
-        config = replace(entry.config, last_known_ip=None)
+
+        async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
+            await backend.close()
+            backend.ip = None
+            return await backend.probe(replace(config, last_known_ip=None))
+
         try:
-            state = await entry.queue.run(lambda backend, _cfg: backend.probe(config))
+            state = await entry.queue.run(action)
         except DeviceOfflineError:
             self._mark_offline(device_id, entry)
             raise
@@ -254,6 +257,8 @@ class DeviceService:
             return
         try:
             state = await entry.queue.run(lambda backend, config: backend.probe(config))
+        except DeviceNotFoundError:
+            return  # removed while this poll cycle was running
         except DeviceOfflineError as e:
             if entry.is_online:
                 logger.warning("Device %s unreachable: %s", device_id, e)

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ..backends.kasa import scan as kasa_scan
 from ..backends.miio import scan as miio_scan
 from ..backends.tuya import scan as tuya_scan
-from ..core import DeviceOfflineError, DeviceRejectedError, normalize_mac
+from ..core import DeviceNotFoundError, DeviceOfflineError, DeviceRejectedError, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
 from ..network import get_interface_pairs
@@ -233,8 +233,9 @@ async def set_outlet_name(
     except DeviceRejectedError as e:
         # 502, not 503: the device was reached and gave a definitive refusal
         raise HTTPException(status_code=502, detail=str(e))
-    except asyncio.CancelledError:
-        raise HTTPException(status_code=409, detail="Interrupted by a concurrent device refresh")
+    except DeviceNotFoundError:
+        # Removed (or re-created by a credentials update) while the rename was queued
+        raise HTTPException(status_code=404, detail="Device not found")
     return build_admin_device_out(row, svc._devices.get(device_id))
 
 

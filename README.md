@@ -234,7 +234,7 @@ Error codes: `400` power strip without `outlet_id`, `403` missing or invalid tok
 
 ### POST /api/v1/devices/{id}/refresh
 
-Force-closes the cached connection, clears the cached IP, and rediscovers the device from scratch. Useful when a device changes IP address.
+Queued behind any in-flight command for the device, then closes the connection, clears the cached IP, and rediscovers the device from scratch. Useful when a device changes IP address.
 
 Returns the updated device object. Returns `503` if the device is still unreachable after rediscovery.
 

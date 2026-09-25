@@ -111,8 +111,6 @@ async def set_power(
         raise HTTPException(status_code=404, detail=str(e))
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))
-    except asyncio.CancelledError:
-        raise HTTPException(status_code=409, detail="Interrupted by a concurrent device refresh")
     return build_device_out(svc.get_device(device_id))
 
 
@@ -124,8 +122,6 @@ async def refresh_device(device_id: str, svc: DeviceService = Depends(_svc)) -> 
         raise HTTPException(status_code=404, detail="Device not found")
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))
-    except asyncio.CancelledError:
-        raise HTTPException(status_code=409, detail="Interrupted by a concurrent device refresh")
     return build_device_out(svc.get_device(device_id))
 
 
