@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from dataclasses import dataclass, replace
+from typing import Any
 from datetime import UTC, datetime
 
 from .command_queue import DeviceQueue
@@ -45,6 +47,9 @@ class DeviceService:
         self._devices: dict[str, DeviceEntry] = {}
         self._subscribers: set[asyncio.Queue[None]] = set()
         self._poll_task: asyncio.Task[None] | None = None
+        # The event loop only keeps weak references to tasks — hold fire-and-forget
+        # tasks here so they can't be garbage-collected mid-run
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     async def start(self) -> None:
         rows = await self._db.get_devices()
@@ -74,6 +79,8 @@ class DeviceService:
                 pass
         for entry in self._devices.values():
             await entry.queue.close()
+        # Let pending DB writes finish before the caller closes the database
+        await asyncio.gather(*self._background_tasks, return_exceptions=True)
         logger.info("DeviceService stopped")
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -149,7 +156,7 @@ class DeviceService:
     ) -> None:
         entry = _make_entry(row, outlet_names, outlet_tokens or {})
         self._devices[row.id] = entry
-        asyncio.create_task(self._probe_one(row.id, entry))
+        self._spawn(self._probe_one(row.id, entry))
         self._broadcast()
 
     async def remove_entry(self, device_id: str) -> None:
@@ -207,13 +214,23 @@ class DeviceService:
         if not was_online:
             logger.info("Device %s is now online", device_id)
         self._broadcast()
-        asyncio.create_task(self._db.update_device_hw(
+        self._spawn(self._db.update_device_hw(
             device_id,
             hw_alias=state.hw_alias,
             hw_model=state.hw_model,
             hw_is_strip=state.hw_is_strip,
             last_known_ip=entry.backend.ip,
         ))
+
+    def _spawn(self, coro: Coroutine[Any, Any, None]) -> None:
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._on_background_done)
+
+    def _on_background_done(self, task: asyncio.Task[Any]) -> None:
+        self._background_tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.error("Background task failed", exc_info=task.exception())
 
     def _mark_offline(self, device_id: str, entry: DeviceEntry) -> None:
         was_online = entry.is_online
