@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .admin.router import router as admin_router
-from .core import DeviceNotFoundError, DeviceOfflineError, tokens_match
+from .core import DeviceNotFoundError, DeviceOfflineError, DeviceRejectedError, tokens_match
 from .db import Database
 from .device_service import DeviceService
 from .schemas import DeviceOut, SetPowerRequest, build_device_out
@@ -111,6 +111,9 @@ async def set_power(
         raise HTTPException(status_code=404, detail=str(e))
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except DeviceRejectedError as e:
+        # 502, not 503: the device was reached and gave a definitive refusal
+        raise HTTPException(status_code=502, detail=str(e))
     return build_device_out(svc.get_device(device_id))
 
 
@@ -122,6 +125,9 @@ async def refresh_device(device_id: str, svc: DeviceService = Depends(_svc)) -> 
         raise HTTPException(status_code=404, detail="Device not found")
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except DeviceRejectedError as e:
+        # 502, not 503: the device was reached and gave a definitive refusal
+        raise HTTPException(status_code=502, detail=str(e))
     return build_device_out(svc.get_device(device_id))
 
 

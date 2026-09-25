@@ -237,13 +237,13 @@ Request body:
 
 Response (200): updated device object.
 
-Error codes: `400` power strip without `outlet_id`, `403` missing or invalid token, `404` device or outlet not found, `503` device offline.
+Error codes: `400` power strip without `outlet_id`, `403` missing or invalid token, `404` device or outlet not found, `502` device reachable but rejected the command, `503` device offline.
 
 ### POST /api/v1/devices/{id}/refresh
 
 Queued behind any in-flight command for the device, then closes the connection, clears the cached IP, and rediscovers the device from scratch. Useful when a device changes IP address.
 
-Returns the updated device object. Returns `503` if the device is still unreachable after rediscovery.
+Returns the updated device object. Returns `503` if the device is still unreachable after rediscovery, or `502` if it answered but rejected the request.
 
 ### GET /api/v1/events
 

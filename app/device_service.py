@@ -8,7 +8,10 @@ from typing import Any
 from datetime import UTC, datetime
 
 from .command_queue import DeviceQueue
-from .core import DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceState
+from .core import (
+    DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceRejectedError,
+    DeviceState,
+)
 from .db import Database, Device as DeviceRow
 from .backends.kasa import KasaBackend
 from .backends.miio import MiioBackend
@@ -263,6 +266,10 @@ class DeviceService:
             if entry.is_online:
                 logger.warning("Device %s unreachable: %s", device_id, e)
             self._mark_offline(device_id, entry)
+            return
+        except DeviceRejectedError as e:
+            # Reachable but refused the query: not offline, just no fresh state this cycle
+            logger.warning("Device %s rejected poll: %s", device_id, e)
             return
         except Exception:
             logger.exception("Unexpected error probing %s", device_id)
