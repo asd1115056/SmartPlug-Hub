@@ -1,8 +1,4 @@
-function esc(str) {
-  const d = document.createElement('div')
-  d.textContent = str ?? ''
-  return d.innerHTML.replaceAll('"', '&quot;')
-}
+import { esc } from './common.js'
 
 export function renderTabs(devices, activeGroup, searchQuery, onSelect) {
   const container = document.getElementById('tabs-nav')

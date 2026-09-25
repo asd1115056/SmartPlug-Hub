@@ -1,3 +1,5 @@
+import { request } from '../common.js'
+
 const KEY = 'adminToken'
 
 export function getToken() {
@@ -23,20 +25,6 @@ export async function verifyToken() {
   }
 }
 
-export async function authFetch(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` } }
-  if (body !== undefined) opts.body = JSON.stringify(body)
-  const res = await fetch(path, opts)
-  if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-  if (res.status === 204) return null
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`)
-  return data
-}
-
-export async function authFetchBlob(path) {
-  const res = await fetch(path, { headers: { Authorization: `Bearer ${getToken()}` } })
-  if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return URL.createObjectURL(await res.blob())
+export function authFetch(method, path, body) {
+  return request(method, path, { body, headers: { Authorization: `Bearer ${getToken()}` } })
 }

@@ -1,6 +1,8 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
 import { renderDeviceCards, renderScanResults, fillDetailPanel, confirmDelete } from './js/admin/devices.js'
+import { esc } from './js/common.js'
+import { showToast } from './js/notifications.js'
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -24,29 +26,6 @@ const detailPanel    = document.getElementById('detailPanel')
 const panelClose     = document.getElementById('panelClose')
 const panelSaveBtn   = document.getElementById('panelSaveBtn')
 const panelDeleteBtn = document.getElementById('panelDeleteBtn')
-
-// ── Toast ─────────────────────────────────────────────────────────────────────
-
-function flash(msg, ok = true) {
-  const container = document.getElementById('toastContainer')
-  const el = document.createElement('div')
-  el.className = `toast align-items-center text-bg-${ok ? 'success' : 'danger'} border-0`
-  el.setAttribute('role', 'alert')
-  el.innerHTML = `<div class="d-flex">
-    <div class="toast-body">${esc(msg)}</div>
-    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-  </div>`
-  container.appendChild(el)
-  const toast = new bootstrap.Toast(el, { delay: 3000 })
-  toast.show()
-  el.addEventListener('hidden.bs.toast', () => el.remove())
-}
-
-function esc(str) {
-  const d = document.createElement('div')
-  d.textContent = str ?? ''
-  return d.innerHTML
-}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -154,7 +133,7 @@ async function handleScanAdd(deviceData) {
       tuya_local_key: deviceData.tuya_local_key,
       tuya_product_id: deviceData.tuya_product_id,
     })
-    flash('Device added')
+    showToast('Device added', 'success')
     await loadDevices()
     openPanel(row.id)
     const btn = document.querySelector(`.js-scan-add[data-mac="${deviceData.mac}"]`)
@@ -170,7 +149,7 @@ async function handleScanAdd(deviceData) {
       }
     }
   } catch (err) {
-    flash(err.message || 'Failed to add device', false)
+    showToast(err.message || 'Failed to add device', 'danger')
   }
 }
 
@@ -287,13 +266,13 @@ panelSaveBtn.addEventListener('click', async () => {
 
     await loadDevices()
     if (errors.length) {
-      flash(`Saved with errors: ${errors.join('; ')}`, false)
+      showToast(`Saved with errors: ${errors.join('; ')}`, 'danger')
     } else {
-      flash('Changes saved')
+      showToast('Changes saved', 'success')
       closePanel()
     }
   } catch (err) {
-    flash(err.message || 'Save failed', false)
+    showToast(err.message || 'Save failed', 'danger')
   } finally {
     panelSaveBtn.disabled = false
     panelSaveBtn.innerHTML = '<i class="bi bi-floppy me-1"></i>Save Changes'
@@ -307,11 +286,11 @@ panelDeleteBtn.addEventListener('click', async () => {
   if (!await confirmDelete('Delete this device? This cannot be undone.')) return
   try {
     await adminApi.deleteDevice(_activeDeviceId)
-    flash('Device deleted')
+    showToast('Device deleted', 'success')
     closePanel()
     await loadDevices()
   } catch (err) {
-    if (err.status !== 401) flash(err.message, false)
+    if (err.status !== 401) showToast(err.message, 'danger')
   }
 })
 
