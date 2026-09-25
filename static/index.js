@@ -118,11 +118,9 @@ async function handleToggle(deviceId, outletId, action, token = null) {
 async function handleRefresh(deviceId) {
   document.querySelector(`.device-card[data-device-id="${deviceId}"]`)?.classList.add('loading')
   try {
+    // A device still unreachable comes back as a 503, handled below
     const updated = await refreshDevice(deviceId)
-    showToast(
-      updated.is_online ? `Back online: ${updated.name}` : `Still offline: ${updated.name}`,
-      updated.is_online ? 'success' : 'warning',
-    )
+    showToast(`Back online: ${updated.name}`, 'success')
     devices = devices.map(d => d.id === updated.id ? updated : d)
   } catch (e) {
     const name = devices.find(d => d.id === deviceId)?.name ?? deviceId

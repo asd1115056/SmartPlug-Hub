@@ -162,7 +162,13 @@
     </div>
     <div>
       <label class="form-label fw-semibold">Password</label>
-      <input id="panelKasaPassword" type="password" class="form-control form-control-sm" autocomplete="new-password">
+      <div class="input-group input-group-sm">
+        <input id="panelKasaPassword" type="password" class="form-control" autocomplete="new-password">
+        <button id="panelKasaPasswordToggle" class="btn btn-outline-secondary" type="button"
+                title="Show password" aria-label="Show password">
+          <i class="bi bi-eye"></i>
+        </button>
+      </div>
     </div>
   </div>
 

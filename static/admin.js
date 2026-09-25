@@ -26,6 +26,8 @@ const detailPanel    = document.getElementById('detailPanel')
 const panelClose     = document.getElementById('panelClose')
 const panelSaveBtn   = document.getElementById('panelSaveBtn')
 const panelDeleteBtn = document.getElementById('panelDeleteBtn')
+const kasaPassword       = document.getElementById('panelKasaPassword')
+const kasaPasswordToggle = document.getElementById('panelKasaPasswordToggle')
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -166,9 +168,20 @@ function openPanel(deviceId) {
   })
 
   fillDetailPanel(device)
+  setPasswordVisible(false)   // never carry a revealed password over to another device
   panelBackdrop.classList.add('open')
   detailPanel.classList.add('open')
 }
+
+function setPasswordVisible(isVisible) {
+  kasaPassword.type = isVisible ? 'text' : 'password'
+  kasaPasswordToggle.querySelector('i').className = `bi ${isVisible ? 'bi-eye-slash' : 'bi-eye'}`
+  const label = isVisible ? 'Hide password' : 'Show password'
+  kasaPasswordToggle.title = label
+  kasaPasswordToggle.setAttribute('aria-label', label)
+}
+
+kasaPasswordToggle.addEventListener('click', () => setPasswordVisible(kasaPassword.type === 'password'))
 
 function closePanel() {
   _activeDeviceId = null
@@ -221,7 +234,7 @@ panelSaveBtn.addEventListener('click', async () => {
     if (!document.getElementById('panelKasa').hidden) {
       const kasa = {
         kasa_username: document.getElementById('panelKasaUsername').value.trim() || null,
-        kasa_password: document.getElementById('panelKasaPassword').value || null,
+        kasa_password: kasaPassword.value || null,
       }
       if (Object.entries(kasa).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, kasa)
     }

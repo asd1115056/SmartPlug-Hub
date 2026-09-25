@@ -80,11 +80,12 @@ class Database:
     async def initialize(self) -> None:
         async with self._engine.begin() as conn:
             await conn.run_sync(SQLModel.metadata.create_all)
-            for col in ('kasa_username', 'kasa_password', 'device_token'):
-                try:
-                    await conn.execute(text(f'ALTER TABLE device ADD COLUMN {col} TEXT'))
-                except Exception:
-                    pass  # Column already exists (fresh installs have it from create_all)
+            # create_all never alters existing tables: add columns introduced after a DB was made
+            rows = await conn.execute(text("PRAGMA table_info(device)"))
+            existing = {row[1] for row in rows}
+            for col in ("kasa_username", "kasa_password", "device_token"):
+                if col not in existing:
+                    await conn.execute(text(f"ALTER TABLE device ADD COLUMN {col} TEXT"))
 
     async def close(self) -> None:
         await self._engine.dispose()
