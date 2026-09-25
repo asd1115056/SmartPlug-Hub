@@ -60,7 +60,7 @@ class DeviceService:
         outlet_tokens = await self._db.get_all_outlet_tokens()
 
         for row in rows:
-            self._devices[row.id] = _make_entry(
+            self._devices[row.id] = self._make_entry(
                 row,
                 outlet_names.get(row.id, {}),
                 outlet_tokens.get(row.id, {}),
@@ -129,13 +129,15 @@ class DeviceService:
         self._update_state(device_id, entry, state)
 
     async def refresh(self, device_id: str) -> DeviceState:
-        """Drop the connection and cached IPs, then rediscover — queued like any operation."""
+        """Drop the connection and rediscover the device's IP — queued like any operation.
+
+        If discovery finds nothing the known IP is kept, so polling doesn't start broadcasting.
+        """
         entry = self._get_entry(device_id)
 
         async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
             await backend.close()
-            backend.ip = None
-            return await backend.probe(replace(config, last_known_ip=None))
+            return await backend.probe(await self._discover(entry))
 
         try:
             state = await entry.queue.run(action)
@@ -163,7 +165,7 @@ class DeviceService:
         outlet_names: dict[str, str],
         outlet_tokens: dict[str, str] | None = None,
     ) -> None:
-        entry = _make_entry(row, outlet_names, outlet_tokens or {})
+        entry = self._make_entry(row, outlet_names, outlet_tokens or {})
         self._devices[row.id] = entry
         self._spawn(self._probe_one(row.id, entry))
         self._broadcast()
@@ -177,7 +179,8 @@ class DeviceService:
     def update_device(self, row: DeviceRow, *, is_reconnect: bool) -> None:
         """Apply an edited device row in place — the queue and runtime state are kept."""
         entry = self._get_entry(row.id)
-        entry.config = _make_config(row)
+        # The IP is runtime state owned by this service; admin edits never carry it
+        entry.config = replace(_make_config(row), last_known_ip=entry.config.last_known_ip)
         entry.name = row.name
         entry.group_name = row.group_name
         entry.device_token = row.device_token
@@ -213,8 +216,6 @@ class DeviceService:
         entry.state = state
         entry.is_online = True
         entry.last_updated = datetime.now(UTC)
-        if entry.backend.ip and entry.backend.ip != entry.config.last_known_ip:
-            entry.config = replace(entry.config, last_known_ip=entry.backend.ip)
         if not was_online:
             logger.info("Device %s is now online", device_id)
         self._broadcast()
@@ -223,10 +224,32 @@ class DeviceService:
             hw_alias=state.hw_alias,
             hw_model=state.hw_model,
             hw_is_strip=state.hw_is_strip,
-            last_known_ip=entry.backend.ip,
         ))
 
-    def _spawn(self, coro: Coroutine[Any, Any, None]) -> None:
+    async def _config_for(self, entry: DeviceEntry) -> DeviceConfig:
+        """Config for the next command, discovering the IP first if none is known yet."""
+        if entry.config.last_known_ip is None:
+            return await self._discover(entry)
+        return entry.config
+
+    async def _discover(self, entry: DeviceEntry) -> DeviceConfig:
+        """Broadcast for the device; on a miss the known IP (if any) is left untouched."""
+        cfg = entry.config
+        logger.info("Discovering %s on %s", cfg.id, cfg.broadcast)
+        ip = await entry.backend.discover(cfg)
+        if ip is None:
+            raise DeviceOfflineError(f"Cannot reach {cfg.mac}: not found on {cfg.broadcast}")
+        return self._set_ip(entry, ip)
+
+    def _set_ip(self, entry: DeviceEntry, ip: str) -> DeviceConfig:
+        """The only writer of a device's IP, in memory and in the DB."""
+        if ip != entry.config.last_known_ip:
+            logger.info("Device %s is at %s", entry.config.id, ip)
+            entry.config = replace(entry.config, last_known_ip=ip)
+            self._spawn(self._db.update_device(entry.config.id, {"last_known_ip": ip}))
+        return entry.config
+
+    def _spawn(self, coro: Coroutine[Any, Any, Any]) -> None:
         task = asyncio.create_task(coro)
         self._background_tasks.add(task)
         task.add_done_callback(self._on_background_done)
@@ -295,6 +318,29 @@ class DeviceService:
             ])
             await asyncio.sleep(self._poll_interval)
 
+    def _make_entry(
+        self,
+        row: DeviceRow,
+        outlet_names: dict[str, str],
+        outlet_tokens: dict[str, str] | None = None,
+    ) -> DeviceEntry:
+        backend = _make_backend(row.type)
+        entry = DeviceEntry(
+            config=_make_config(row),
+            backend=backend,
+            # Late-bound on purpose: resolved (and the IP discovered if missing) per command
+            queue=DeviceQueue(row.id, backend, lambda: self._config_for(entry)),
+            name=row.name,
+            group_name=row.group_name,
+            state=None,
+            is_online=False,
+            last_updated=None,
+            outlet_names=outlet_names,
+            outlet_tokens=outlet_tokens or {},
+            device_token=row.device_token,
+        )
+        return entry
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -324,26 +370,3 @@ def _make_backend(device_type: str) -> DeviceBackend:
     if device_type == "tuya":
         return TuyaBackend()
     raise ValueError(f"Unknown device type: {device_type!r}")
-
-
-def _make_entry(
-    row: DeviceRow,
-    outlet_names: dict[str, str],
-    outlet_tokens: dict[str, str] | None = None,
-) -> DeviceEntry:
-    backend = _make_backend(row.type)
-    entry = DeviceEntry(
-        config=_make_config(row),
-        backend=backend,
-        # Late-bound on purpose: the queue reads entry.config each time a command runs
-        queue=DeviceQueue(row.id, backend, lambda: entry.config),
-        name=row.name,
-        group_name=row.group_name,
-        state=None,
-        is_online=False,
-        last_updated=None,
-        outlet_names=outlet_names,
-        outlet_tokens=outlet_tokens or {},
-        device_token=row.device_token,
-    )
-    return entry

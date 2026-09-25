@@ -63,23 +63,18 @@ class TuyaBackend(DeviceBackend):
     session_timeout = 30.0
     command_interval = 0.3
 
-    def __init__(self) -> None:
-        self.ip: str | None = None
-
     def is_configured(self, cfg: DeviceConfig) -> bool:
         return bool(cfg.tuya_device_id and cfg.tuya_local_key)
+
+    async def discover(self, cfg: DeviceConfig) -> str | None:
+        found = await asyncio.to_thread(_sync_discover, get_interface_pairs(), _SCAN_TIMEOUT)
+        return next((d.last_known_ip for d in found if d.mac == cfg.mac), None)
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_credentials(cfg)
         profile = _get_profile(cfg)
-        if not cfg.last_known_ip and not self.ip:
-            self.ip = await _discover_ip(cfg)
-            if not self.ip:
-                raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
         try:
-            state = await asyncio.to_thread(_sync_probe, cfg, self.ip, profile)
-            self.ip = self.ip or cfg.last_known_ip
-            return state
+            return await asyncio.to_thread(_sync_probe, cfg, cfg.ip, profile)
         except DeviceOfflineError:
             raise
         except Exception as e:
@@ -92,12 +87,8 @@ class TuyaBackend(DeviceBackend):
             raise ValueError(f"Unknown outlet_id '{outlet_id}' for {cfg.mac}")
         _require_credentials(cfg)
         profile = _get_profile(cfg)
-        if not cfg.last_known_ip and not self.ip:
-            self.ip = await _discover_ip(cfg)
-            if not self.ip:
-                raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
         try:
-            await asyncio.to_thread(_sync_set_power, cfg, self.ip, on, profile)
+            await asyncio.to_thread(_sync_set_power, cfg, cfg.ip, on, profile)
         except DeviceOfflineError:
             raise
         except Exception as e:
@@ -109,8 +100,8 @@ class TuyaBackend(DeviceBackend):
 
 # ── Sync helpers (run in thread pool) ────────────────────────────────────────
 
-def _sync_probe(cfg: DeviceConfig, cached_ip: str | None, profile: DpsProfile) -> DeviceState:
-    device = _make_device(cfg, cached_ip)
+def _sync_probe(cfg: DeviceConfig, ip: str, profile: DpsProfile) -> DeviceState:
+    device = _make_device(cfg, ip)
     device.set_socketPersistent(True)
     try:
         result = device.status()
@@ -127,9 +118,9 @@ def _sync_probe(cfg: DeviceConfig, cached_ip: str | None, profile: DpsProfile) -
 
 
 def _sync_set_power(
-    cfg: DeviceConfig, cached_ip: str | None, on: bool, profile: DpsProfile
+    cfg: DeviceConfig, ip: str, on: bool, profile: DpsProfile
 ) -> None:
-    device = _make_device(cfg, cached_ip)
+    device = _make_device(cfg, ip)
     try:
         result = device.set_value(profile.switch, on)
         _check_result(result)
@@ -162,12 +153,7 @@ def _decode_phase_a(raw_b64: str) -> tuple[float, float, float]:
     return voltage, current, power_kw * 1000.0
 
 
-def _make_device(cfg: DeviceConfig, cached_ip: str | None) -> tinytuya.Device:
-    # cached_ip wins: after a refresh rediscovers the device, cfg.last_known_ip still
-    # holds the stale address until restart
-    ip = cached_ip or cfg.last_known_ip
-    if not ip:
-        raise DeviceOfflineError(f"No IP known for {cfg.mac}")
+def _make_device(cfg: DeviceConfig, ip: str) -> tinytuya.Device:
     device = tinytuya.Device(
         dev_id=cfg.tuya_device_id,
         address=ip,
@@ -202,15 +188,6 @@ def _require_credentials(cfg: DeviceConfig) -> None:
 
 _UDP_PORTS = (6666, 6667, 7000)
 _SCAN_TIMEOUT = 5.0
-
-
-async def _discover_ip(cfg: DeviceConfig) -> str | None:
-    """UDP-scan all interfaces for cfg.mac; return its current IP or None."""
-    iface_pairs = get_interface_pairs()
-    for found in await asyncio.to_thread(_sync_discover, iface_pairs, _SCAN_TIMEOUT):
-        if found.mac == cfg.mac:
-            return found.last_known_ip
-    return None
 
 
 async def scan(iface_pairs: list[tuple[str, str]], timeout: float = _SCAN_TIMEOUT) -> list[DeviceConfig]:

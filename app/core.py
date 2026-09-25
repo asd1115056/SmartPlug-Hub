@@ -57,7 +57,14 @@ class DeviceConfig:
     tuya_device_id: str | None = None
     tuya_local_key: str | None = None
     tuya_product_id: str | None = None
-    hw_model: str | None = None     # populated during scan; None for stored configs
+    hw_model: str | None = None
+
+    @property
+    def ip(self) -> str:
+        """The address backends connect to; DeviceService resolves it before every command."""
+        if self.last_known_ip is None:
+            raise DeviceOfflineError(f"No IP known for {self.mac}")
+        return self.last_known_ip
 
 
 # ── Backend interface ─────────────────────────────────────────────────────────
@@ -65,13 +72,16 @@ class DeviceConfig:
 class DeviceBackend(ABC):
     can_rename_outlet: bool = False
     can_rename_device: bool = False
-    ip: str | None = None               # current known IP, updated after successful connect
     session_timeout: float = 0.0        # 0 = stateless (MiIO); >0 = keep TCP alive this long
     command_interval: float = 0.0       # minimum seconds between consecutive commands
 
     def is_configured(self, cfg: DeviceConfig) -> bool:
         """Return True if cfg has the minimum credentials needed to attempt a connection."""
         return False
+
+    @abstractmethod
+    async def discover(self, cfg: DeviceConfig) -> str | None:
+        """Search the LAN for this device (by MAC or device id); return its IP, or None."""
 
     @abstractmethod
     async def probe(self, cfg: DeviceConfig) -> DeviceState:

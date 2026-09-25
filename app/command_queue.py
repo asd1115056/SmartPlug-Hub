@@ -28,11 +28,15 @@ class DeviceQueue:
     """Serializes commands for one device; manages the backend TCP session lifecycle."""
 
     def __init__(
-        self, device_id: str, backend: DeviceBackend, get_config: Callable[[], DeviceConfig],
+        self,
+        device_id: str,
+        backend: DeviceBackend,
+        get_config: Callable[[], Awaitable[DeviceConfig]],
     ) -> None:
         self._device_id = device_id
         self._backend = backend
-        # Called per command, so config edits (e.g. new credentials) apply without a rebuild
+        # Awaited per command, inside the serialized run: config edits apply without a rebuild,
+        # and the owner can resolve a missing IP before the backend sees the config
         self._get_config = get_config
         self._queue: asyncio.Queue[Command] = asyncio.Queue()
         self._pending: list[Command] = []
@@ -147,7 +151,7 @@ class DeviceQueue:
         logger.debug("[%s] executing command", self._device_id)
         self._executing = True
         try:
-            result = await cmd.action(self._backend, self._get_config())
+            result = await cmd.action(self._backend, await self._get_config())
             if not cmd.future.done():
                 cmd.future.set_result(result)
             logger.debug("[%s] command completed", self._device_id)

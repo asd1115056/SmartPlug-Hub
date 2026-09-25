@@ -109,6 +109,7 @@ async def create_device(
     try:
         row = await service.add_device(
             body.mac, body.type, body.broadcast, db, svc,
+            ip=body.ip,
             group_name=body.group_name,
             kasa_username=body.kasa_username,
             kasa_password=body.kasa_password,
