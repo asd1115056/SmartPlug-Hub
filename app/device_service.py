@@ -91,6 +91,9 @@ class DeviceService:
     def get_devices(self) -> list[DeviceEntry]:
         return list(self._devices.values())
 
+    def find_device(self, device_id: str) -> DeviceEntry | None:
+        return self._devices.get(device_id)
+
     def get_device(self, device_id: str) -> DeviceEntry:
         entry = self._devices.get(device_id)
         if entry is None:
@@ -171,17 +174,16 @@ class DeviceService:
             await entry.queue.close()
         self._broadcast()
 
-    def set_name(self, device_id: str, name: str) -> None:
-        entry = self._devices.get(device_id)
-        if entry:
-            entry.name = name
-            self._broadcast()
-
-    def set_group_name(self, device_id: str, group_name: str | None) -> None:
-        entry = self._devices.get(device_id)
-        if entry:
-            entry.group_name = group_name
-            self._broadcast()
+    def update_device(self, row: DeviceRow, *, is_reconnect: bool) -> None:
+        """Apply an edited device row in place — the queue and runtime state are kept."""
+        entry = self._get_entry(row.id)
+        entry.config = _make_config(row)
+        entry.name = row.name
+        entry.group_name = row.group_name
+        entry.device_token = row.device_token
+        self._broadcast()
+        if is_reconnect:
+            self._spawn(self._probe_one(row.id, entry, is_reconnect=True))
 
     def set_outlet_name(self, device_id: str, outlet_id: str, name: str) -> None:
         entry = self._devices.get(device_id)
@@ -198,12 +200,6 @@ class DeviceService:
                 entry.outlet_tokens[outlet_id] = token
             self._broadcast()
 
-    def set_device_token(self, device_id: str, token: str | None) -> None:
-        entry = self._devices.get(device_id)
-        if entry:
-            entry.device_token = token
-            self._broadcast()
-
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _get_entry(self, device_id: str) -> DeviceEntry:
@@ -217,6 +213,8 @@ class DeviceService:
         entry.state = state
         entry.is_online = True
         entry.last_updated = datetime.now(UTC)
+        if entry.backend.ip and entry.backend.ip != entry.config.last_known_ip:
+            entry.config = replace(entry.config, last_known_ip=entry.backend.ip)
         if not was_online:
             logger.info("Device %s is now online", device_id)
         self._broadcast()
@@ -252,14 +250,25 @@ class DeviceService:
             except asyncio.QueueFull:
                 pass
 
-    async def _probe_one(self, device_id: str, entry: DeviceEntry) -> None:
+    async def _probe_one(
+        self, device_id: str, entry: DeviceEntry, *, is_reconnect: bool = False,
+    ) -> None:
+        """Poll one device; is_reconnect drops the old session first (credentials changed)."""
         if not entry.backend.is_configured(entry.config):
+            if is_reconnect:
+                self._mark_offline(device_id, entry)  # credentials were cleared
             return
-        if entry.queue.is_active():
+        if entry.queue.is_active() and not is_reconnect:
             logger.debug("Skipping %s — command in progress", device_id)
             return
+
+        async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
+            if is_reconnect:
+                await backend.close()
+            return await backend.probe(config)
+
         try:
-            state = await entry.queue.run(lambda backend, config: backend.probe(config))
+            state = await entry.queue.run(action)
         except DeviceNotFoundError:
             return  # removed while this poll cycle was running
         except DeviceOfflineError as e:
@@ -322,12 +331,12 @@ def _make_entry(
     outlet_names: dict[str, str],
     outlet_tokens: dict[str, str] | None = None,
 ) -> DeviceEntry:
-    config = _make_config(row)
     backend = _make_backend(row.type)
-    return DeviceEntry(
-        config=config,
+    entry = DeviceEntry(
+        config=_make_config(row),
         backend=backend,
-        queue=DeviceQueue(row.id, backend, config),
+        # Late-bound on purpose: the queue reads entry.config each time a command runs
+        queue=DeviceQueue(row.id, backend, lambda: entry.config),
         name=row.name,
         group_name=row.group_name,
         state=None,
@@ -337,3 +346,4 @@ def _make_entry(
         outlet_tokens=outlet_tokens or {},
         device_token=row.device_token,
     )
+    return entry

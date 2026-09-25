@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -119,59 +120,18 @@ class Database:
                 await session.delete(device)
             await session.commit()
 
-    async def set_device_name(self, device_id: str, name: str) -> None:
+    async def update_device(self, device_id: str, fields: dict[str, Any]) -> Device | None:
+        """Set the given columns on one device row; returns the updated row."""
         async with AsyncSession(self._engine) as session:
             device = await session.get(Device, device_id)
-            if device:
-                device.name = name
-                session.add(device)
-                await session.commit()
-
-    async def set_device_group_name(self, device_id: str, group_name: str | None) -> None:
-        async with AsyncSession(self._engine) as session:
-            device = await session.get(Device, device_id)
-            if device:
-                device.group_name = group_name
-                session.add(device)
-                await session.commit()
-
-    async def set_kasa_credentials(
-        self, device_id: str, kasa_username: str | None, kasa_password: str | None
-    ) -> None:
-        async with AsyncSession(self._engine) as session:
-            device = await session.get(Device, device_id)
-            if device:
-                device.kasa_username = kasa_username
-                device.kasa_password = kasa_password
-                session.add(device)
-                await session.commit()
-
-    async def set_miio_credentials(
-        self, device_id: str, miio_device_id: str | None, miio_device_token: str | None
-    ) -> None:
-        async with AsyncSession(self._engine) as session:
-            device = await session.get(Device, device_id)
-            if device:
-                device.miio_id = miio_device_id
-                device.miio_token = miio_device_token
-                session.add(device)
-                await session.commit()
-
-    async def set_tuya_credentials(
-        self,
-        device_id: str,
-        tuya_device_id: str | None,
-        tuya_local_key: str | None,
-        tuya_product_id: str | None,
-    ) -> None:
-        async with AsyncSession(self._engine) as session:
-            device = await session.get(Device, device_id)
-            if device:
-                device.tuya_device_id = tuya_device_id
-                device.tuya_local_key = tuya_local_key
-                device.tuya_product_id = tuya_product_id
-                session.add(device)
-                await session.commit()
+            if device is None:
+                return None
+            for column, value in fields.items():
+                setattr(device, column, value)
+            session.add(device)
+            await session.commit()
+            await session.refresh(device)
+            return device
 
     async def update_device_hw(
         self,
@@ -240,11 +200,3 @@ class Database:
             else:
                 session.add(OutletToken(device_id=device_id, outlet_id=outlet_id, token=token))
             await session.commit()
-
-    async def set_device_token(self, device_id: str, token: str | None) -> None:
-        async with AsyncSession(self._engine) as session:
-            device = await session.get(Device, device_id)
-            if device:
-                device.device_token = token
-                session.add(device)
-                await session.commit()

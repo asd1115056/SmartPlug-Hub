@@ -212,61 +212,47 @@ panelSaveBtn.addEventListener('click', async () => {
 
   const errors = []
   try {
-    // Name
+    // Device fields: collect what changed and send it as one partial update
+    const patch = {}
+
     const newName = document.getElementById('panelNameInput').value.trim()
-    if (newName !== (device.name ?? '')) {
-      await adminApi.setDeviceName(_activeDeviceId, newName)
-    }
+    if (newName !== (device.name ?? '')) patch.name = newName
 
-    // Group
     const newGroup = document.getElementById('panelGroupInput').value.trim() || null
-    if (newGroup !== (device.group_name ?? null)) {
-      await adminApi.setDeviceGroup(_activeDeviceId, newGroup)
+    if (newGroup !== (device.group_name ?? null)) patch.group_name = newGroup
+
+    if (!document.getElementById('panelTuya').hidden) {
+      const tuya = {
+        tuya_device_id: document.getElementById('panelTuyaDeviceId').value.trim() || null,
+        tuya_local_key: document.getElementById('panelTuyaLocalKey').value.trim() || null,
+        tuya_product_id: document.getElementById('panelTuyaProductId').value.trim() || null,
+      }
+      if (Object.entries(tuya).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, tuya)
     }
 
-    // Tuya credentials (tuya only)
-    const tuyaSec = document.getElementById('panelTuya')
-    if (!tuyaSec.hidden) {
-      const newTuyaDeviceId = document.getElementById('panelTuyaDeviceId').value.trim() || null
-      const newTuyaLocalKey = document.getElementById('panelTuyaLocalKey').value.trim() || null
-      const newTuyaProductId = document.getElementById('panelTuyaProductId').value.trim() || null
-      if (
-        newTuyaDeviceId !== (device.tuya_device_id ?? null) ||
-        newTuyaLocalKey !== (device.tuya_local_key ?? null) ||
-        newTuyaProductId !== (device.tuya_product_id ?? null)
-      ) {
-        await adminApi.setTuyaCredentials(_activeDeviceId, newTuyaDeviceId, newTuyaLocalKey, newTuyaProductId)
+    if (!document.getElementById('panelMiio').hidden) {
+      const miio = {
+        miio_id: document.getElementById('panelMiioId').value.trim() || null,
+        miio_token: document.getElementById('panelMiioToken').value.trim() || null,
       }
+      if (Object.entries(miio).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, miio)
     }
 
-    // MiIO credentials (miio only)
-    const miioSec = document.getElementById('panelMiio')
-    if (!miioSec.hidden) {
-      const newMiioDeviceId = document.getElementById('panelMiioId').value.trim() || null
-      const newMiioDeviceToken = document.getElementById('panelMiioToken').value.trim() || null
-      if (newMiioDeviceId !== (device.miio_id ?? null) || newMiioDeviceToken !== (device.miio_token ?? null)) {
-        await adminApi.setMiioCredentials(_activeDeviceId, newMiioDeviceId, newMiioDeviceToken)
+    if (!document.getElementById('panelKasa').hidden) {
+      const kasa = {
+        kasa_username: document.getElementById('panelKasaUsername').value.trim() || null,
+        kasa_password: document.getElementById('panelKasaPassword').value || null,
       }
-    }
-
-    // Kasa credentials (kasa only)
-    const kasaSec = document.getElementById('panelKasa')
-    if (!kasaSec.hidden) {
-      const newKasaUsername = document.getElementById('panelKasaUsername').value.trim() || null
-      const newKasaPassword = document.getElementById('panelKasaPassword').value || null
-      if (newKasaUsername !== (device.kasa_username ?? null) || newKasaPassword !== (device.kasa_password ?? null)) {
-        await adminApi.setKasaCredentials(_activeDeviceId, newKasaUsername, newKasaPassword)
-      }
+      if (Object.entries(kasa).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, kasa)
     }
 
     // Device token (non-strip only)
-    const deviceTokenSec = document.getElementById('panelDeviceTokenSec')
-    if (!deviceTokenSec.hidden) {
+    if (!document.getElementById('panelDeviceTokenSec').hidden) {
       const newDeviceToken = document.getElementById('panelDeviceToken').value.trim() || null
-      if (newDeviceToken !== (device.device_token ?? null)) {
-        await adminApi.setDeviceToken(_activeDeviceId, newDeviceToken)
-      }
+      if (newDeviceToken !== (device.device_token ?? null)) patch.device_token = newDeviceToken
     }
+
+    if (Object.keys(patch).length) await adminApi.updateDevice(_activeDeviceId, patch)
 
     // Outlet names + tokens (strip only)
     if (device.hw_is_strip) {

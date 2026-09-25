@@ -256,14 +256,23 @@ Devices and individual outlets can be protected with an optional access token. W
 Power strips have no device token — protect each outlet instead. Whole-strip commands are
 rejected (`400`), so a strip can only be switched one outlet at a time.
 
-Tokens are managed via the admin panel or the following admin API endpoints (require `Authorization: Bearer <admin-token>`):
+Tokens are managed via the admin panel or the admin API (requires `Authorization: Bearer <admin-token>`):
 
-| Method  | Path                                            | Description                        |
+| Method  | Path                                            | Body                               |
 |---------|-------------------------------------------------|------------------------------------|
-| `PATCH` | `/admin/api/devices/{id}/token`                 | Set or clear the device token      |
-| `PATCH` | `/admin/api/devices/{id}/outlets/{oid}/token`   | Set or clear an outlet token       |
+| `PATCH` | `/admin/api/devices/{id}`                       | `{ "device_token": "secret" }`     |
+| `PATCH` | `/admin/api/devices/{id}/outlets/{oid}/token`   | `{ "token": "secret" }`            |
 
-Request body for both: `{ "token": "secret" }` — send `null` or omit to clear.
+Send `null` (or an empty string) to clear a token.
+
+### Updating a Device (Admin)
+
+`PATCH /admin/api/devices/{id}` is a partial update: only the fields present in the body change,
+and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`, plus
+the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
+`miio_token`, or `tuya_device_id` / `tuya_local_key` / `tuya_product_id`. A field for another
+type returns `400`. Changing credentials takes effect immediately: the device reconnects with
+them without losing its current state.
 
 ### Device ID
 
