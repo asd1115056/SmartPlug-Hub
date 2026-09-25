@@ -86,6 +86,10 @@ class TuyaBackend(DeviceBackend):
             raise DeviceOfflineError(f"Tuya probe failed for {cfg.mac}: {e}") from e
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
+        # Single-switch devices have no outlets; ignoring outlet_id would toggle the whole
+        # device and bypass its device_token (the API checks outlet_tokens instead)
+        if outlet_id is not None:
+            raise ValueError(f"Unknown outlet_id '{outlet_id}' for {cfg.mac}")
         _require_credentials(cfg)
         profile = _get_profile(cfg)
         if not cfg.last_known_ip and not self.ip:

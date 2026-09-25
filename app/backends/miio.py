@@ -267,7 +267,7 @@ def _set_power_sync(
     elif outlet_id in outlet_id_to_siid:
         siid = outlet_id_to_siid[outlet_id]
     else:
-        raise DeviceOfflineError(f"Unknown outlet_id '{outlet_id}' for {profile.model}")
+        raise ValueError(f"Unknown outlet_id '{outlet_id}' for {profile.model}")
 
     device = MiotDevice(ip=ip, token=cfg.miio_token)
     try:
