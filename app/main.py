@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .admin.router import router as admin_router
-from .core import DeviceNotFoundError, DeviceOfflineError
+from .core import DeviceNotFoundError, DeviceOfflineError, tokens_match
 from .db import Database
 from .device_service import DeviceService
 from .schemas import DeviceOut, SetPowerRequest, build_device_out
@@ -94,7 +94,7 @@ async def set_power(
         required_token = entry.outlet_tokens.get(body.outlet_id)
     else:
         required_token = entry.device_token
-    if required_token is not None and body.token != required_token:
+    if required_token is not None and not tokens_match(body.token, required_token):
         detail = "Token required" if body.token is None else "Invalid token"
         raise HTTPException(status_code=403, detail=detail)
     try:
