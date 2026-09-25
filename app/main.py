@@ -90,6 +90,10 @@ async def set_power(
         entry = svc.get_device(device_id)
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")
+    # Strips only expose per-outlet tokens, so a whole-strip command would need no token.
+    # The backends re-check after connecting, for the window before the first poll.
+    if body.outlet_id is None and entry.state is not None and entry.state.hw_is_strip:
+        raise HTTPException(status_code=400, detail="outlet_id is required for a power strip")
     if body.outlet_id is not None:
         required_token = entry.outlet_tokens.get(body.outlet_id)
     else:
@@ -102,7 +106,8 @@ async def set_power(
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")
     except ValueError as e:
-        # Backends raise ValueError for an outlet_id the device doesn't have
+        # Backends raise ValueError for an outlet_id the device doesn't have, or a missing
+        # one on a strip the API couldn't recognise yet (no successful poll since startup)
         raise HTTPException(status_code=404, detail=str(e))
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))

@@ -262,6 +262,8 @@ def _set_power_sync(
     siid_map = profile.siid_map()
     outlet_id_to_siid = {oid: siid for siid, (oid, _) in siid_map.items()}
 
+    if outlet_id is None and siid_map:
+        raise ValueError(f"{cfg.mac} is a power strip — outlet_id is required")
     if outlet_id is None:
         siid = profile.main_siid
     elif outlet_id in outlet_id_to_siid:
