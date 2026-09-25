@@ -101,6 +101,9 @@ async def set_power(
         await svc.set_power(device_id, body.outlet_id, body.on)
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")
+    except ValueError as e:
+        # Backends raise ValueError for an outlet_id the device doesn't have
+        raise HTTPException(status_code=404, detail=str(e))
     except DeviceOfflineError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except asyncio.CancelledError:
