@@ -27,10 +27,13 @@ class Command:
 class DeviceQueue:
     """Serializes commands for one device; manages the backend TCP session lifecycle."""
 
-    def __init__(self, device_id: str, backend: DeviceBackend, config: DeviceConfig) -> None:
+    def __init__(
+        self, device_id: str, backend: DeviceBackend, get_config: Callable[[], DeviceConfig],
+    ) -> None:
         self._device_id = device_id
         self._backend = backend
-        self._config = config
+        # Called per command, so config edits (e.g. new credentials) apply without a rebuild
+        self._get_config = get_config
         self._queue: asyncio.Queue[Command] = asyncio.Queue()
         self._pending: list[Command] = []
         self._processor: asyncio.Task[None] | None = None
@@ -144,7 +147,7 @@ class DeviceQueue:
         logger.debug("[%s] executing command", self._device_id)
         self._executing = True
         try:
-            result = await cmd.action(self._backend, self._config)
+            result = await cmd.action(self._backend, self._get_config())
             if not cmd.future.done():
                 cmd.future.set_result(result)
             logger.debug("[%s] command completed", self._device_id)

@@ -101,17 +101,15 @@ class AddDeviceRequest(BaseModel):
     tuya_product_id: str | None = None
 
 
-class SetKasaCredentialsRequest(BaseModel):
+class UpdateDeviceRequest(BaseModel):
+    """Partial update: only fields present in the body are changed; null clears a field."""
+    name: str | None = None
+    group_name: str | None = None
+    device_token: str | None = None
     kasa_username: str | None = None
     kasa_password: str | None = None
-
-
-class SetMiioCredentialsRequest(BaseModel):
-    miio_device_id: str | None = None
-    miio_device_token: str | None = None
-
-
-class SetTuyaCredentialsRequest(BaseModel):
+    miio_id: str | None = None
+    miio_token: str | None = None
     tuya_device_id: str | None = None
     tuya_local_key: str | None = None
     tuya_product_id: str | None = None
@@ -121,15 +119,7 @@ class SetNameRequest(BaseModel):
     name: str
 
 
-class SetGroupRequest(BaseModel):
-    group_name: str | None = None
-
-
 class SetOutletTokenRequest(BaseModel):
-    token: str | None = None
-
-
-class SetDeviceTokenRequest(BaseModel):
     token: str | None = None
 
 

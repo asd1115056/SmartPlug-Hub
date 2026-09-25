@@ -1,8 +1,9 @@
 """Admin CRUD operations — pure functions called after route validation."""
 
 import logging
+from typing import Any
 
-from ..core import mac_to_id, normalize_mac
+from ..core import DeviceNotFoundError, mac_to_id, normalize_mac
 from ..db import Database, Device as DeviceRow
 from ..device_service import DeviceService
 
@@ -51,73 +52,33 @@ async def remove_device(device_id: str, db: Database, svc: DeviceService) -> Non
     logger.info("Device removed: %s", device_id)
 
 
-async def set_device_name(device_id: str, name: str, db: Database, svc: DeviceService) -> None:
-    await db.set_device_name(device_id, name)
-    svc.set_name(device_id, name)
-    logger.info("Device %s renamed to %r", device_id, name)
+_COMMON_FIELDS = {"name", "group_name", "device_token"}
+_CREDENTIAL_FIELDS = {
+    "kasa": {"kasa_username", "kasa_password"},
+    "miio": {"miio_id", "miio_token"},
+    "tuya": {"tuya_device_id", "tuya_local_key", "tuya_product_id"},
+}
+_TRIMMED_FIELDS = {"name", "group_name", "device_token"}   # secrets are stored verbatim
 
 
-async def set_device_group_name(
-    device_id: str, group_name: str | None, db: Database, svc: DeviceService
-) -> None:
-    await db.set_device_group_name(device_id, group_name)
-    svc.set_group_name(device_id, group_name)
-    logger.info("Device %s group set to %r", device_id, group_name)
-
-
-async def set_kasa_credentials(
-    device_id: str,
-    kasa_username: str | None,
-    kasa_password: str | None,
-    db: Database,
-    svc: DeviceService,
-) -> None:
-    await db.set_kasa_credentials(device_id, kasa_username, kasa_password)
+async def update_device(
+    device_id: str, fields: dict[str, Any], db: Database, svc: DeviceService,
+) -> DeviceRow:
+    """Apply a partial device edit to the DB and the running service in one step."""
     row = await db.get_device(device_id)
-    if row:
-        entry = svc._devices.get(device_id)
-        outlet_names = entry.outlet_names if entry else {}
-        outlet_tokens = entry.outlet_tokens if entry else {}
-        await svc.remove_entry(device_id)
-        svc.add_entry(row, outlet_names, outlet_tokens)
-    logger.info("Device %s kasa credentials updated", device_id)
+    if row is None:
+        raise DeviceNotFoundError(device_id)
+    credential_fields = _CREDENTIAL_FIELDS.get(row.type, set())
+    if unknown := fields.keys() - _COMMON_FIELDS - credential_fields:
+        raise ValueError(f"Not applicable to a {row.type} device: {', '.join(sorted(unknown))}")
 
-
-async def set_miio_credentials(
-    device_id: str,
-    miio_device_id: str | None,
-    miio_device_token: str | None,
-    db: Database,
-    svc: DeviceService,
-) -> None:
-    await db.set_miio_credentials(device_id, miio_device_id, miio_device_token)
-    row = await db.get_device(device_id)
-    if row:
-        entry = svc._devices.get(device_id)
-        outlet_names = entry.outlet_names if entry else {}
-        outlet_tokens = entry.outlet_tokens if entry else {}
-        await svc.remove_entry(device_id)
-        svc.add_entry(row, outlet_names, outlet_tokens)
-    logger.info("Device %s miio credentials updated", device_id)
-
-
-async def set_tuya_credentials(
-    device_id: str,
-    tuya_device_id: str | None,
-    tuya_local_key: str | None,
-    tuya_product_id: str | None,
-    db: Database,
-    svc: DeviceService,
-) -> None:
-    await db.set_tuya_credentials(device_id, tuya_device_id, tuya_local_key, tuya_product_id)
-    row = await db.get_device(device_id)
-    if row:
-        entry = svc._devices.get(device_id)
-        outlet_names = entry.outlet_names if entry else {}
-        outlet_tokens = entry.outlet_tokens if entry else {}
-        await svc.remove_entry(device_id)
-        svc.add_entry(row, outlet_names, outlet_tokens)
-    logger.info("Device %s tuya credentials updated", device_id)
+    cleaned = {k: _clean(v, is_trimmed=k in _TRIMMED_FIELDS) for k, v in fields.items()}
+    row = await db.update_device(device_id, cleaned)
+    if row is None:
+        raise DeviceNotFoundError(device_id)
+    svc.update_device(row, is_reconnect=bool(cleaned.keys() & credential_fields))
+    logger.info("Device %s updated: %s", device_id, ", ".join(sorted(cleaned)))
+    return row
 
 
 async def set_outlet_name(
@@ -130,3 +91,9 @@ async def set_outlet_name(
         await db.set_outlet_name(device_id, outlet_id, name)
         svc.set_outlet_name(device_id, outlet_id, name)
     logger.info("Device %s outlet %s renamed to %r", device_id, outlet_id, name)
+
+
+def _clean(value: str | None, *, is_trimmed: bool) -> str | None:
+    if value is not None and is_trimmed:
+        value = value.strip()
+    return value or None   # "" means "clear", same as null
