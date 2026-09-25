@@ -13,6 +13,9 @@ class DeviceError(Exception):
 class DeviceOfflineError(DeviceError):
     """Operation attempted on an unreachable device."""
 
+class DeviceRejectedError(DeviceError):
+    """Device is reachable but refused the command."""
+
 class DeviceNotFoundError(DeviceError):
     """device_id does not exist in the runtime registry."""
 

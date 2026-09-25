@@ -7,7 +7,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from .core import DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceState
+from .core import (
+    DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceRejectedError, DeviceState,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,10 @@ class DeviceQueue:
             raise
         except DeviceOfflineError as e:
             logger.info("[%s] device offline: %s", self._device_id, e)
+            if not cmd.future.done():
+                cmd.future.set_exception(e)
+        except DeviceRejectedError as e:
+            logger.info("[%s] device rejected command: %s", self._device_id, e)
             if not cmd.future.done():
                 cmd.future.set_exception(e)
         except ValueError as e:
