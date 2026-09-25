@@ -54,7 +54,9 @@ Devices and accounts are managed through the admin panel at `/admin` — no conf
 uv run kasa discover
 ```
 
-Newer Kasa devices (EP25, KP125M, etc.) require TP-Link account credentials — enter them in the device's **Kasa** section in the detail panel. Older models (HS103, KP303, etc.) work without authentication.
+Devices that speak the encrypted **KLAP** protocol need TP-Link account credentials — enter them in the device's **Kasa** section in the detail panel. This includes newer models (EP25, KP125M, etc.) and older ones on recent firmware, e.g. an HS300 on fw 1.1.2 after a reboot, unless *Third-Party Compatibility* is enabled for it in the Kasa app. Devices on the legacy protocol work without authentication.
+
+The email is sent lowercased: devices are bound to the lowercase form of the account email and the KLAP handshake is case-sensitive.
 
 #### Finding your MiIO device token and ID
 
@@ -126,9 +128,14 @@ smartplug-hub/
 
 ### Connection Strategy (Kasa)
 
-Kasa devices use **short-term persistent TCP connections** managed per device:
+Kasa devices use **short-term persistent connections** managed per device:
 
 - Connects on the first command (not at startup)
+- The protocol (legacy XOR on port 9999, or KLAP v1/v2 over HTTP) is detected by unicast
+  discovery on first connect and reused; it is re-detected if a connection fails, e.g. after
+  toggling *Third-Party Compatibility*
+- IOT devices advertising KLAP login version 2 (HS300 fw 1.1.2 and others) get the v2
+  handshake, which python-kasa 0.10.2 doesn't select for them yet (upstream PR #1731)
 - Back-to-back commands reuse the existing connection
 - After 20 seconds of idle, the connection is deterministically closed — well under the
   60s poll interval, so polling always re-establishes a fresh connection each cycle

@@ -1,4 +1,4 @@
-"""Kasa protocol backend — persistent TCP connection, reconnects on demand."""
+"""Kasa protocol backend — persistent connection over XOR or KLAP, reconnects on demand."""
 
 import asyncio
 import logging
@@ -6,7 +6,11 @@ import logging
 from kasa import Credentials, Device, Module
 from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
-from kasa.exceptions import AuthenticationError, KasaException
+from kasa.device_factory import get_device_class_from_sys_info, get_protocol
+from kasa.deviceconfig import DeviceConnectionParameters, DeviceEncryptionType
+from kasa.exceptions import AuthenticationError, KasaException, UnsupportedDeviceError
+from kasa.protocols import BaseProtocol, IotProtocol
+from kasa.transports.klaptransport import KlapTransportV2
 
 from ..core import (
     ChildState, DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceRejectedError,
@@ -18,6 +22,7 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = 10
 _RETRIES = 2
 _RETRY_DELAY = 0.5
+_SYSINFO_QUERY = {"system": {"get_sysinfo": {}}}
 
 
 class KasaBackend(DeviceBackend):
@@ -33,6 +38,9 @@ class KasaBackend(DeviceBackend):
     def __init__(self) -> None:
         self.ip: str | None = None
         self._device: Device | None = None
+        # Detected once per backend instead of on every reconnect; _connect re-detects if
+        # it stops working (e.g. Third-Party Compatibility toggled in the Kasa app)
+        self._params: DeviceConnectionParameters | None = None
 
     def is_configured(self, cfg: DeviceConfig) -> bool:
         return True  # Kasa probes without credentials; auth is attempted opportunistically
@@ -114,9 +122,16 @@ class KasaBackend(DeviceBackend):
         taken_ips: list[str] = []
         for ip in known_ips:
             logger.info("Probing %s at %s", cfg.id, ip)
-            device = await _connect(ip, _credentials(cfg))
+            try:
+                device = await _connect(ip, _credentials(cfg), self._params)
+            except AuthenticationError as e:
+                raise DeviceOfflineError(
+                    f"Kasa login failed for {cfg.mac} at {ip} — check the account email and "
+                    f"password: {e}"
+                ) from e
             if device is not None and _mac_ok(device, cfg.mac):
                 self._device = device
+                self._params = device.config.connection_type
                 self.ip = device.host
                 return device
             if device is not None:
@@ -139,33 +154,78 @@ class KasaBackend(DeviceBackend):
 
 def _credentials(cfg: DeviceConfig) -> Credentials | None:
     if cfg.username and cfg.password:
-        return Credentials(username=cfg.username, password=cfg.password)
+        # KLAP hashes the username case-sensitively, and devices are bound to the lowercased
+        # account email (discovery's owner field is md5(email.lower()))
+        return Credentials(username=cfg.username.lower(), password=cfg.password)
     return None
 
 
-async def _connect(ip: str, credentials: Credentials | None) -> Device | None:
-    """Try connecting without auth first, then with credentials if auth is required."""
-    for creds in ([None, credentials] if credentials else [None]):
-        for attempt in range(_RETRIES):
-            device = None
-            try:
-                device = await Device.connect(
-                    config=KasaConfig(host=ip, credentials=creds, timeout=_TIMEOUT)
-                )
-                await device.update()
-                return device
-            except AuthenticationError:
-                if device:
-                    await _safe_close(device)
-                break  # wrong creds — try next creds variant, not retry
-            except Exception as e:
-                if device:
-                    await _safe_close(device)
-                if attempt < _RETRIES - 1:
-                    await asyncio.sleep(_RETRY_DELAY)
-                else:
-                    logger.warning("Cannot connect to %s: %s", ip, e)
+async def _connect(
+    ip: str, credentials: Credentials | None, params: DeviceConnectionParameters | None,
+) -> Device | None:
+    """Connect over the device's own protocol, detecting it first when params is None.
+
+    Raises AuthenticationError (retrying can't fix wrong credentials); returns None when
+    the device can't be reached.
+    """
+    for attempt in range(_RETRIES):
+        try:
+            if params is None:
+                params = await _detect_protocol(ip, credentials)
+            return await _open(ip, params, credentials)
+        except AuthenticationError:
+            raise
+        except Exception as e:
+            params = None  # the cached protocol may be stale — re-detect on the next attempt
+            if attempt < _RETRIES - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+            else:
+                logger.warning("Cannot connect to %s: %s", ip, e)
     return None
+
+
+async def _detect_protocol(
+    ip: str, credentials: Credentials | None,
+) -> DeviceConnectionParameters:
+    """Unicast discovery: which protocol (XOR / KLAP, login version) the device speaks."""
+    device = await Discover.discover_single(ip, credentials=credentials, timeout=_TIMEOUT)
+    await _safe_close(device)
+    return device.config.connection_type
+
+
+async def _open(
+    ip: str, params: DeviceConnectionParameters, credentials: Credentials | None,
+) -> Device:
+    config = KasaConfig(
+        host=ip, credentials=credentials, timeout=_TIMEOUT, connection_type=params,
+    )
+    if not params.device_family.value.startswith("IOT."):
+        return await Device.connect(config=config)  # newer (SMART) devices: library path works
+
+    # python-kasa picks the class of an IOT KLAP device from its family alone, which makes
+    # an HS300 an IotPlug with no outlets; sysinfo gives the real class (IotStrip)
+    protocol = _iot_protocol(config)
+    try:
+        info = await protocol.query(_SYSINFO_QUERY)
+        device = get_device_class_from_sys_info(info)(ip, config=config, protocol=protocol)
+        await device.update()
+    except BaseException:
+        await protocol.close()
+        raise
+    return device
+
+
+def _iot_protocol(config: KasaConfig) -> BaseProtocol:
+    ctype = config.connection_type
+    if ctype.encryption_type is DeviceEncryptionType.Klap and (ctype.login_version or 1) >= 2:
+        # python-kasa 0.10.2 gives every IOT KLAP device the v1 handshake, but firmware that
+        # advertises login_version 2 (HS300 fw 1.1.2, EP10, HS200, ...) rejects it. Drop
+        # this once python-kasa PR #1731 is released.
+        return IotProtocol(transport=KlapTransportV2(config=config))
+    protocol = get_protocol(config)
+    if protocol is None:
+        raise UnsupportedDeviceError(f"Unsupported Kasa protocol for {config.host}: {ctype}")
+    return protocol
 
 
 async def _broadcast_discover(
