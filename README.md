@@ -113,15 +113,17 @@ smartplug-hub/
 │   ├── admin.html           # Admin panel
 │   ├── admin.js             # Admin panel wiring
 │   ├── style.css
+│   ├── vendor/              # Bootstrap 5.3.2 + Bootstrap Icons 1.11.3 (served locally, no CDN)
 │   └── js/
-│       ├── api.js           # Public API fetch wrappers
+│       ├── common.js        # Shared esc() and request() (JSON fetch + errors)
+│       ├── api.js           # Public API calls
 │       ├── devices.js       # Device card rendering
 │       ├── notifications.js # Toast + notification bell
 │       ├── sse.js           # SSE connection with auto-reconnect
+│       ├── token-cache.js   # Remembers entered outlet/device tokens for 15 min
 │       └── admin/
-│           ├── api.js       # Admin API fetch wrappers
+│           ├── api.js       # Admin API calls
 │           ├── auth.js      # Token login + sessionStorage
-│           ├── accounts.js  # Accounts CRUD UI
 │           └── devices.js   # Device cards, scan results, detail panel
 └── pyproject.toml
 ```
