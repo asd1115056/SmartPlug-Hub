@@ -56,6 +56,8 @@ class KasaBackend(DeviceBackend):
                 if child is None:
                     raise ValueError(f"Outlet {outlet_id} not found on {cfg.mac}")
                 await (child.turn_on() if on else child.turn_off())
+            elif device.children:
+                raise ValueError(f"{cfg.mac} is a power strip — outlet_id is required")
             else:
                 await (device.turn_on() if on else device.turn_off())
         except ValueError:
