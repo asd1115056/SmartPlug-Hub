@@ -9,7 +9,9 @@ from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
 from kasa.device_factory import get_device_class_from_sys_info, get_protocol
 from kasa.deviceconfig import DeviceConnectionParameters, DeviceEncryptionType
-from kasa.exceptions import AuthenticationError, KasaException, UnsupportedDeviceError
+from kasa.exceptions import (
+    AuthenticationError, DeviceError, KasaException, UnsupportedDeviceError,
+)
 from kasa.protocols import BaseProtocol, IotProtocol
 from kasa.transports.klaptransport import KlapTransportV2
 
@@ -277,9 +279,11 @@ async def _safe_close(device: Device) -> None:
 
 
 def _is_rejection(e: Exception) -> bool:
-    # IotDevice._query_helper raises a bare KasaException when the device replies with a
-    # non-zero err_code; transport failures use subclasses (TimeoutError, _ConnectionError).
-    return type(e) is KasaException
+    # Exact types on purpose. IOT: IotDevice._query_helper raises a bare KasaException for a
+    # non-zero err_code; transport failures are subclasses (TimeoutError, _ConnectionError).
+    # SMART: SmartProtocol raises a bare DeviceError for a refused request; its subclasses
+    # are login problems (AuthenticationError) or transient session errors (_RetryableError).
+    return type(e) in (KasaException, DeviceError)
 
 
 def _mac_ok(device: Device, expected_mac: str) -> bool:
