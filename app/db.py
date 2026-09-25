@@ -140,7 +140,6 @@ class Database:
         hw_alias: str | None,
         hw_model: str | None,
         hw_is_strip: bool,
-        last_known_ip: str | None,
     ) -> None:
         """Update the hardware snapshot after a successful poll."""
         async with AsyncSession(self._engine) as session:
@@ -149,7 +148,6 @@ class Database:
                 device.hw_alias = hw_alias
                 device.hw_model = hw_model
                 device.hw_is_strip = hw_is_strip
-                device.last_known_ip = last_known_ip
                 session.add(device)
                 await session.commit()
 

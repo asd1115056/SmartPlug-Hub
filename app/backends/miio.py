@@ -76,40 +76,26 @@ class MiioBackend(DeviceBackend):
     command_interval = 0.0
 
     def __init__(self) -> None:
-        self.ip: str | None = None
         self._model: str | None = None   # cached after first miIO.info call
 
     def is_configured(self, cfg: DeviceConfig) -> bool:
         return bool(cfg.miio_token and _TOKEN_RE.match(cfg.miio_token))
 
+    async def discover(self, cfg: DeviceConfig) -> str | None:
+        return (await _broadcast_discover(cfg.broadcast)).get(cfg.miio_id or "")
+
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_token(cfg)
-        ip = await self._resolve_ip(cfg)
-        profile = await self._resolve_profile(ip, cfg)
-        return await _get_status(ip, cfg, profile)
+        profile = await self._resolve_profile(cfg.ip, cfg)
+        return await _get_status(cfg.ip, cfg, profile)
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         _require_token(cfg)
-        ip = await self._resolve_ip(cfg)
-        profile = await self._resolve_profile(ip, cfg)
-        await _set_power(ip, cfg, on, outlet_id, profile)
+        profile = await self._resolve_profile(cfg.ip, cfg)
+        await _set_power(cfg.ip, cfg, on, outlet_id, profile)
 
     async def close(self) -> None:
         pass  # UDP — nothing to close
-
-    async def _resolve_ip(self, cfg: DeviceConfig) -> str:
-        """Known IP if any, else broadcast discovery (new device, or after refresh())."""
-        if self.ip:
-            return self.ip
-        if cfg.last_known_ip:
-            self.ip = cfg.last_known_ip
-            return self.ip
-        logger.info("Discovering %s on %s", cfg.id, cfg.broadcast)
-        ip = await _discover(cfg)
-        if not ip:
-            raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
-        self.ip = ip
-        return ip
 
     async def _resolve_profile(self, ip: str, cfg: DeviceConfig) -> MiotProfile:
         """Return the MiotProfile for this device, detecting via miIO.info if needed."""
@@ -167,12 +153,6 @@ async def _broadcast_discover(
     return await loop.run_in_executor(
         None, partial(_udp_discover_sync, broadcast, timeout)
     )
-
-
-async def _discover(cfg: DeviceConfig) -> str | None:
-    """Search cfg.broadcast for a device matching cfg.miio_id; return IP or None."""
-    results = await _broadcast_discover(cfg.broadcast)
-    return results.get(cfg.miio_id or "")
 
 
 async def scan(iface_pairs: list[tuple[str, str]], timeout: float = 3.0) -> list[DeviceConfig]:

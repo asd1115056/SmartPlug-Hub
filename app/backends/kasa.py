@@ -39,7 +39,6 @@ class KasaBackend(DeviceBackend):
     command_interval = 0.5
 
     def __init__(self) -> None:
-        self.ip: str | None = None
         self._device: Device | None = None
         # Detected once per backend instead of on every reconnect; _connect re-detects if
         # it stops working (e.g. Third-Party Compatibility toggled in the Kasa app)
@@ -48,11 +47,16 @@ class KasaBackend(DeviceBackend):
     def is_configured(self, cfg: DeviceConfig) -> bool:
         return True  # Kasa probes without credentials; auth is attempted opportunistically
 
+    async def discover(self, cfg: DeviceConfig) -> str | None:
+        for mac, ip, _model in await _broadcast_discover(cfg.broadcast):
+            if mac == cfg.mac:
+                return ip
+        return None
+
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         device = await self._get_device(cfg)
         try:
             await device.update()
-            self.ip = device.host
             return _build_state(device)
         except Exception as e:
             await self._raise_failure(cfg, e, "status query")
@@ -107,38 +111,23 @@ class KasaBackend(DeviceBackend):
         if self._device is not None:
             return self._device
 
-        # Broadcast discovery only when no IP is known (new device, or after refresh()).
-        # A known-but-dead IP is reported offline; refresh() rediscovers, same as MiIO/Tuya.
-        known_ips = _unique(self.ip, cfg.last_known_ip)
-        if not known_ips:
-            logger.info("Discovering %s on %s", cfg.id, cfg.broadcast)
-            ip = await _discover(cfg)
-            known_ips = [ip] if ip else []
-
-        taken_ips: list[str] = []
-        for ip in known_ips:
-            logger.info("Probing %s at %s", cfg.id, ip)
-            try:
-                device = await _connect(ip, _credentials(cfg), self._params)
-            except AuthenticationError as e:
-                raise DeviceOfflineError(
-                    f"Kasa login failed for {cfg.mac} at {ip} — check the account email and "
-                    f"password: {e}"
-                ) from e
-            if device is not None and _mac_ok(device, cfg.mac):
-                self._device = device
-                self._params = device.config.connection_type
-                self.ip = device.host
-                return device
-            if device is not None:
-                await _safe_close(device)
-                taken_ips.append(ip)
-
-        if taken_ips:
+        ip = cfg.ip
+        logger.info("Probing %s at %s", cfg.id, ip)
+        try:
+            device = await _connect(ip, _credentials(cfg), self._params)
+        except AuthenticationError as e:
             raise DeviceOfflineError(
-                f"Cannot reach {cfg.mac}: {', '.join(taken_ips)} now answers as another device"
-            )
-        raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
+                f"Kasa login failed for {cfg.mac} at {ip} — check the account email and "
+                f"password: {e}"
+            ) from e
+        if device is None:
+            raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
+        if not _mac_ok(device, cfg.mac):
+            await _safe_close(device)
+            raise DeviceOfflineError(f"Cannot reach {cfg.mac}: {ip} now answers as another device")
+        self._device = device
+        self._params = device.config.connection_type
+        return device
 
     async def _raise_failure(self, cfg: DeviceConfig, e: Exception, action: str) -> NoReturn:
         if _is_rejection(e):
@@ -248,14 +237,6 @@ async def _broadcast_discover(
     return found
 
 
-async def _discover(cfg: DeviceConfig) -> str | None:
-    """Search cfg.broadcast for a device matching cfg.mac; return IP or None."""
-    for mac, ip, _model in await _broadcast_discover(cfg.broadcast):
-        if mac == cfg.mac:
-            return ip
-    return None
-
-
 async def scan(iface_pairs: list[tuple[str, str]], timeout: float = 3.0) -> list[DeviceConfig]:
     """Discover all Kasa devices across multiple broadcast addresses."""
     seen: dict[str, DeviceConfig] = {}
@@ -294,14 +275,6 @@ def _mac_ok(device: Device, expected_mac: str) -> bool:
         return normalize_mac(mac) == expected_mac
     except ValueError:
         return True
-
-
-def _unique(*values: str | None) -> list[str]:
-    seen: dict[str, None] = {}
-    for v in values:
-        if v is not None:
-            seen[v] = None
-    return list(seen)
 
 
 def _watts(obj: Device) -> float | None:

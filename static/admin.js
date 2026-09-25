@@ -127,6 +127,7 @@ async function handleScanAdd(deviceData) {
       mac: deviceData.mac,
       type: deviceData.type,
       broadcast: deviceData.broadcast,
+      ip: deviceData.ip,
       miio_id: deviceData.miio_id,
       miio_token: null,
       tuya_device_id: deviceData.tuya_device_id,

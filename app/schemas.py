@@ -91,6 +91,7 @@ class AddDeviceRequest(BaseModel):
     mac: str
     type: str
     broadcast: str
+    ip: str | None = None            # from a scan; omitted → discovered on first contact
     group_name: str | None = None
     kasa_username: str | None = None
     kasa_password: str | None = None
