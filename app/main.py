@@ -20,8 +20,11 @@ from .schemas import DeviceOut, SetPowerRequest, build_device_out
 
 logger = logging.getLogger(__name__)
 
-_DB_PATH = Path("data/smartplug.db")
-_SETTINGS_PATH = Path("config/settings.toml")
+# Anchored to the repo, not the working directory, so the service starts from anywhere
+_ROOT = Path(__file__).resolve().parent.parent
+_DB_PATH = _ROOT / "data" / "smartplug.db"
+_SETTINGS_PATH = _ROOT / "config" / "settings.toml"
+_STATIC_DIR = _ROOT / "static"
 
 
 @asynccontextmanager
@@ -46,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(admin_router)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 def _svc(request: Request) -> DeviceService:
@@ -57,12 +60,12 @@ def _svc(request: Request) -> DeviceService:
 
 @app.get("/")
 async def index() -> FileResponse:
-    return FileResponse("static/index.html")
+    return FileResponse(_STATIC_DIR / "index.html")
 
 
 @app.get("/admin")
 async def admin_page() -> FileResponse:
-    return FileResponse("static/admin.html")
+    return FileResponse(_STATIC_DIR / "admin.html")
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
