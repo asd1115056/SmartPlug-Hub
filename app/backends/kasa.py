@@ -62,9 +62,10 @@ class KasaBackend(DeviceBackend):
             await self._raise_failure(cfg, e, "status query")
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
+        # No update() first: _get_device's device was updated when it connected (its outlet list
+        # can't change), and the queue probes right after every command to read the new state
         device = await self._get_device(cfg)
         try:
-            await device.update()
             if outlet_id:
                 child = next((c for c in (device.children or []) if c.device_id == outlet_id), None)
                 if child is None:
@@ -80,9 +81,8 @@ class KasaBackend(DeviceBackend):
             await self._raise_failure(cfg, e, "power command")
 
     async def rename_outlet(self, cfg: DeviceConfig, outlet_id: str, name: str) -> None:
-        device = await self._get_device(cfg)
+        device = await self._get_device(cfg)   # already updated on connect, as in set_power
         try:
-            await device.update()
             target = next(
                 (c for c in (device.children or []) if c.device_id == outlet_id), None
             )
