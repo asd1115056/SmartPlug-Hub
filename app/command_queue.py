@@ -46,11 +46,16 @@ class DeviceQueue:
         self._is_closed: bool = False
 
     def submit(self, outlet_id: str | None, on: bool) -> asyncio.Future[DeviceState]:
-        """Enqueue a power command and return a future. Deduplicates identical pending commands."""
+        """Enqueue a power command and return a future. Merges into an identical pending one."""
         dedup_key = (outlet_id, on)
-        for cmd in self._pending:
-            if cmd.dedup_key == dedup_key:
-                return cmd.future
+        # Only the latest pending command for this outlet may absorb the new one: merging past
+        # an opposite command (on, off, on) would run on→off and leave the outlet off
+        latest = next(
+            (c for c in reversed(self._pending) if c.dedup_key and c.dedup_key[0] == outlet_id),
+            None,
+        )
+        if latest is not None and latest.dedup_key == dedup_key:
+            return latest.future
 
         async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
             await backend.set_power(config, outlet_id, on)
