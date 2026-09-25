@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from .core import (
-    DeviceBackend, DeviceConfig, DeviceOfflineError, DeviceRejectedError, DeviceState,
+    DeviceBackend, DeviceConfig, DeviceNotFoundError, DeviceOfflineError, DeviceRejectedError,
+    DeviceState,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class DeviceQueue:
         self._processor: asyncio.Task[None] | None = None
         self._executing: bool = False
         self._last_cmd_time: float = 0.0
+        self._is_closed: bool = False
 
     def submit(self, outlet_id: str | None, on: bool) -> asyncio.Future[DeviceState]:
         """Enqueue a power command and return a future. Deduplicates identical pending commands."""
@@ -58,6 +60,8 @@ class DeviceQueue:
     def _enqueue(
         self, action: Action, dedup_key: tuple[str | None, bool] | None,
     ) -> asyncio.Future[Any]:
+        if self._is_closed:
+            raise DeviceNotFoundError(self._device_id)
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
         cmd = Command(action=action, future=future, dedup_key=dedup_key)
         self._pending.append(cmd)
@@ -74,7 +78,12 @@ class DeviceQueue:
         return self._executing
 
     async def close(self) -> None:
-        """Cancel the processor and close the backend connection."""
+        """Close for good (device removed or app stopping): fail every pending command."""
+        self._is_closed = True
+        # Drain before cancelling so the processor's teardown finds nothing to restart for
+        while not self._queue.empty():
+            self._queue.get_nowait().future.set_exception(DeviceNotFoundError(self._device_id))
+        self._pending.clear()
         if self._processor and not self._processor.done():
             self._processor.cancel()
             try:
@@ -107,8 +116,8 @@ class DeviceQueue:
             await self._backend.close()
             logger.debug("[%s] processor exited", self._device_id)
 
-            # Restart if commands arrived during teardown
-            if not self._queue.empty():
+            # Restart if commands arrived during an idle-timeout teardown
+            if not self._queue.empty() and not self._is_closed:
                 logger.debug("[%s] commands pending — restarting processor", self._device_id)
                 self._processor = asyncio.create_task(self._run())
 
@@ -140,9 +149,12 @@ class DeviceQueue:
                 cmd.future.set_result(result)
             logger.debug("[%s] command completed", self._device_id)
         except asyncio.CancelledError:
-            logger.info("[%s] command cancelled — connection closed underneath it", self._device_id)
+            # Only close() cancels the processor. Fail the caller with a real error rather than
+            # cancelling its future: CancelledError must mean "you were cancelled", or awaiting
+            # callers like the poll loop's gather() tear themselves down.
+            logger.info("[%s] command aborted — queue closed", self._device_id)
             if not cmd.future.done():
-                cmd.future.cancel()
+                cmd.future.set_exception(DeviceNotFoundError(self._device_id))
             raise
         except DeviceOfflineError as e:
             logger.info("[%s] device offline: %s", self._device_id, e)
