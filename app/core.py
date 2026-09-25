@@ -1,6 +1,7 @@
 """Shared abstractions — exceptions, runtime models, device config, backend interface, utilities."""
 
 import hashlib
+import secrets
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -100,3 +101,11 @@ def normalize_mac(mac: str) -> str:
 def mac_to_id(mac: str) -> str:
     """Derive a stable 8-char device ID from a MAC address."""
     return hashlib.sha256(normalize_mac(mac).encode()).hexdigest()[:8]
+
+
+def tokens_match(given: str | None, expected: str) -> bool:
+    """Constant-time token comparison, so response timing doesn't leak the token."""
+    if given is None:
+        return False
+    # Compare bytes: compare_digest rejects non-ASCII str, and tokens are user-chosen
+    return secrets.compare_digest(given.encode(), expected.encode())
