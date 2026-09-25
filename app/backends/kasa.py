@@ -2,13 +2,16 @@
 
 import asyncio
 import logging
+from typing import NoReturn
 
 from kasa import Credentials, Device, Module
 from kasa import DeviceConfig as KasaConfig
 from kasa import Discover
 from kasa.device_factory import get_device_class_from_sys_info, get_protocol
 from kasa.deviceconfig import DeviceConnectionParameters, DeviceEncryptionType
-from kasa.exceptions import AuthenticationError, KasaException, UnsupportedDeviceError
+from kasa.exceptions import (
+    AuthenticationError, DeviceError, KasaException, UnsupportedDeviceError,
+)
 from kasa.protocols import BaseProtocol, IotProtocol
 from kasa.transports.klaptransport import KlapTransportV2
 
@@ -52,8 +55,7 @@ class KasaBackend(DeviceBackend):
             self.ip = device.host
             return _build_state(device)
         except Exception as e:
-            await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
+            await self._raise_failure(cfg, e, "status query")
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         device = await self._get_device(cfg)
@@ -71,8 +73,7 @@ class KasaBackend(DeviceBackend):
         except ValueError:
             raise
         except Exception as e:
-            await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
+            await self._raise_failure(cfg, e, "power command")
 
     async def rename_outlet(self, cfg: DeviceConfig, outlet_id: str, name: str) -> None:
         device = await self._get_device(cfg)
@@ -87,11 +88,7 @@ class KasaBackend(DeviceBackend):
         except ValueError:
             raise
         except Exception as e:
-            if _is_rejection(e):
-                # The device answered, so the connection is healthy — keep it open
-                raise DeviceRejectedError(f"{cfg.mac} rejected outlet rename: {e}") from e
-            await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
+            await self._raise_failure(cfg, e, "outlet rename")
 
     async def rename_device(self, cfg: DeviceConfig, name: str) -> None:
         # TODO: verify set_alias on strip (HS300 untested) and cloud sync on single plug
@@ -99,8 +96,7 @@ class KasaBackend(DeviceBackend):
         try:
             await device.set_alias(name)
         except Exception as e:
-            await self._drop()
-            raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
+            await self._raise_failure(cfg, e, "device rename")
 
     async def close(self) -> None:
         await self._drop()
@@ -143,6 +139,13 @@ class KasaBackend(DeviceBackend):
                 f"Cannot reach {cfg.mac}: {', '.join(taken_ips)} now answers as another device"
             )
         raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
+
+    async def _raise_failure(self, cfg: DeviceConfig, e: Exception, action: str) -> NoReturn:
+        if _is_rejection(e):
+            # The device answered, so the connection is healthy — keep it open
+            raise DeviceRejectedError(f"{cfg.mac} rejected {action}: {e}") from e
+        await self._drop()
+        raise DeviceOfflineError(f"Lost connection to {cfg.mac}: {e}") from e
 
     async def _drop(self) -> None:
         if self._device is not None:
@@ -276,9 +279,11 @@ async def _safe_close(device: Device) -> None:
 
 
 def _is_rejection(e: Exception) -> bool:
-    # IotDevice._query_helper raises a bare KasaException when the device replies with a
-    # non-zero err_code; transport failures use subclasses (TimeoutError, _ConnectionError).
-    return type(e) is KasaException
+    # Exact types on purpose. IOT: IotDevice._query_helper raises a bare KasaException for a
+    # non-zero err_code; transport failures are subclasses (TimeoutError, _ConnectionError).
+    # SMART: SmartProtocol raises a bare DeviceError for a refused request; its subclasses
+    # are login problems (AuthenticationError) or transient session errors (_RetryableError).
+    return type(e) in (KasaException, DeviceError)
 
 
 def _mac_ok(device: Device, expected_mac: str) -> bool:
