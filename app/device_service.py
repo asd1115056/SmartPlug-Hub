@@ -53,6 +53,7 @@ class DeviceService:
         # The event loop only keeps weak references to tasks — hold fire-and-forget
         # tasks here so they can't be garbage-collected mid-run
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._refreshes: dict[str, asyncio.Future[DeviceState]] = {}
 
     async def start(self) -> None:
         rows = await self._db.get_devices()
@@ -132,15 +133,23 @@ class DeviceService:
         """Drop the connection and rediscover the device's IP — queued like any operation.
 
         If discovery finds nothing the known IP is kept, so polling doesn't start broadcasting.
+        Concurrent calls share one refresh: repeated requests (the endpoint needs no token)
+        can't stack broadcasts in the queue ahead of real commands.
         """
         entry = self._get_entry(device_id)
+        future = self._refreshes.get(device_id)
+        if future is None:
+            async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
+                await backend.close()
+                return await backend.probe(await self._discover(entry))
 
-        async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
-            await backend.close()
-            return await backend.probe(await self._discover(entry))
+            future = entry.queue.run(action)
+            self._refreshes[device_id] = future
+            future.add_done_callback(lambda _: self._refreshes.pop(device_id, None))
 
         try:
-            state = await entry.queue.run(action)
+            # Shielded: one caller going away must not cancel the refresh the others await
+            state = await asyncio.shield(future)
         except DeviceOfflineError:
             self._mark_offline(device_id, entry)
             raise
