@@ -103,8 +103,17 @@ class KasaBackend(DeviceBackend):
         if self._device is not None:
             return self._device
 
-        logger.info("Probing %s at %s", cfg.id, self.ip or cfg.last_known_ip or cfg.broadcast)
-        for ip in _unique(self.ip, cfg.last_known_ip):
+        # Broadcast discovery only when no IP is known (new device, or after refresh()).
+        # A known-but-dead IP is reported offline; refresh() rediscovers, same as MiIO/Tuya.
+        known_ips = _unique(self.ip, cfg.last_known_ip)
+        if not known_ips:
+            logger.info("Discovering %s on %s", cfg.id, cfg.broadcast)
+            ip = await _discover(cfg)
+            known_ips = [ip] if ip else []
+
+        taken_ips: list[str] = []
+        for ip in known_ips:
+            logger.info("Probing %s at %s", cfg.id, ip)
             device = await _connect(ip, _credentials(cfg))
             if device is not None and _mac_ok(device, cfg.mac):
                 self._device = device
@@ -112,15 +121,12 @@ class KasaBackend(DeviceBackend):
                 return device
             if device is not None:
                 await _safe_close(device)
+                taken_ips.append(ip)
 
-        ip = await _discover(cfg)
-        if ip:
-            device = await _connect(ip, _credentials(cfg))
-            if device is not None:
-                self._device = device
-                self.ip = device.host
-                return device
-
+        if taken_ips:
+            raise DeviceOfflineError(
+                f"Cannot reach {cfg.mac}: {', '.join(taken_ips)} now answers as another device"
+            )
         raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
 
     async def _drop(self) -> None:

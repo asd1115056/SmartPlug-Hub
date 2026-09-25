@@ -133,22 +133,25 @@ Kasa devices use **short-term persistent TCP connections** managed per device:
 - After 20 seconds of idle, the connection is deterministically closed — well under the
   60s poll interval, so polling always re-establishes a fresh connection each cycle
   instead of holding one open indefinitely
-- On first contact or after failure: try last known IP → broadcast discover → mark offline
-- Use `POST /api/v1/devices/{id}/refresh` to trigger rediscovery for an offline device
+- Connects to the last known IP; if it fails (or now answers as another device), the device is
+  marked offline — no automatic rediscovery
+- Broadcast discovery runs only when no IP is known: a newly added device, or after
+  `POST /api/v1/devices/{id}/refresh`, which clears the IP
 
 ### Connection Strategy (MiIO)
 
 MiIO devices use **stateless UDP** — each command is an independent encrypted packet:
 
 - Every command opens a UDP socket, sends the request, and closes immediately
-- On first contact: try last known IP → broadcast discover
-- On failure: mark offline (use `POST /refresh` to trigger rediscovery)
+- Sends to the last known IP; on failure the device is marked offline
+- Broadcast discovery runs only when no IP is known (new device, or after `POST /refresh`)
 
 ### Connection Strategy (Tuya)
 
 Tuya devices use **local encrypted LAN protocol** via [tinytuya](https://github.com/jasonacox/tinytuya):
 
 - Each command opens a TCP connection to the device's last known IP, sends the encrypted payload, and closes
+- Broadcast discovery runs only when no IP is known (new device, or after `POST /refresh`)
 - Protocol v3.5 with session key negotiation using the device's local key
 - Requires `tuya_device_id` (gwId) and `tuya_local_key` set on the device record
 
