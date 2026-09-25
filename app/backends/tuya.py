@@ -78,7 +78,7 @@ class TuyaBackend(DeviceBackend):
                 raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
         try:
             state = await asyncio.to_thread(_sync_probe, cfg, self.ip, profile)
-            self.ip = cfg.last_known_ip or self.ip
+            self.ip = self.ip or cfg.last_known_ip
             return state
         except DeviceOfflineError:
             raise
@@ -159,7 +159,9 @@ def _decode_phase_a(raw_b64: str) -> tuple[float, float, float]:
 
 
 def _make_device(cfg: DeviceConfig, cached_ip: str | None) -> tinytuya.Device:
-    ip = cfg.last_known_ip or cached_ip
+    # cached_ip wins: after a refresh rediscovers the device, cfg.last_known_ip still
+    # holds the stale address until restart
+    ip = cached_ip or cfg.last_known_ip
     if not ip:
         raise DeviceOfflineError(f"No IP known for {cfg.mac}")
     device = tinytuya.Device(
