@@ -173,7 +173,7 @@ The frontend subscribes to `GET /api/v1/events` (Server-Sent Events). State chan
 
 ## API Reference
 
-All public endpoints are under `/api/v1/`. Admin endpoints are under `/api/v1/admin/` and require `Authorization: Bearer <token>`.
+All public endpoints are under `/api/v1/`. Admin endpoints are under `/admin/api/` and require `Authorization: Bearer <token>`.
 
 ### Public Endpoints
 
@@ -222,12 +222,12 @@ Request body:
 | Field       | Required | Description                                                  |
 |-------------|----------|--------------------------------------------------------------|
 | `on`        | Yes      | `true` to turn on, `false` to turn off                       |
-| `outlet_id` | No       | Outlet ID for power strips; omit to control whole device     |
+| `outlet_id` | Strips   | Outlet to control; required for power strips, omit otherwise |
 | `token`     | No       | Required if the device or outlet has an access token set     |
 
 Response (200): updated device object.
 
-Error codes: `403` missing or invalid token, `404` device not found, `503` device offline.
+Error codes: `400` power strip without `outlet_id`, `403` missing or invalid token, `404` device or outlet not found, `503` device offline.
 
 ### POST /api/v1/devices/{id}/refresh
 
@@ -243,12 +243,15 @@ Server-Sent Events stream. Each event is a JSON array of all device objects (sam
 
 Devices and individual outlets can be protected with an optional access token. When set, every `PATCH /api/v1/devices/{id}` request must include the correct `token` field or the server returns `403`.
 
+Power strips have no device token — protect each outlet instead. Whole-strip commands are
+rejected (`400`), so a strip can only be switched one outlet at a time.
+
 Tokens are managed via the admin panel or the following admin API endpoints (require `Authorization: Bearer <admin-token>`):
 
 | Method  | Path                                            | Description                        |
 |---------|-------------------------------------------------|------------------------------------|
-| `PATCH` | `/api/v1/admin/devices/{id}/token`              | Set or clear the device token      |
-| `PATCH` | `/api/v1/admin/devices/{id}/outlets/{oid}/token`| Set or clear an outlet token       |
+| `PATCH` | `/admin/api/devices/{id}/token`                 | Set or clear the device token      |
+| `PATCH` | `/admin/api/devices/{id}/outlets/{oid}/token`   | Set or clear an outlet token       |
 
 Request body for both: `{ "token": "secret" }` — send `null` or omit to clear.
 
