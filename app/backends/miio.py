@@ -84,34 +84,32 @@ class MiioBackend(DeviceBackend):
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_token(cfg)
-        if not self.ip:
-            logger.info("Probing %s at %s", cfg.id, cfg.last_known_ip or cfg.broadcast)
-            if cfg.last_known_ip:
-                try:
-                    profile = await self._resolve_profile(cfg.last_known_ip, cfg)
-                    state = await _get_status(cfg.last_known_ip, cfg, profile)
-                    self.ip = cfg.last_known_ip
-                    return state
-                except DeviceOfflineError:
-                    logger.warning(
-                        "Cannot connect to %s, falling back to discover", cfg.last_known_ip
-                    )
-            ip = await _discover(cfg)
-            if not ip:
-                raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
-            self.ip = ip
-        profile = await self._resolve_profile(self.ip, cfg)
-        return await _get_status(self.ip, cfg, profile)
+        ip = await self._resolve_ip(cfg)
+        profile = await self._resolve_profile(ip, cfg)
+        return await _get_status(ip, cfg, profile)
 
     async def set_power(self, cfg: DeviceConfig, outlet_id: str | None, on: bool) -> None:
         _require_token(cfg)
-        if not self.ip:
-            raise DeviceOfflineError(f"{cfg.mac}: IP unknown")
-        profile = await self._resolve_profile(self.ip, cfg)
-        await _set_power(self.ip, cfg, on, outlet_id, profile)
+        ip = await self._resolve_ip(cfg)
+        profile = await self._resolve_profile(ip, cfg)
+        await _set_power(ip, cfg, on, outlet_id, profile)
 
     async def close(self) -> None:
         pass  # UDP — nothing to close
+
+    async def _resolve_ip(self, cfg: DeviceConfig) -> str:
+        """Known IP if any, else broadcast discovery (new device, or after refresh())."""
+        if self.ip:
+            return self.ip
+        if cfg.last_known_ip:
+            self.ip = cfg.last_known_ip
+            return self.ip
+        logger.info("Discovering %s on %s", cfg.id, cfg.broadcast)
+        ip = await _discover(cfg)
+        if not ip:
+            raise DeviceOfflineError(f"Cannot reach {cfg.mac}")
+        self.ip = ip
+        return ip
 
     async def _resolve_profile(self, ip: str, cfg: DeviceConfig) -> MiotProfile:
         """Return the MiotProfile for this device, detecting via miIO.info if needed."""
