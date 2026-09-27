@@ -177,7 +177,11 @@ setInterval(() => {
 }, 10000)
 
 function _outletList(deviceId, outlets, isOnline) {
-  if (!outlets.length) return '<p class="text-muted text-center p-3 mb-0">No outlets</p>'
+  if (!outlets.length) {
+    // A strip known from its DB snapshot but not reached since startup has no outlet list yet
+    const msg = isOnline ? 'No outlets' : 'Outlets appear once the device is reachable'
+    return `<p class="text-muted text-center p-3 mb-0">${msg}</p>`
+  }
   const disabledAttr = isOnline ? '' : 'disabled'
   return outlets.map(o => {
     const onClass   = o.is_on ? 'is-on' : ''

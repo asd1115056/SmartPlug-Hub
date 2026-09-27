@@ -167,11 +167,11 @@ def build_device_out(entry: DeviceEntry) -> DeviceOut:
     state = entry.state
     return DeviceOut(
         id=entry.config.id,
-        name=entry.name or (state.hw_alias if state else None) or f"Unnamed ···{entry.config.mac[-4:]}",
+        name=entry.name or entry.hw.alias or f"Unnamed ···{entry.config.mac[-4:]}",
         group_name=entry.group_name,
         type=entry.config.type,
-        model=state.hw_model if state else None,
-        is_strip=state.hw_is_strip if state else False,
+        model=entry.hw.model,
+        is_strip=entry.hw.is_strip,
         is_online=entry.is_online,
         is_on=state.is_on if state else None,
         last_updated=entry.last_updated,
