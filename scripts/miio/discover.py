@@ -8,15 +8,15 @@ The hello response's checksum field IS the device token in plaintext —
 no app or cloud access needed to retrieve it.
 
 Usage:
-    python tests/miio/test_discover.py <broadcast> [timeout]
+    python scripts/miio/discover.py <broadcast> [timeout]
 
 Arguments:
     broadcast   Broadcast address (e.g. 192.168.1.255)
     timeout     Seconds to wait for responses (default: 5)
 
 Example:
-    python tests/miio/test_discover.py 192.168.1.255
-    python tests/miio/test_discover.py 192.168.1.255 10
+    python scripts/miio/discover.py 192.168.1.255
+    python scripts/miio/discover.py 192.168.1.255 10
 """
 
 import binascii

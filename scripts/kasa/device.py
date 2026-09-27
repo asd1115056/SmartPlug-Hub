@@ -36,7 +36,7 @@ async def main(host: str, action: str | None = None, child_index: int | None = N
 
 
 def print_usage() -> None:
-    print("Usage: python tests/kasa/test_device.py <host> [action] [child_index]")
+    print("Usage: python scripts/kasa/device.py <host> [action] [child_index]")
     print()
     print("Arguments:")
     print("  host         Device IP address (required)")
@@ -44,9 +44,9 @@ def print_usage() -> None:
     print("  child_index  Outlet index for strips (optional, 0-based)")
     print()
     print("Examples:")
-    print("  python tests/kasa/test_device.py 192.168.1.100")
-    print("  python tests/kasa/test_device.py 192.168.1.100 on")
-    print("  python tests/kasa/test_device.py 192.168.1.100 on 0")
+    print("  python scripts/kasa/device.py 192.168.1.100")
+    print("  python scripts/kasa/device.py 192.168.1.100 on")
+    print("  python scripts/kasa/device.py 192.168.1.100 on 0")
 
 
 if __name__ == "__main__":

@@ -4,32 +4,37 @@ import { showToast, initNotifBell } from './js/notifications.js'
 import { renderDevices, renderTabs } from './js/devices.js'
 import { getCachedToken, setCachedToken, clearCachedToken } from './js/token-cache.js'
 
+const tokenModal = document.getElementById('tokenModal')
+const tokenModalInput = document.getElementById('tokenModalInput')
+const tokenModalMsg = document.getElementById('tokenModalMsg')
+const tokenModalSubmit = document.getElementById('tokenModalSubmit')
+const searchInput = document.getElementById('search-input')
+const devicesContainer = document.getElementById('devices-container')
+const banner = document.getElementById('server-offline-banner')
+
 function promptToken(msg, isError = false) {
   return new Promise(resolve => {
-    const el = document.getElementById('tokenModal')
-    const modal = bootstrap.Modal.getOrCreateInstance(el)
-    const input = document.getElementById('tokenModalInput')
-    const msgEl = document.getElementById('tokenModalMsg')
+    const modal = bootstrap.Modal.getOrCreateInstance(tokenModal)
 
-    msgEl.textContent = msg
-    msgEl.className = `small mb-2 ${isError ? 'text-danger' : 'text-muted'}`
-    input.value = ''
-    input.classList.toggle('is-invalid', isError)
+    tokenModalMsg.textContent = msg
+    tokenModalMsg.className = `small mb-2 ${isError ? 'text-danger' : 'text-muted'}`
+    tokenModalInput.value = ''
+    tokenModalInput.classList.toggle('is-invalid', isError)
 
     let confirmedValue = null
 
     const submit = () => {
-      const val = input.value.trim()
+      const val = tokenModalInput.value.trim()
       if (!val) return
       confirmedValue = val
       modal.hide()
     }
 
-    input.onkeydown = e => { if (e.key === 'Enter') submit() }
-    document.getElementById('tokenModalSubmit').onclick = submit
+    tokenModalInput.onkeydown = e => { if (e.key === 'Enter') submit() }
+    tokenModalSubmit.onclick = submit
     // Resolve after fully hidden so the next show() doesn't collide with the close animation
-    el.addEventListener('hidden.bs.modal', () => resolve(confirmedValue), { once: true })
-    el.addEventListener('shown.bs.modal', () => input.focus(), { once: true })
+    tokenModal.addEventListener('hidden.bs.modal', () => resolve(confirmedValue), { once: true })
+    tokenModal.addEventListener('shown.bs.modal', () => tokenModalInput.focus(), { once: true })
 
     modal.show()
   })
@@ -48,7 +53,7 @@ function render() {
 function onTabSelect(group) {
   activeGroup = group
   searchQuery = ''
-  document.getElementById('search-input').value = ''
+  searchInput.value = ''
   render()
 }
 
@@ -130,7 +135,7 @@ async function handleRefresh(deviceId) {
   }
 }
 
-document.getElementById('devices-container').addEventListener('click', async e => {
+devicesContainer.addEventListener('click', async e => {
   const toggle = e.target.closest('.toggle-switch:not([disabled])')
   if (toggle) {
     const { deviceId, outletId, action, hasToken } = toggle.dataset
@@ -152,12 +157,11 @@ document.getElementById('devices-container').addEventListener('click', async e =
   if (refresh) handleRefresh(refresh.dataset.deviceId)
 })
 
-document.getElementById('search-input').addEventListener('input', e => {
+searchInput.addEventListener('input', e => {
   searchQuery = e.target.value.trim()
   render()
 })
 
-const banner = document.getElementById('server-offline-banner')
 connectSSE(
   updated => {
     detectChanges(devices, updated)

@@ -6,6 +6,8 @@ A web-based controller for smart plugs and power strips. Supports multiple proto
 
 - Python >= 3.12
 - [uv](https://docs.astral.sh/uv/) package manager
+- Linux: network scanning and MiIO/Tuya discovery read interfaces via `ioctl` and MACs from
+  `/proc/net/arp`, so they don't work on macOS or Windows
 
 ## Quick Start
 
@@ -107,6 +109,7 @@ smartplug-hub/
 │   └── settings.toml.example
 ├── data/
 │   └── smartplug.db         # SQLite database (auto-created)
+├── scripts/                 # Manual hardware check scripts (kasa/, miio/), not automated tests
 ├── static/
 │   ├── index.html           # Main web UI
 │   ├── index.js             # Main page wiring (ES modules)
@@ -144,8 +147,8 @@ Kasa devices use **short-term persistent connections** managed per device:
   instead of holding one open indefinitely
 - Connects to the last known IP; if it fails (or now answers as another device), the device is
   marked offline — no automatic rediscovery
-- Broadcast discovery runs only when no IP is known: a newly added device, or after
-  `POST /api/v1/devices/{id}/refresh`, which clears the IP
+- Broadcast discovery runs only when no IP is known (a newly added device), or on
+  `POST /api/v1/devices/{id}/refresh`; if it finds nothing, the last known IP is kept
 
 ### Connection Strategy (MiIO)
 
@@ -153,14 +156,14 @@ MiIO devices use **stateless UDP** — each command is an independent encrypted 
 
 - Every command opens a UDP socket, sends the request, and closes immediately
 - Sends to the last known IP; on failure the device is marked offline
-- Broadcast discovery runs only when no IP is known (new device, or after `POST /refresh`)
+- Broadcast discovery runs only when no IP is known (new device), or on `POST /refresh`
 
 ### Connection Strategy (Tuya)
 
 Tuya devices use **local encrypted LAN protocol** via [tinytuya](https://github.com/jasonacox/tinytuya):
 
 - Each command opens a TCP connection to the device's last known IP, sends the encrypted payload, and closes
-- Broadcast discovery runs only when no IP is known (new device, or after `POST /refresh`)
+- Broadcast discovery runs only when no IP is known (new device), or on `POST /refresh`
 - Protocol v3.5 with session key negotiation using the device's local key
 - Requires `tuya_device_id` (gwId) and `tuya_local_key` set on the device record
 
@@ -243,7 +246,7 @@ Error codes: `400` power strip without `outlet_id`, `403` missing or invalid tok
 
 ### POST /api/v1/devices/{id}/refresh
 
-Queued behind any in-flight command for the device, then closes the connection, clears the cached IP, and rediscovers the device from scratch. Useful when a device changes IP address.
+Queued behind any in-flight command for the device, then closes the connection and rediscovers the device by broadcast. Useful when a device changes IP address. If discovery finds nothing, the last known IP is kept.
 
 Returns the updated device object. Returns `503` if the device is still unreachable after rediscovery, or `502` if it answered but rejected the request.
 

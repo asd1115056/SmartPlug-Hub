@@ -103,7 +103,7 @@ class DeviceService:
 
     async def set_power(self, device_id: str, outlet_id: str | None, on: bool) -> DeviceState:
         logger.info("set_power %s outlet=%s on=%s", device_id, outlet_id, on)
-        entry = self._get_entry(device_id)
+        entry = self.get_device(device_id)
         try:
             state = await entry.queue.submit(outlet_id, on)
         except DeviceOfflineError:
@@ -114,7 +114,7 @@ class DeviceService:
 
     async def rename_outlet(self, device_id: str, outlet_id: str, name: str) -> None:
         """Push a hardware alias change — serialized against power commands and polling."""
-        entry = self._get_entry(device_id)
+        entry = self.get_device(device_id)
 
         async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
             await backend.rename_outlet(config, outlet_id, name)
@@ -136,7 +136,7 @@ class DeviceService:
         Concurrent calls share one refresh: repeated requests (the endpoint needs no token)
         can't stack broadcasts in the queue ahead of real commands.
         """
-        entry = self._get_entry(device_id)
+        entry = self.get_device(device_id)
         future = self._refreshes.get(device_id)
         if future is None:
             async def action(backend: DeviceBackend, config: DeviceConfig) -> DeviceState:
@@ -187,7 +187,7 @@ class DeviceService:
 
     def update_device(self, row: DeviceRow, *, is_reconnect: bool) -> None:
         """Apply an edited device row in place — the queue and runtime state are kept."""
-        entry = self._get_entry(row.id)
+        entry = self.get_device(row.id)
         # The IP is runtime state owned by this service; admin edits never carry it
         entry.config = replace(_make_config(row), last_known_ip=entry.config.last_known_ip)
         entry.name = row.name
@@ -213,12 +213,6 @@ class DeviceService:
             self._broadcast()
 
     # ── Internal ─────────────────────────────────────────────────────────────
-
-    def _get_entry(self, device_id: str) -> DeviceEntry:
-        entry = self._devices.get(device_id)
-        if entry is None:
-            raise DeviceNotFoundError(device_id)
-        return entry
 
     def _update_state(self, device_id: str, entry: DeviceEntry, state: DeviceState) -> None:
         was_online = entry.is_online

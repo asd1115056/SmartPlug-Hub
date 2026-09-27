@@ -1,9 +1,11 @@
-import { esc } from './common.js'
+import { esc, fmtTime } from './common.js'
+
+const tabsNav = document.getElementById('tabs-nav')
+const devicesContainer = document.getElementById('devices-container')
 
 export function renderTabs(devices, activeGroup, searchQuery, onSelect) {
-  const container = document.getElementById('tabs-nav')
   const groups = [...new Set(devices.filter(d => d.group_name).map(d => d.group_name))]
-  if (!devices.length) { container.innerHTML = ''; return }
+  if (!devices.length) { tabsNav.innerHTML = ''; return }
 
   const effectiveActive = searchQuery ? 'all' : activeGroup
   const tabs = [
@@ -11,23 +13,22 @@ export function renderTabs(devices, activeGroup, searchQuery, onSelect) {
     ...groups.map(g => ({ id: g, label: g, count: devices.filter(d => d.group_name === g).length })),
   ]
 
-  container.innerHTML = `<ul class="nav nav-tabs">${tabs.map(t => `
+  tabsNav.innerHTML = `<ul class="nav nav-tabs">${tabs.map(t => `
     <li class="nav-item">
       <button class="nav-link ${effectiveActive === t.id ? 'active' : ''}" data-group="${esc(t.id)}">
         ${esc(t.label)} <span class="badge text-bg-secondary ms-1">${t.count}</span>
       </button>
     </li>`).join('')}</ul>`
 
-  container.querySelectorAll('[data-group]').forEach(btn =>
+  tabsNav.querySelectorAll('[data-group]').forEach(btn =>
     btn.addEventListener('click', () => onSelect(btn.dataset.group))
   )
 }
 
 export function renderDevices(devices, searchQuery, activeGroup) {
-  const container = document.getElementById('devices-container')
 
   if (!devices.length) {
-    container.innerHTML = `
+    devicesContainer.innerHTML = `
       <div class="alert alert-info">
         <strong>No devices.</strong> Add devices from the <a href="/admin">Admin panel</a>.
       </div>`
@@ -46,7 +47,7 @@ export function renderDevices(devices, searchQuery, activeGroup) {
   }
 
   if (!filtered.length) {
-    container.innerHTML = '<p class="text-muted py-3">No matching devices.</p>'
+    devicesContainer.innerHTML = '<p class="text-muted py-3">No matching devices.</p>'
     return
   }
 
@@ -66,7 +67,7 @@ export function renderDevices(devices, searchQuery, activeGroup) {
       <div class="col-12 col-md-6">${_deviceCard(d)}</div>`).join('')}</div>`
   }
 
-  container.innerHTML = html
+  devicesContainer.innerHTML = html
 }
 
 function _protocolBadge(type) {
@@ -83,7 +84,7 @@ function _deviceHeader(d) {
          <i class="bi bi-arrow-clockwise"></i>
        </button>`
     : ''
-  const abs = d.last_updated ? _fmtTime(d.last_updated) : ''
+  const abs = d.last_updated ? fmtTime(d.last_updated) : ''
   const timeLabel = d.is_online ? 'Last updated' : 'Last seen'
   const timeHtml = d.last_updated
     ? `<div style="font-size:.72rem;opacity:.4;margin-top:.1rem">
@@ -163,19 +164,6 @@ function _fmtAgo(iso) {
     const hrs = Math.floor(mins / 60)
     if (hrs < 24) return `${hrs} hr ago`
     return `${Math.floor(hrs / 24)} days ago`
-  } catch { return '' }
-}
-
-function _fmtTime(iso) {
-  try {
-    const date = new Date(iso)
-    const offsetMin = -date.getTimezoneOffset()
-    const sign = offsetMin >= 0 ? '+' : '-'
-    const absMin = Math.abs(offsetMin)
-    const hours = Math.floor(absMin / 60)
-    const mins = absMin % 60
-    const offset = mins ? `${hours}:${String(mins).padStart(2, '0')}` : `${hours}`
-    return `${date.toLocaleTimeString(undefined, { hour12: true })} UTC${sign}${offset}`
   } catch { return '' }
 }
 
