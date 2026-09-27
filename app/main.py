@@ -94,8 +94,8 @@ async def set_power(
     except DeviceNotFoundError:
         raise HTTPException(status_code=404, detail="Device not found")
     # Strips only expose per-outlet tokens, so a whole-strip command would need no token.
-    # The backends re-check after connecting, for the window before the first poll.
-    if body.outlet_id is None and entry.state is not None and entry.state.hw_is_strip:
+    # The backends re-check after connecting, for a device never polled (no DB snapshot yet).
+    if body.outlet_id is None and entry.hw.is_strip:
         raise HTTPException(status_code=400, detail="outlet_id is required for a power strip")
     if body.outlet_id is not None:
         required_token = entry.outlet_tokens.get(body.outlet_id)

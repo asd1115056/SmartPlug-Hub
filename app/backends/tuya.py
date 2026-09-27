@@ -17,8 +17,10 @@ import tinytuya.scanner as _tuya_scanner
 from ..core import (
     DeviceBackend,
     DeviceConfig,
+    DeviceError,
     DeviceOfflineError,
     DeviceState,
+    DeviceUnsupportedError,
     mac_to_id,
     normalize_mac,
 )
@@ -50,7 +52,7 @@ SUPPORTED_DEVICES: dict[str, DpsProfile] = {
 def _get_profile(cfg: DeviceConfig) -> DpsProfile:
     product_id = cfg.tuya_product_id
     if not product_id or product_id not in SUPPORTED_DEVICES:
-        raise DeviceOfflineError(
+        raise DeviceUnsupportedError(
             f"Unsupported Tuya product_id '{product_id}' for {cfg.mac} — "
             "add it to SUPPORTED_DEVICES in tuya.py"
         )
@@ -60,7 +62,7 @@ def _get_profile(cfg: DeviceConfig) -> DpsProfile:
 class TuyaBackend(DeviceBackend):
     can_rename_outlet = False
     can_rename_device = False
-    session_timeout = 30.0
+    session_timeout = 0.0   # every command opens and closes its own connection
     command_interval = 0.3
 
     def is_configured(self, cfg: DeviceConfig) -> bool:
@@ -81,7 +83,7 @@ class TuyaBackend(DeviceBackend):
         profile = _get_profile(cfg)
         try:
             return await asyncio.to_thread(_sync_probe, cfg, cfg.ip, profile)
-        except DeviceOfflineError:
+        except DeviceError:
             raise
         except Exception as e:
             raise DeviceOfflineError(f"Tuya probe failed for {cfg.mac}: {e}") from e
@@ -95,7 +97,7 @@ class TuyaBackend(DeviceBackend):
         profile = _get_profile(cfg)
         try:
             await asyncio.to_thread(_sync_set_power, cfg, cfg.ip, on, profile)
-        except DeviceOfflineError:
+        except DeviceError:
             raise
         except Exception as e:
             raise DeviceOfflineError(f"Tuya set_power failed for {cfg.mac}: {e}") from e
@@ -176,6 +178,9 @@ def _check_result(result: dict | None) -> None:
     if result is None:
         return  # some devices return null on successful set — not an error
     if "Error" in result:
+        # Offline, not rejected: tinytuya's local errors are timeouts (914), connection failures
+        # (901) or undecodable replies (900/904, usually a wrong local key) — none means the
+        # device understood the request and refused it
         err = result.get("Error", "unknown")
         code = result.get("Err", "?")
         raise DeviceOfflineError(f"Tuya error {code}: {err}")

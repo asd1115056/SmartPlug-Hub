@@ -24,14 +24,23 @@ POLL_INTERVAL: float = 60.0
 
 # ── Runtime entry ─────────────────────────────────────────────────────────────
 
+@dataclass(frozen=True)
+class HardwareInfo:
+    """Last known hardware identity: loaded from the DB, then replaced by each poll."""
+    alias: str | None
+    model: str | None
+    is_strip: bool
+
+
 @dataclass
 class DeviceEntry:
     config: DeviceConfig
     backend: DeviceBackend
     queue: DeviceQueue
-    name: str | None                # user-set name; None = fall back to state.hw_alias
+    name: str | None                # user-set name; None = fall back to hw.alias
     group_name: str | None
     state: DeviceState | None       # None until first successful poll
+    hw: HardwareInfo                # known before the first poll, so names and strip checks work
     is_online: bool
     last_updated: datetime | None   # UTC timestamp of last successful state update
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
@@ -221,13 +230,13 @@ class DeviceService:
         entry.last_updated = datetime.now(UTC)
         if not was_online:
             logger.info("Device %s is now online", device_id)
+        hw = HardwareInfo(alias=state.hw_alias, model=state.hw_model, is_strip=state.hw_is_strip)
+        if hw != entry.hw:
+            entry.hw = hw
+            self._spawn(self._db.update_device_hw(
+                device_id, hw_alias=hw.alias, hw_model=hw.model, hw_is_strip=hw.is_strip,
+            ))
         self._broadcast()
-        self._spawn(self._db.update_device_hw(
-            device_id,
-            hw_alias=state.hw_alias,
-            hw_model=state.hw_model,
-            hw_is_strip=state.hw_is_strip,
-        ))
 
     async def _config_for(self, entry: DeviceEntry) -> DeviceConfig:
         """Config for the next command, discovering the IP first if none is known yet."""
@@ -336,6 +345,7 @@ class DeviceService:
             name=row.name,
             group_name=row.group_name,
             state=None,
+            hw=HardwareInfo(alias=row.hw_alias, model=row.hw_model, is_strip=row.hw_is_strip),
             is_online=False,
             last_updated=None,
             outlet_names=outlet_names,
