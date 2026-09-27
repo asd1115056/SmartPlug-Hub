@@ -5,20 +5,20 @@ Run this to validate the siid/piid mapping and token before adding the device
 to devices.json.
 
 Usage:
-    python tests/miio/test_device.py <ip> <token> <miio_id> [on|off] [child_id]
+    python scripts/miio/device.py <ip> <token> <miio_id> [on|off] [child_id]
 
 Arguments:
     ip        Device IP address
     token     32-char hex token
-    miio_id   Device DID (from test_discover.py output)
+    miio_id   Device DID (from discover.py output)
     on|off    Action to perform (optional)
     child_id  Outlet to control: 1-6 or 'usb' (optional, omit for main switch)
 
 Examples:
-    python tests/miio/test_device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678
-    python tests/miio/test_device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678 on
-    python tests/miio/test_device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678 off 3
-    python tests/miio/test_device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678 on usb
+    python scripts/miio/device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678
+    python scripts/miio/device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678 on
+    python scripts/miio/device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678 off 3
+    python scripts/miio/device.py 192.168.1.50 aabbccddeeff00112233445566778899 12345678 on usb
 """
 
 import sys

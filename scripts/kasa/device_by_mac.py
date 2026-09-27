@@ -55,7 +55,7 @@ async def main(
 
 
 def print_usage() -> None:
-    print("Usage: python tests/kasa/test_device_by_mac.py <mac> [action] [child_index]")
+    print("Usage: python scripts/kasa/device_by_mac.py <mac> [action] [child_index]")
     print()
     print("Arguments:")
     print("  mac          Device MAC address (required)")
@@ -64,9 +64,9 @@ def print_usage() -> None:
     print("  child_index  Outlet index for strips (optional, 0-based)")
     print()
     print("Examples:")
-    print("  python tests/kasa/test_device_by_mac.py AA:BB:CC:DD:EE:FF")
-    print("  python tests/kasa/test_device_by_mac.py AA-BB-CC-DD-EE-FF on")
-    print("  python tests/kasa/test_device_by_mac.py AA:BB:CC:DD:EE:FF on 0")
+    print("  python scripts/kasa/device_by_mac.py AA:BB:CC:DD:EE:FF")
+    print("  python scripts/kasa/device_by_mac.py AA-BB-CC-DD-EE-FF on")
+    print("  python scripts/kasa/device_by_mac.py AA:BB:CC:DD:EE:FF on 0")
 
 
 if __name__ == "__main__":

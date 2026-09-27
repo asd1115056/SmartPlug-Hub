@@ -1,5 +1,39 @@
 import { esc } from '../common.js'
 
+export const deviceCards = document.getElementById('deviceCards')
+export const scanResults = document.getElementById('scanResults')
+const deviceCount = document.getElementById('deviceCount')
+const deleteModal = document.getElementById('deleteModal')
+const deleteConfirmBtn = document.getElementById('deleteConfirmBtn')
+const deleteModalBody = document.getElementById('deleteModalBody')
+
+// Detail panel fields, shared with admin.js so each element is looked up once
+export const panel = {
+  name:               document.getElementById('panelName'),
+  nameInput:          document.getElementById('panelNameInput'),
+  groupInput:         document.getElementById('panelGroupInput'),
+  status:             document.getElementById('panelStatus'),
+  model:              document.getElementById('panelModel'),
+  type:               document.getElementById('panelType'),
+  mac:                document.getElementById('panelMac'),
+  ip:                 document.getElementById('panelIp'),
+  kasa:               document.getElementById('panelKasa'),
+  kasaUsername:       document.getElementById('panelKasaUsername'),
+  kasaPassword:       document.getElementById('panelKasaPassword'),
+  kasaPasswordToggle: document.getElementById('panelKasaPasswordToggle'),
+  tuya:               document.getElementById('panelTuya'),
+  tuyaDeviceId:       document.getElementById('panelTuyaDeviceId'),
+  tuyaLocalKey:       document.getElementById('panelTuyaLocalKey'),
+  tuyaProductId:      document.getElementById('panelTuyaProductId'),
+  miio:               document.getElementById('panelMiio'),
+  miioId:             document.getElementById('panelMiioId'),
+  miioToken:          document.getElementById('panelMiioToken'),
+  deviceTokenSec:     document.getElementById('panelDeviceTokenSec'),
+  deviceToken:        document.getElementById('panelDeviceToken'),
+  outletsSec:         document.getElementById('panelOutletsSec'),
+  outlets:            document.getElementById('panelOutlets'),
+}
+
 function _formatMac(mac) {
   if (!mac) return '—'
   const clean = mac.replace(/[:-]/g, '').toUpperCase()
@@ -13,8 +47,6 @@ function _protocolBadge(type) {
 // ── Device cards ──────────────────────────────────────────────────────────────
 
 export function renderDeviceCards(devices, filter = '') {
-  const container = document.getElementById('deviceCards')
-  const count = document.getElementById('deviceCount')
 
   const q = filter.toLowerCase().trim()
   const filtered = q
@@ -26,16 +58,16 @@ export function renderDeviceCards(devices, filter = '') {
       )
     : devices
 
-  count.textContent = filtered.length
+  deviceCount.textContent = filtered.length
 
   if (!filtered.length) {
-    container.innerHTML = q
+    deviceCards.innerHTML = q
       ? '<p class="text-muted py-3">No devices match the filter.</p>'
       : '<p class="text-muted py-3">No devices yet. Use Scan to discover devices.</p>'
     return
   }
 
-  container.innerHTML = filtered.map(d => {
+  deviceCards.innerHTML = filtered.map(d => {
     const dotClass = d.is_online ? 'online' : 'offline'
     const cardClass = d.is_online ? '' : 'offline'
     const displayName = d.name || d.hw_alias || d.mac
@@ -65,10 +97,9 @@ export function renderDeviceCards(devices, filter = '') {
 // ── Scan results ──────────────────────────────────────────────────────────────
 
 export function renderScanResults(discovered, onAdd) {
-  const container = document.getElementById('scanResults')
   if (!discovered.length) {
-    container.innerHTML = '<p class="text-muted mb-0 mt-2">No devices found on any interface.</p>'
-    container.hidden = false
+    scanResults.innerHTML = '<p class="text-muted mb-0 mt-2">No devices found on any interface.</p>'
+    scanResults.hidden = false
     return
   }
 
@@ -112,11 +143,11 @@ export function renderScanResults(discovered, onAdd) {
       </div>`
   }
 
-  container.innerHTML = html
-  container.hidden = false
+  scanResults.innerHTML = html
+  scanResults.hidden = false
 
   // Collapse toggle
-  container.querySelectorAll('[data-toggle]').forEach(header => {
+  scanResults.querySelectorAll('[data-toggle]').forEach(header => {
     header.addEventListener('click', () => {
       const list = document.getElementById(header.dataset.toggle)
       const chev = document.getElementById(`chev-${header.dataset.toggle}`)
@@ -127,7 +158,7 @@ export function renderScanResults(discovered, onAdd) {
   })
 
   // Add buttons
-  container.querySelectorAll('.js-scan-add').forEach(btn => {
+  scanResults.querySelectorAll('.js-scan-add').forEach(btn => {
     btn.addEventListener('click', () => {
       const { mac, type, broadcast, ip, model, miioId, tuyaDeviceId, tuyaLocalKey, tuyaProductId } = btn.dataset
       onAdd({
@@ -180,68 +211,62 @@ function _scanRow(d) {
 export function fillDetailPanel(device) {
   const displayName = device.name || device.hw_alias || device.mac
 
-  document.getElementById('panelName').textContent = displayName
-  document.getElementById('panelNameInput').value = device.name ?? ''
-  document.getElementById('panelGroupInput').value = device.group_name ?? ''
+  panel.name.textContent = displayName
+  panel.nameInput.value = device.name ?? ''
+  panel.groupInput.value = device.group_name ?? ''
 
   // Status
-  const statusEl = document.getElementById('panelStatus')
   if (device.is_online) {
-    statusEl.innerHTML = '<span style="color:#198754"><i class="bi bi-circle-fill me-1" style="font-size:.45rem"></i>Online</span>'
+    panel.status.innerHTML = '<span style="color:#198754"><i class="bi bi-circle-fill me-1" style="font-size:.45rem"></i>Online</span>'
   } else {
-    statusEl.innerHTML = '<span class="text-muted">○ Offline</span>'
+    panel.status.innerHTML = '<span class="text-muted">○ Offline</span>'
   }
 
   // Info
-  document.getElementById('panelModel').textContent = device.hw_model ?? '—'
-  document.getElementById('panelType').innerHTML = _protocolBadge(device.type)
-  document.getElementById('panelMac').textContent = _formatMac(device.mac)
-  document.getElementById('panelIp').textContent = device.last_known_ip ?? '—'
+  panel.model.textContent = device.hw_model ?? '—'
+  panel.type.innerHTML = _protocolBadge(device.type)
+  panel.mac.textContent = _formatMac(device.mac)
+  panel.ip.textContent = device.last_known_ip ?? '—'
 
   // Kasa credentials (editable)
-  const kasaSec = document.getElementById('panelKasa')
   if (device.type === 'kasa') {
-    document.getElementById('panelKasaUsername').value = device.kasa_username ?? ''
-    document.getElementById('panelKasaPassword').value = device.kasa_password ?? ''
-    kasaSec.hidden = false
+    panel.kasaUsername.value = device.kasa_username ?? ''
+    panel.kasaPassword.value = device.kasa_password ?? ''
+    panel.kasa.hidden = false
   } else {
-    kasaSec.hidden = true
+    panel.kasa.hidden = true
   }
 
   // Tuya credentials (editable)
-  const tuyaSec = document.getElementById('panelTuya')
   if (device.type === 'tuya') {
-    document.getElementById('panelTuyaDeviceId').value = device.tuya_device_id ?? ''
-    document.getElementById('panelTuyaLocalKey').value = device.tuya_local_key ?? ''
-    document.getElementById('panelTuyaProductId').value = device.tuya_product_id ?? ''
-    tuyaSec.hidden = false
+    panel.tuyaDeviceId.value = device.tuya_device_id ?? ''
+    panel.tuyaLocalKey.value = device.tuya_local_key ?? ''
+    panel.tuyaProductId.value = device.tuya_product_id ?? ''
+    panel.tuya.hidden = false
   } else {
-    tuyaSec.hidden = true
+    panel.tuya.hidden = true
   }
 
   // MiIO credentials (editable)
-  const miioSec = document.getElementById('panelMiio')
   if (device.type === 'miio') {
-    document.getElementById('panelMiioId').value = device.miio_id ?? ''
-    document.getElementById('panelMiioToken').value = device.miio_token ?? ''
-    miioSec.hidden = false
+    panel.miioId.value = device.miio_id ?? ''
+    panel.miioToken.value = device.miio_token ?? ''
+    panel.miio.hidden = false
   } else {
-    miioSec.hidden = true
+    panel.miio.hidden = true
   }
 
   // Device token (non-strip only)
-  const deviceTokenSec = document.getElementById('panelDeviceTokenSec')
   if (!device.hw_is_strip) {
-    document.getElementById('panelDeviceToken').value = device.device_token ?? ''
-    deviceTokenSec.hidden = false
+    panel.deviceToken.value = device.device_token ?? ''
+    panel.deviceTokenSec.hidden = false
   } else {
-    deviceTokenSec.hidden = true
+    panel.deviceTokenSec.hidden = true
   }
 
   // Outlets (strip only)
-  const outletsSec = document.getElementById('panelOutletsSec')
   if (device.hw_is_strip && device.outlets?.length) {
-    document.getElementById('panelOutlets').innerHTML = device.outlets.map((o, i) => `
+    panel.outlets.innerHTML = device.outlets.map((o, i) => `
       <div class="border rounded p-2 mb-2">
         <div class="d-flex align-items-center gap-1 mb-1">
           <span class="badge bg-secondary font-monospace">${i}</span>
@@ -254,9 +279,9 @@ export function fillDetailPanel(device) {
             value="${esc(o.token ?? '')}" placeholder="Access token (blank = no restriction)" autocomplete="off">
         </div>
       </div>`).join('')
-    outletsSec.hidden = false
+    panel.outletsSec.hidden = false
   } else {
-    outletsSec.hidden = true
+    panel.outletsSec.hidden = true
   }
 }
 
@@ -264,19 +289,17 @@ export function fillDetailPanel(device) {
 
 export function confirmDelete(message) {
   return new Promise(resolve => {
-    const modalEl = document.getElementById('deleteModal')
-    const btn = document.getElementById('deleteConfirmBtn')
-    document.getElementById('deleteModalBody').textContent = message
-    const modal = bootstrap.Modal.getOrCreateInstance(modalEl)
+    deleteModalBody.textContent = message
+    const modal = bootstrap.Modal.getOrCreateInstance(deleteModal)
     function cleanup() {
-      btn.removeEventListener('click', onConfirm)
-      modalEl.removeEventListener('hidden.bs.modal', onDismiss)
+      deleteConfirmBtn.removeEventListener('click', onConfirm)
+      deleteModal.removeEventListener('hidden.bs.modal', onDismiss)
       modal.hide()
     }
     const onConfirm = () => { cleanup(); resolve(true) }
     const onDismiss = () => { cleanup(); resolve(false) }
-    btn.addEventListener('click', onConfirm, { once: true })
-    modalEl.addEventListener('hidden.bs.modal', onDismiss, { once: true })
+    deleteConfirmBtn.addEventListener('click', onConfirm, { once: true })
+    deleteModal.addEventListener('hidden.bs.modal', onDismiss, { once: true })
     modal.show()
   })
 }

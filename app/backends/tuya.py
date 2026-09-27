@@ -67,7 +67,13 @@ class TuyaBackend(DeviceBackend):
         return bool(cfg.tuya_device_id and cfg.tuya_local_key)
 
     async def discover(self, cfg: DeviceConfig) -> str | None:
-        found = await asyncio.to_thread(_sync_discover, get_interface_pairs(), _SCAN_TIMEOUT)
+        try:
+            found = await asyncio.to_thread(_sync_discover, get_interface_pairs(), _SCAN_TIMEOUT)
+        except OSError as e:
+            # Typically a discovery port held by another Tuya client on this host: report the
+            # device as not found (503) rather than letting the error surface as a 500
+            logger.warning("Tuya discovery for %s failed: %s", cfg.mac, e)
+            return None
         return next((d.last_known_ip for d in found if d.mac == cfg.mac), None)
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
@@ -201,20 +207,21 @@ async def scan(iface_pairs: list[tuple[str, str]], timeout: float = _SCAN_TIMEOU
 def _sync_discover(iface_pairs: list[tuple[str, str]], timeout: float) -> list[DeviceConfig]:
     own_ips = {local_ip for local_ip, _ in iface_pairs}
     socks: list[socket.socket] = []
-    for port in _UDP_PORTS:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(("0.0.0.0", port))
-        s.setblocking(False)
-        socks.append(s)
-
-    _tuya_scanner.send_discovery_request(
-        {local_ip: {"broadcast": brd} for local_ip, brd in iface_pairs}
-    )
-
     found: dict[str, DeviceConfig] = {}
-    deadline = time.monotonic() + timeout
     try:
+        # Inside the try: a bind failing on a later port must still close the earlier sockets
+        for port in _UDP_PORTS:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            socks.append(s)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("0.0.0.0", port))
+            s.setblocking(False)
+
+        _tuya_scanner.send_discovery_request(
+            {local_ip: {"broadcast": brd} for local_ip, brd in iface_pairs}
+        )
+
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             remaining = deadline - time.monotonic()
             ready, _, _ = select.select(socks, [], [], max(0.0, remaining))

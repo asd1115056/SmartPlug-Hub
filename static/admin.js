@@ -1,6 +1,8 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
-import { renderDeviceCards, renderScanResults, fillDetailPanel, confirmDelete } from './js/admin/devices.js'
+import {
+  deviceCards, scanResults, panel, renderDeviceCards, renderScanResults, fillDetailPanel, confirmDelete,
+} from './js/admin/devices.js'
 import { esc } from './js/common.js'
 import { showToast } from './js/notifications.js'
 
@@ -26,8 +28,6 @@ const detailPanel    = document.getElementById('detailPanel')
 const panelClose     = document.getElementById('panelClose')
 const panelSaveBtn   = document.getElementById('panelSaveBtn')
 const panelDeleteBtn = document.getElementById('panelDeleteBtn')
-const kasaPassword       = document.getElementById('panelKasaPassword')
-const kasaPasswordToggle = document.getElementById('panelKasaPasswordToggle')
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ deviceFilter.addEventListener('input', () => {
   renderDeviceCards(_devices, deviceFilter.value)
 })
 
-document.getElementById('deviceCards').addEventListener('click', e => {
+deviceCards.addEventListener('click', e => {
   const card = e.target.closest('.admin-device-card')
   if (!card) return
   openPanel(card.dataset.deviceId)
@@ -107,16 +107,15 @@ document.getElementById('deviceCards').addEventListener('click', e => {
 scanBtn.addEventListener('click', async () => {
   scanBtn.disabled = true
   scanBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…'
-  const resultsEl = document.getElementById('scanResults')
-  resultsEl.hidden = true
-  resultsEl.innerHTML = ''
+  scanResults.hidden = true
+  scanResults.innerHTML = ''
 
   try {
     const discovered = await adminApi.scanNetwork()
     renderScanResults(discovered, handleScanAdd)
   } catch (err) {
-    resultsEl.innerHTML = `<p class="text-danger mb-0 mt-2">${esc(err.message || 'Scan failed')}</p>`
-    resultsEl.hidden = false
+    scanResults.innerHTML = `<p class="text-danger mb-0 mt-2">${esc(err.message || 'Scan failed')}</p>`
+    scanResults.hidden = false
   } finally {
     scanBtn.disabled = false
     scanBtn.innerHTML = '<i class="bi bi-radar me-1"></i>Scan'
@@ -174,14 +173,16 @@ function openPanel(deviceId) {
 }
 
 function setPasswordVisible(isVisible) {
-  kasaPassword.type = isVisible ? 'text' : 'password'
-  kasaPasswordToggle.querySelector('i').className = `bi ${isVisible ? 'bi-eye-slash' : 'bi-eye'}`
+  panel.kasaPassword.type = isVisible ? 'text' : 'password'
+  panel.kasaPasswordToggle.querySelector('i').className = `bi ${isVisible ? 'bi-eye-slash' : 'bi-eye'}`
   const label = isVisible ? 'Hide password' : 'Show password'
-  kasaPasswordToggle.title = label
-  kasaPasswordToggle.setAttribute('aria-label', label)
+  panel.kasaPasswordToggle.title = label
+  panel.kasaPasswordToggle.setAttribute('aria-label', label)
 }
 
-kasaPasswordToggle.addEventListener('click', () => setPasswordVisible(kasaPassword.type === 'password'))
+panel.kasaPasswordToggle.addEventListener('click', () => {
+  setPasswordVisible(panel.kasaPassword.type === 'password')
+})
 
 function closePanel() {
   _activeDeviceId = null
@@ -208,40 +209,40 @@ panelSaveBtn.addEventListener('click', async () => {
     // Device fields: collect what changed and send it as one partial update
     const patch = {}
 
-    const newName = document.getElementById('panelNameInput').value.trim()
+    const newName = panel.nameInput.value.trim()
     if (newName !== (device.name ?? '')) patch.name = newName
 
-    const newGroup = document.getElementById('panelGroupInput').value.trim() || null
+    const newGroup = panel.groupInput.value.trim() || null
     if (newGroup !== (device.group_name ?? null)) patch.group_name = newGroup
 
-    if (!document.getElementById('panelTuya').hidden) {
+    if (!panel.tuya.hidden) {
       const tuya = {
-        tuya_device_id: document.getElementById('panelTuyaDeviceId').value.trim() || null,
-        tuya_local_key: document.getElementById('panelTuyaLocalKey').value.trim() || null,
-        tuya_product_id: document.getElementById('panelTuyaProductId').value.trim() || null,
+        tuya_device_id: panel.tuyaDeviceId.value.trim() || null,
+        tuya_local_key: panel.tuyaLocalKey.value.trim() || null,
+        tuya_product_id: panel.tuyaProductId.value.trim() || null,
       }
       if (Object.entries(tuya).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, tuya)
     }
 
-    if (!document.getElementById('panelMiio').hidden) {
+    if (!panel.miio.hidden) {
       const miio = {
-        miio_id: document.getElementById('panelMiioId').value.trim() || null,
-        miio_token: document.getElementById('panelMiioToken').value.trim() || null,
+        miio_id: panel.miioId.value.trim() || null,
+        miio_token: panel.miioToken.value.trim() || null,
       }
       if (Object.entries(miio).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, miio)
     }
 
-    if (!document.getElementById('panelKasa').hidden) {
+    if (!panel.kasa.hidden) {
       const kasa = {
-        kasa_username: document.getElementById('panelKasaUsername').value.trim() || null,
-        kasa_password: kasaPassword.value || null,
+        kasa_username: panel.kasaUsername.value.trim() || null,
+        kasa_password: panel.kasaPassword.value || null,
       }
       if (Object.entries(kasa).some(([k, v]) => v !== (device[k] ?? null))) Object.assign(patch, kasa)
     }
 
     // Device token (non-strip only)
-    if (!document.getElementById('panelDeviceTokenSec').hidden) {
-      const newDeviceToken = document.getElementById('panelDeviceToken').value.trim() || null
+    if (!panel.deviceTokenSec.hidden) {
+      const newDeviceToken = panel.deviceToken.value.trim() || null
       if (newDeviceToken !== (device.device_token ?? null)) patch.device_token = newDeviceToken
     }
 
@@ -251,7 +252,7 @@ panelSaveBtn.addEventListener('click', async () => {
     if (device.hw_is_strip) {
       const outlets = device.outlets ?? []
 
-      for (const input of document.querySelectorAll('#panelOutlets .js-outlet-name')) {
+      for (const input of panel.outlets.querySelectorAll('.js-outlet-name')) {
         const outletId = input.dataset.outletId
         const original = outlets.find(o => o.outlet_id === outletId)
         if (original && input.value !== original.name) {
@@ -263,7 +264,7 @@ panelSaveBtn.addEventListener('click', async () => {
         }
       }
 
-      for (const input of document.querySelectorAll('#panelOutlets .js-outlet-token')) {
+      for (const input of panel.outlets.querySelectorAll('.js-outlet-token')) {
         const outletId = input.dataset.outletId
         const original = outlets.find(o => o.outlet_id === outletId)
         const newToken = input.value.trim() || null

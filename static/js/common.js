@@ -20,3 +20,17 @@ export async function request(method, path, { body, headers = {} } = {}) {
   if (!res.ok) throw Object.assign(new Error(data.detail || `HTTP ${res.status}`), { status: res.status })
   return data
 }
+
+// Local wall-clock time with its UTC offset, e.g. "3:04:05 PM UTC+8"
+export function fmtTime(iso) {
+  try {
+    const date = new Date(iso)
+    const offsetMin = -date.getTimezoneOffset()
+    const sign = offsetMin >= 0 ? '+' : '-'
+    const absMin = Math.abs(offsetMin)
+    const hours = Math.floor(absMin / 60)
+    const mins = absMin % 60
+    const offset = mins ? `${hours}:${String(mins).padStart(2, '0')}` : `${hours}`
+    return `${date.toLocaleTimeString(undefined, { hour12: true })} UTC${sign}${offset}`
+  } catch { return '' }
+}

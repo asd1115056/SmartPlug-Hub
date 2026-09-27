@@ -187,6 +187,12 @@ async def set_outlet_token(
 ) -> AdminDeviceOut:
     await _require_device(device_id, db)
     token = body.token.strip() if body.token else None
+    # Only checkable once the outlet list is known (first successful poll). Clearing is always
+    # allowed so a token left on an outlet that no longer exists can still be removed.
+    entry = svc.find_device(device_id)
+    if token is not None and entry is not None and entry.state is not None:
+        if not any(c.outlet_id == outlet_id for c in entry.state.children):
+            raise HTTPException(status_code=404, detail="Outlet not found")
     await db.set_outlet_token(device_id, outlet_id, token)
     svc.set_outlet_token(device_id, outlet_id, token)
     row = await db.get_device(device_id)

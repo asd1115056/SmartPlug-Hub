@@ -1,4 +1,4 @@
-import { esc } from './common.js'
+import { esc, fmtTime } from './common.js'
 
 const ICONS = {
   success: 'bi-check-circle-fill',
@@ -14,11 +14,15 @@ const COLOR = {
   info:    'text-bg-info',
 }
 
+// Shared with the admin page, which has the toast container but no notification bell
+const toastContainer = document.getElementById('toast-container')
+const notifBadge = document.getElementById('notif-badge')
+const notifDropdown = document.getElementById('notif-dropdown')
+
 const history = []
 let unreadCount = 0
 
 export function showToast(msg, type = 'danger') {
-  const container = document.getElementById('toast-container')
   const icon = ICONS[type] ?? ICONS.danger
 
   const el = document.createElement('div')
@@ -30,7 +34,7 @@ export function showToast(msg, type = 'danger') {
       <span class="toast-body p-0">${esc(msg)}</span>
       <button type="button" class="btn-close btn-close-white flex-shrink-0 ms-auto" style="font-size:.7rem" data-bs-dismiss="toast"></button>
     </div>`
-  container.appendChild(el)
+  toastContainer.appendChild(el)
   const delay = (type === 'success' || type === 'info') ? 2500 : 5000
   const toast = new bootstrap.Toast(el, { delay })
   toast.show()
@@ -45,64 +49,47 @@ export function showToast(msg, type = 'danger') {
 export function initNotifBell() {
   const btn      = document.getElementById('notif-btn')
   const wrapper  = document.getElementById('notif-wrapper')
-  const dropdown = document.getElementById('notif-dropdown')
-  if (!btn || !dropdown) return
+  if (!btn || !notifDropdown) return
 
   btn.addEventListener('click', e => {
     e.stopPropagation()
-    if (!dropdown.classList.contains('d-none')) {
-      dropdown.classList.add('d-none')
+    if (!notifDropdown.classList.contains('d-none')) {
+      notifDropdown.classList.add('d-none')
       return
     }
     unreadCount = 0
     _updateBadge()
     _renderDropdown()
-    dropdown.classList.remove('d-none')
+    notifDropdown.classList.remove('d-none')
   })
 
   document.addEventListener('click', e => {
-    if (wrapper && !wrapper.contains(e.target)) dropdown.classList.add('d-none')
+    if (wrapper && !wrapper.contains(e.target)) notifDropdown.classList.add('d-none')
   })
 }
 
 function _updateBadge() {
-  const badge = document.getElementById('notif-badge')
-  if (!badge) return
+  if (!notifBadge) return
   if (unreadCount > 0) {
-    badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount)
-    badge.classList.remove('d-none')
+    notifBadge.textContent = unreadCount > 9 ? '9+' : String(unreadCount)
+    notifBadge.classList.remove('d-none')
   } else {
-    badge.classList.add('d-none')
+    notifBadge.classList.add('d-none')
   }
 }
 
 function _renderDropdown() {
-  const dropdown = document.getElementById('notif-dropdown')
-  if (!dropdown) return
+  if (!notifDropdown) return
   if (!history.length) {
-    dropdown.innerHTML = '<p class="notif-empty">No notifications yet</p>'
+    notifDropdown.innerHTML = '<p class="notif-empty">No notifications yet</p>'
     return
   }
-  dropdown.innerHTML = history.map(n => `
+  notifDropdown.innerHTML = history.map(n => `
     <div class="notif-item">
       <span class="notif-item-icon type-${n.type}"><i class="bi ${n.icon}"></i></span>
       <div class="notif-item-body">
         <div class="notif-item-msg">${esc(n.msg)}</div>
-        <div class="notif-item-time">${_formatTime(n.time)}</div>
+        <div class="notif-item-time">${fmtTime(n.time)}</div>
       </div>
     </div>`).join('')
 }
-
-function _formatTime(iso) {
-  try {
-    const date = new Date(iso)
-    const offsetMin = -date.getTimezoneOffset()
-    const sign = offsetMin >= 0 ? '+' : '-'
-    const absMin = Math.abs(offsetMin)
-    const h = Math.floor(absMin / 60)
-    const m = absMin % 60
-    const offset = m ? `${h}:${String(m).padStart(2, '0')}` : `${h}`
-    return `${date.toLocaleTimeString(undefined, { hour12: true })} UTC${sign}${offset}`
-  } catch { return '' }
-}
-
