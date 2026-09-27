@@ -215,18 +215,7 @@ export function fillDetailPanel(device) {
   panel.nameInput.value = device.name ?? ''
   panel.groupInput.value = device.group_name ?? ''
 
-  // Status
-  if (device.is_online) {
-    panel.status.innerHTML = '<span style="color:#198754"><i class="bi bi-circle-fill me-1" style="font-size:.45rem"></i>Online</span>'
-  } else {
-    panel.status.innerHTML = '<span class="text-muted">○ Offline</span>'
-  }
-
-  // Info
-  panel.model.textContent = device.hw_model ?? '—'
-  panel.type.innerHTML = _protocolBadge(device.type)
-  panel.mac.textContent = _formatMac(device.mac)
-  panel.ip.textContent = device.last_known_ip ?? '—'
+  fillPanelInfo(device)
 
   // Kasa credentials (editable)
   if (device.type === 'kasa') {
@@ -283,6 +272,19 @@ export function fillDetailPanel(device) {
   } else {
     panel.outletsSec.hidden = true
   }
+}
+
+// Read-only fields only, so a live update never overwrites what the user is editing
+export function fillPanelInfo(device) {
+  if (device.is_online) {
+    panel.status.innerHTML = '<span style="color:#198754"><i class="bi bi-circle-fill me-1" style="font-size:.45rem"></i>Online</span>'
+  } else {
+    panel.status.innerHTML = '<span class="text-muted">○ Offline</span>'
+  }
+  panel.model.textContent = device.hw_model ?? '—'
+  panel.type.innerHTML = _protocolBadge(device.type)
+  panel.mac.textContent = _formatMac(device.mac)
+  panel.ip.textContent = device.last_known_ip ?? '—'
 }
 
 // ── Delete confirm ────────────────────────────────────────────────────────────

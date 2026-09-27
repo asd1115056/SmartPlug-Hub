@@ -1,15 +1,20 @@
 import { getToken, setToken, clearToken, verifyToken } from './js/admin/auth.js'
 import * as adminApi from './js/admin/api.js'
 import {
-  deviceCards, scanResults, panel, renderDeviceCards, renderScanResults, fillDetailPanel, confirmDelete,
+  deviceCards, scanResults, panel, renderDeviceCards, renderScanResults, fillDetailPanel,
+  fillPanelInfo, confirmDelete,
 } from './js/admin/devices.js'
 import { esc } from './js/common.js'
 import { showToast } from './js/notifications.js'
+import { connectSSE } from './js/sse.js'
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let _devices = []
 let _activeDeviceId = null
+let loadQueue = Promise.resolve()
+let isLiveReloadQueued = false
+let isLiveConnected = false
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +47,10 @@ function showAdmin() {
   loginView.style.display = 'none'
   adminView.style.display = 'block'
   loadDevices()
+  if (!isLiveConnected) {
+    isLiveConnected = true
+    connectSSE(onLiveUpdate)
+  }
 }
 
 function onUnauth() {
@@ -83,18 +92,53 @@ menuDropdown.addEventListener('click', e => e.stopPropagation())
 
 // ── Devices ───────────────────────────────────────────────────────────────────
 
-async function loadDevices() {
-  try {
-    _devices = await adminApi.getDevices()
-    renderDeviceCards(_devices, deviceFilter.value)
-  } catch (e) {
-    if (e.status === 401) onUnauth()
-  }
+// Loads run one at a time, so an older response can never overwrite a newer one
+function loadDevices() {
+  loadQueue = loadQueue.then(fetchDevices)
+  return loadQueue
 }
 
-deviceFilter.addEventListener('input', () => {
+async function fetchDevices() {
+  try {
+    _devices = await adminApi.getDevices()
+  } catch (e) {
+    if (e.status === 401) onUnauth()
+    return
+  }
+  renderCards()
+  syncOpenPanel()
+}
+
+// The public SSE stream only says that something changed; the admin view needs the full
+// admin rows, so refetch them. A burst of events collapses into one pending reload.
+function onLiveUpdate() {
+  if (!getToken() || isLiveReloadQueued) return   // signed out: the stream stays open
+  isLiveReloadQueued = true
+  loadQueue = loadQueue.then(() => {
+    isLiveReloadQueued = false
+    return fetchDevices()
+  })
+}
+
+function renderCards() {
   renderDeviceCards(_devices, deviceFilter.value)
-})
+  markSelected(_activeDeviceId)
+}
+
+function markSelected(deviceId) {
+  deviceCards.querySelectorAll('.admin-device-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.deviceId === deviceId)
+  })
+}
+
+function syncOpenPanel() {
+  if (!_activeDeviceId) return
+  const device = _devices.find(d => d.id === _activeDeviceId)
+  if (device) fillPanelInfo(device)
+  else closePanel()   // deleted elsewhere
+}
+
+deviceFilter.addEventListener('input', renderCards)
 
 deviceCards.addEventListener('click', e => {
   const card = e.target.closest('.admin-device-card')
@@ -161,10 +205,7 @@ function openPanel(deviceId) {
   const device = _devices.find(d => d.id === deviceId)
   if (!device) return
   _activeDeviceId = deviceId
-
-  document.querySelectorAll('.admin-device-card').forEach(c => {
-    c.classList.toggle('selected', c.dataset.deviceId === deviceId)
-  })
+  markSelected(deviceId)
 
   fillDetailPanel(device)
   setPasswordVisible(false)   // never carry a revealed password over to another device
@@ -188,7 +229,7 @@ function closePanel() {
   _activeDeviceId = null
   panelBackdrop.classList.remove('open')
   detailPanel.classList.remove('open')
-  document.querySelectorAll('.admin-device-card.selected').forEach(c => c.classList.remove('selected'))
+  markSelected(null)
 }
 
 panelClose.addEventListener('click', closePanel)
