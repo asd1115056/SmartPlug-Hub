@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from functools import partial
 
+from miio.exceptions import DeviceError as MiioDeviceError
 from miio.exceptions import DeviceException
 from miio.miot_device import MiotDevice
 from miio.protocol import Message
@@ -17,7 +18,9 @@ from ..core import (
     DeviceBackend,
     DeviceConfig,
     DeviceOfflineError,
+    DeviceRejectedError,
     DeviceState,
+    DeviceUnsupportedError,
     mac_to_id,
 )
 from ..network import mac_from_ip
@@ -107,7 +110,7 @@ class MiioBackend(DeviceBackend):
         loop = asyncio.get_running_loop()
         model = await loop.run_in_executor(None, partial(_fetch_model_sync, ip, cfg))
         if model not in SUPPORTED_DEVICES:
-            raise DeviceOfflineError(
+            raise DeviceUnsupportedError(
                 f"Unsupported miio model '{model}' for {cfg.mac} — "
                 "add it to SUPPORTED_DEVICES in miio.py"
             )
@@ -183,10 +186,13 @@ def _fetch_model_sync(ip: str, cfg: DeviceConfig) -> str:
         raw = device.send("miIO.info", [])
         info = raw[0] if isinstance(raw, list) else raw
         model = info.get("model") if isinstance(info, dict) else None
+    except MiioDeviceError as e:
+        # The device replied with an error code: reachable, just refusing
+        raise DeviceRejectedError(f"{cfg.mac} rejected model probe: {e}") from e
     except DeviceException as e:
         raise DeviceOfflineError(f"{cfg.mac} unreachable during model probe: {e}") from e
     if not model:
-        raise DeviceOfflineError(f"{cfg.mac}: miIO.info returned no model string")
+        raise DeviceRejectedError(f"{cfg.mac}: miIO.info returned no model string")
     return model
 
 
@@ -201,6 +207,8 @@ def _get_status_sync(ip: str, cfg: DeviceConfig, profile: MiotProfile) -> Device
 
     try:
         results = device.send("get_properties", props)
+    except MiioDeviceError as e:
+        raise DeviceRejectedError(f"{cfg.mac} rejected status query: {e}") from e
     except DeviceException as e:
         raise DeviceOfflineError(f"{cfg.mac} unreachable: {e}") from e
 
@@ -253,6 +261,8 @@ def _set_power_sync(
     try:
         device.send("set_properties",
                     [{"did": cfg.miio_id, "siid": siid, "piid": 1, "value": on}])
+    except MiioDeviceError as e:
+        raise DeviceRejectedError(f"{cfg.mac} rejected power command: {e}") from e
     except DeviceException as e:
         raise DeviceOfflineError(f"{cfg.mac} set_power failed: {e}") from e
 

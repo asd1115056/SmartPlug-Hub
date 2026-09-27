@@ -146,7 +146,7 @@ class DeviceQueue:
                 )
                 return None
         else:
-            # Stateless (MiIO): drain queue immediately then exit
+            # Stateless (MiIO, Tuya): drain queue immediately then exit
             try:
                 return self._queue.get_nowait()
             except asyncio.QueueEmpty:

@@ -17,6 +17,9 @@ class DeviceOfflineError(DeviceError):
 class DeviceRejectedError(DeviceError):
     """Device is reachable but refused the command."""
 
+class DeviceUnsupportedError(DeviceRejectedError):
+    """Device answered, but its model isn't in the backend's support table."""
+
 class DeviceNotFoundError(DeviceError):
     """device_id does not exist in the runtime registry."""
 
@@ -70,9 +73,18 @@ class DeviceConfig:
 # ── Backend interface ─────────────────────────────────────────────────────────
 
 class DeviceBackend(ABC):
+    """Protocol adapter. Operations report failure only through these exceptions:
+
+    - DeviceOfflineError: the device can't be reached or won't open a session, including
+      wrong credentials (the connection itself is refused)
+    - DeviceRejectedError: the device answered and refused the request; the connection is
+      healthy. DeviceUnsupportedError when its model has no profile in this backend
+    - ValueError: the request doesn't fit the device (unknown outlet_id, strip without one)
+    """
+
     can_rename_outlet: bool = False
     can_rename_device: bool = False
-    session_timeout: float = 0.0        # 0 = stateless (MiIO); >0 = keep TCP alive this long
+    session_timeout: float = 0.0        # 0 = stateless (MiIO, Tuya); >0 = hold TCP this long
     command_interval: float = 0.0       # minimum seconds between consecutive commands
 
     def is_configured(self, cfg: DeviceConfig) -> bool:
