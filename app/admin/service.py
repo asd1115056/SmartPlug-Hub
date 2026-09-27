@@ -49,8 +49,10 @@ async def add_device(
 
 
 async def remove_device(device_id: str, db: Database, svc: DeviceService) -> None:
-    await svc.remove_entry(device_id)
+    # DB first: if the delete fails the device stays fully registered instead of coming back
+    # on the next restart after vanishing from the running service
     await db.remove_device(device_id)
+    await svc.remove_entry(device_id)
     logger.info("Device removed: %s", device_id)
 
 
