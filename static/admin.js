@@ -256,6 +256,8 @@ panelSaveBtn.addEventListener('click', async () => {
     const newGroup = panel.groupInput.value.trim() || null
     if (newGroup !== (device.group_name ?? null)) patch.group_name = newGroup
 
+    if (panel.hiddenInput.checked !== device.is_hidden) patch.is_hidden = panel.hiddenInput.checked
+
     if (!panel.tuya.hidden) {
       const tuya = {
         tuya_device_id: panel.tuyaDeviceId.value.trim() || null,

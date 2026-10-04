@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from .admin.router import router as admin_router
 from .core import DeviceNotFoundError, DeviceOfflineError, DeviceRejectedError, tokens_match
 from .db import Database
-from .device_service import DeviceService
+from .device_service import DeviceEntry, DeviceService
 from .schemas import DeviceOut, SetPowerRequest, build_device_out
 
 logger = logging.getLogger(__name__)
@@ -56,6 +56,18 @@ def _svc(request: Request) -> DeviceService:
     return request.app.state.device_service
 
 
+def _visible_devices(svc: DeviceService) -> list[DeviceEntry]:
+    return [e for e in svc.get_devices() if not e.is_hidden]
+
+
+def _visible_device(svc: DeviceService, device_id: str) -> DeviceEntry:
+    """A hidden device answers 404 exactly like a missing one, so its id can't be probed."""
+    entry = svc.find_device(device_id)
+    if entry is None or entry.is_hidden:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return entry
+
+
 # ── HTML pages ────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -72,15 +84,12 @@ async def admin_page() -> FileResponse:
 
 @app.get("/api/v1/devices", response_model=list[DeviceOut])
 async def list_devices(svc: DeviceService = Depends(_svc)) -> list[DeviceOut]:
-    return [build_device_out(e) for e in svc.get_devices()]
+    return [build_device_out(e) for e in _visible_devices(svc)]
 
 
 @app.get("/api/v1/devices/{device_id}", response_model=DeviceOut)
 async def get_device(device_id: str, svc: DeviceService = Depends(_svc)) -> DeviceOut:
-    try:
-        return build_device_out(svc.get_device(device_id))
-    except DeviceNotFoundError:
-        raise HTTPException(status_code=404, detail="Device not found")
+    return build_device_out(_visible_device(svc, device_id))
 
 
 @app.patch("/api/v1/devices/{device_id}", response_model=DeviceOut)
@@ -89,10 +98,7 @@ async def set_power(
     body: SetPowerRequest,
     svc: DeviceService = Depends(_svc),
 ) -> DeviceOut:
-    try:
-        entry = svc.get_device(device_id)
-    except DeviceNotFoundError:
-        raise HTTPException(status_code=404, detail="Device not found")
+    entry = _visible_device(svc, device_id)
     # Strips only expose per-outlet tokens, so a whole-strip command would need no token.
     # The backends re-check after connecting, for a device never polled (no DB snapshot yet).
     if body.outlet_id is None and entry.hw.is_strip:
@@ -122,6 +128,7 @@ async def set_power(
 
 @app.post("/api/v1/devices/{device_id}/refresh", response_model=DeviceOut)
 async def refresh_device(device_id: str, svc: DeviceService = Depends(_svc)) -> DeviceOut:
+    _visible_device(svc, device_id)
     try:
         await svc.refresh(device_id)
     except DeviceNotFoundError:
@@ -141,7 +148,7 @@ async def sse_stream(request: Request, svc: DeviceService = Depends(_svc)) -> St
     q = svc.subscribe()
 
     def _payload() -> str:
-        devices = [build_device_out(e).model_dump(mode='json') for e in svc.get_devices()]
+        devices = [build_device_out(e).model_dump(mode='json') for e in _visible_devices(svc)]
         return f"data: {json.dumps(devices)}\n\n"
 
     async def generate() -> AsyncGenerator[str, None]:

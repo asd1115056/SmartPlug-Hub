@@ -309,6 +309,7 @@
 .adc-name  { font-weight: 600; }
 .adc-model { font-size: .875rem; color: #adb5bd; margin-top: .1rem; }
 .adc-group { font-size: .875rem; color: #6c757d; margin-top: .1rem; }
+.adc-hidden { margin-left: .4rem; font-weight: 400; color: #6c757d; }
 .adc-meta  { font-size: .8rem; color: #495057; font-family: monospace; margin-top: .25rem; }
 
 .adc-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }

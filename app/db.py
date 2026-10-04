@@ -37,6 +37,7 @@ class Device(SQLModel, table=True):
     tuya_product_id: str | None = None
 
     device_token: str | None = None       # optional on/off protection token
+    is_hidden: bool = False               # hidden devices don't exist for the public API
 
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None
@@ -83,9 +84,14 @@ class Database:
             # create_all never alters existing tables: add columns introduced after a DB was made
             rows = await conn.execute(text("PRAGMA table_info(device)"))
             existing = {row[1] for row in rows}
-            for col in ("kasa_username", "kasa_password", "device_token"):
+            for col, ddl in (
+                ("kasa_username", "TEXT"),
+                ("kasa_password", "TEXT"),
+                ("device_token", "TEXT"),
+                ("is_hidden", "BOOLEAN NOT NULL DEFAULT 0"),
+            ):
                 if col not in existing:
-                    await conn.execute(text(f"ALTER TABLE device ADD COLUMN {col} TEXT"))
+                    await conn.execute(text(f"ALTER TABLE device ADD COLUMN {col} {ddl}"))
 
     async def close(self) -> None:
         await self._engine.dispose()

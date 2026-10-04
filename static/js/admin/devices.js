@@ -12,6 +12,7 @@ export const panel = {
   name:               document.getElementById('panelName'),
   nameInput:          document.getElementById('panelNameInput'),
   groupInput:         document.getElementById('panelGroupInput'),
+  hiddenInput:        document.getElementById('panelHiddenInput'),
   status:             document.getElementById('panelStatus'),
   model:              document.getElementById('panelModel'),
   type:               document.getElementById('panelType'),
@@ -76,6 +77,9 @@ export function renderDeviceCards(devices, filter = '') {
       ? `<div class="adc-group"><i class="bi bi-folder me-1"></i>${esc(d.group_name)}</div>`
       : ''
     const meta = [_formatMac(d.mac), d.last_known_ip].filter(Boolean).join(' · ')
+    const hidden = d.is_hidden
+      ? '<span class="adc-hidden" title="Hidden from dashboard"><i class="bi bi-eye-slash"></i></span>'
+      : ''
 
     return `
       <div class="col-lg-4 col-md-6">
@@ -83,7 +87,7 @@ export function renderDeviceCards(devices, filter = '') {
           <div class="d-flex gap-2">
             <div class="adc-dot ${dotClass}"></div>
             <div class="flex-fill">
-              <div class="adc-name">${esc(displayName)}</div>
+              <div class="adc-name">${esc(displayName)}${hidden}</div>
               <div class="adc-model">${model}</div>
               ${group}
               ${meta ? `<div class="adc-meta">${esc(meta)}</div>` : ''}
@@ -214,6 +218,7 @@ export function fillDetailPanel(device) {
   panel.name.textContent = displayName
   panel.nameInput.value = device.name ?? ''
   panel.groupInput.value = device.group_name ?? ''
+  panel.hiddenInput.checked = device.is_hidden
 
   fillPanelInfo(device)
 

@@ -273,11 +273,18 @@ Send `null` (or an empty string) to clear a token.
 ### Updating a Device (Admin)
 
 `PATCH /admin/api/devices/{id}` is a partial update: only the fields present in the body change,
-and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`, plus
-the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
+and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`,
+`is_hidden` (`true` / `false`, never cleared), plus the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
 `miio_token`, or `tuya_device_id` / `tuya_local_key` / `tuya_product_id`. A field for another
 type returns `400`. Changing credentials takes effect immediately: the device reconnects with
 them without losing its current state.
+
+### Hidden Devices (Admin)
+
+Setting `is_hidden: true` removes a device from the public side entirely: it is left out of
+`GET /api/v1/devices` and the SSE stream, and every `/api/v1/devices/{id}` endpoint answers `404`
+for it, exactly as for a device that doesn't exist. It is still polled and stays fully manageable in
+the admin panel, where its card is marked with a crossed-out eye.
 
 ### Device ID
 
