@@ -43,6 +43,7 @@ class DeviceEntry:
     hw: HardwareInfo                # known before the first poll, so names and strip checks work
     is_online: bool
     last_updated: datetime | None   # UTC timestamp of last successful state update
+    poll_rejection: str | None      # last refusal reported for polling; None after a success
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
     outlet_tokens: dict[str, str]   # outlet_id → access token (only set outlets)
     device_token: str | None        # access token for whole-device on/off
@@ -230,6 +231,7 @@ class DeviceService:
         entry.state = state
         entry.is_online = True
         entry.last_updated = datetime.now(UTC)
+        entry.poll_rejection = None
         if not was_online:
             logger.info("Device %s is now online", device_id)
         hw = HardwareInfo(alias=state.hw_alias, model=state.hw_model, is_strip=state.hw_is_strip)
@@ -314,8 +316,13 @@ class DeviceService:
             self._mark_offline(device_id, entry)
             return
         except DeviceRejectedError as e:
-            # Reachable but refused the query: not offline, just no fresh state this cycle
-            logger.warning("Device %s rejected poll: %s", device_id, e)
+            # Reachable but refused the query: not offline, just no fresh state this cycle.
+            # A lasting refusal (e.g. an unsupported model) would repeat every cycle: warn once.
+            if str(e) != entry.poll_rejection:
+                logger.warning("Device %s rejected poll: %s", device_id, e)
+                entry.poll_rejection = str(e)
+            else:
+                logger.debug("Device %s rejected poll again: %s", device_id, e)
             return
         except Exception:
             logger.exception("Unexpected error probing %s", device_id)
@@ -350,6 +357,7 @@ class DeviceService:
             hw=HardwareInfo(alias=row.hw_alias, model=row.hw_model, is_strip=row.hw_is_strip),
             is_online=False,
             last_updated=None,
+            poll_rejection=None,
             outlet_names=outlet_names,
             outlet_tokens=outlet_tokens or {},
             device_token=row.device_token,

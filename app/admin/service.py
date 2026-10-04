@@ -1,5 +1,6 @@
 """Admin CRUD operations — pure functions called after route validation."""
 
+import ipaddress
 import logging
 from typing import Any
 
@@ -56,13 +57,14 @@ async def remove_device(device_id: str, db: Database, svc: DeviceService) -> Non
     logger.info("Device removed: %s", device_id)
 
 
-_COMMON_FIELDS = {"name", "group_name", "device_token", "is_hidden"}
+_COMMON_FIELDS = {"name", "group_name", "device_token", "is_hidden", "broadcast"}
 _CREDENTIAL_FIELDS = {
     "kasa": {"kasa_username", "kasa_password"},
     "miio": {"miio_id", "miio_token"},
     "tuya": {"tuya_device_id", "tuya_local_key", "tuya_product_id"},
 }
-_TRIMMED_FIELDS = {"name", "group_name", "device_token"}   # secrets are stored verbatim
+# Secrets are stored verbatim
+_TRIMMED_FIELDS = {"name", "group_name", "device_token", "broadcast"}
 
 
 async def update_device(
@@ -82,6 +84,8 @@ async def update_device(
         k: v if isinstance(v, bool) else _clean(v, is_trimmed=k in _TRIMMED_FIELDS)
         for k, v in fields.items()
     }
+    if "broadcast" in cleaned:
+        _require_ipv4(cleaned["broadcast"])
     row = await db.update_device(device_id, cleaned)
     if row is None:
         raise DeviceNotFoundError(device_id)
@@ -100,6 +104,16 @@ async def set_outlet_name(
         await db.set_outlet_name(device_id, outlet_id, name)
         svc.set_outlet_name(device_id, outlet_id, name)
     logger.info("Device %s outlet %s renamed to %r", device_id, outlet_id, name)
+
+
+def _require_ipv4(broadcast: str | None) -> None:
+    # Discovery sends to this address, and the column can't be empty
+    if broadcast is None:
+        raise ValueError("broadcast can't be cleared")
+    try:
+        ipaddress.IPv4Address(broadcast)
+    except ValueError:
+        raise ValueError(f"broadcast must be an IPv4 address, not {broadcast!r}") from None
 
 
 def _clean(value: str | None, *, is_trimmed: bool) -> str | None:

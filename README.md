@@ -29,6 +29,7 @@ uv run smartplug-hub
 Options:
 
 ```text
+--host HOST    Address to listen on (default: 0.0.0.0, all interfaces)
 --port PORT    Port to listen on (default: 8000)
 --debug        Enable debug logging for app.* loggers
 ```
@@ -166,13 +167,24 @@ MiIO devices use **stateless UDP** — each command is an independent encrypted 
 Tuya devices use **local encrypted LAN protocol** via [tinytuya](https://github.com/jasonacox/tinytuya):
 
 - Each command opens a TCP connection to the device's last known IP, sends the encrypted payload, and closes
-- Broadcast discovery runs only when no IP is known (new device), or on `POST /refresh`
+- Broadcast discovery runs only when no IP is known (new device), or on `POST /refresh`. It
+  searches the device's broadcast subnet only, matches the reply by `tuya_device_id` (gwId) and
+  returns as soon as the device answers; the reply's MAC must match the device's
 - Protocol v3.5 with session key negotiation using the device's local key
 - Requires `tuya_device_id` (gwId) and `tuya_local_key` set on the device record
 
 ### Scan Strategy (Tuya)
 
-Tuya scan sends an **encrypted UDP discovery broadcast** on ports 6666, 6667, and 7000 using tinytuya's hardcoded `udpkey`. All Tuya protocol versions (v3.1 through v3.5) respond to this broadcast. The response includes `gwId` (Device ID), `productKey`, and `version` — no credentials needed. The Local Key is not in the response and must be entered manually from the Tuya IoT Platform.
+Tuya discovery listens on UDP ports 6666, 6667 and 7000. Devices on protocol v3.1 to v3.4
+broadcast their discovery packet on their own every few seconds; v3.5 devices only answer a
+request, which is sent to port 7000 every 6 seconds using tinytuya's hardcoded `udpkey`. A scan
+listens for 7 seconds, so the request goes out twice in case one is lost. The response includes
+`gwId` (Device ID), `productKey`, and `version` — no credentials needed. The device's MAC comes
+from ARP; a device whose MAC can't be resolved is logged and left out. The Local Key is not in
+the response and must be entered manually from the Tuya IoT Platform.
+
+The listening sockets set both `SO_REUSEADDR` and `SO_REUSEPORT`, so discovery can share these
+ports with other Tuya tools on the same host (tinytuya-based ones use `SO_REUSEPORT`).
 
 ### Database Migrations
 
@@ -303,10 +315,12 @@ Send `null` (or an empty string) to clear a token.
 
 `PATCH /admin/api/devices/{id}` is a partial update: only the fields present in the body change,
 and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`,
-`is_hidden` (`true` / `false`, never cleared), plus the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
+`is_hidden` (`true` / `false`, never cleared), `broadcast` (an IPv4 address, never cleared),
+plus the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
 `miio_token`, or `tuya_device_id` / `tuya_local_key` / `tuya_product_id`. A field for another
 type returns `400`. Changing credentials takes effect immediately: the device reconnects with
-them without losing its current state.
+them without losing its current state. A new `broadcast` is used the next time the device is
+discovered: when no IP is known, or on `POST /api/v1/devices/{id}/refresh`.
 
 ### Hidden Devices (Admin)
 

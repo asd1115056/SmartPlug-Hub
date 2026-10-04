@@ -278,6 +278,9 @@ panelSaveBtn.addEventListener('click', async () => {
     const newGroup = panel.groupInput.value.trim() || null
     if (newGroup !== (device.group_name ?? null)) patch.group_name = newGroup
 
+    const newBroadcast = panel.broadcastInput.value.trim()
+    if (newBroadcast !== device.broadcast) patch.broadcast = newBroadcast
+
     if (!panel.tuya.hidden) {
       const tuya = {
         tuya_device_id: panel.tuyaDeviceId.value.trim() || null,

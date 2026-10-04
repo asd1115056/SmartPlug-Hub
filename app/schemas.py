@@ -109,6 +109,7 @@ class UpdateDeviceRequest(BaseModel):
     group_name: str | None = None
     device_token: str | None = None
     is_hidden: bool | None = None
+    broadcast: str | None = None
     kasa_username: str | None = None
     kasa_password: str | None = None
     miio_id: str | None = None
