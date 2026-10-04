@@ -29,6 +29,7 @@ uv run smartplug-hub
 Options:
 
 ```text
+--host HOST    Address to listen on (default: 0.0.0.0, all interfaces)
 --port PORT    Port to listen on (default: 8000)
 --debug        Enable debug logging for app.* loggers
 ```
@@ -303,10 +304,12 @@ Send `null` (or an empty string) to clear a token.
 
 `PATCH /admin/api/devices/{id}` is a partial update: only the fields present in the body change,
 and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`,
-`is_hidden` (`true` / `false`, never cleared), plus the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
+`is_hidden` (`true` / `false`, never cleared), `broadcast` (an IPv4 address, never cleared),
+plus the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
 `miio_token`, or `tuya_device_id` / `tuya_local_key` / `tuya_product_id`. A field for another
 type returns `400`. Changing credentials takes effect immediately: the device reconnects with
-them without losing its current state.
+them without losing its current state. A new `broadcast` is used the next time the device is
+discovered: when no IP is known, or on `POST /api/v1/devices/{id}/refresh`.
 
 ### Hidden Devices (Admin)
 

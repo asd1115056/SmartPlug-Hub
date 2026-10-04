@@ -26,11 +26,30 @@ _SETTINGS_PATH = _ROOT / "config" / "settings.toml"
 _STATIC_DIR = _ROOT / "static"
 
 
+class SettingsError(Exception):
+    """config/settings.toml is missing or unusable."""
+
+
+def load_admin_token(path: Path = _SETTINGS_PATH) -> str:
+    if not path.exists():
+        raise SettingsError(
+            f"{path} not found: copy config/settings.toml.example to it and set [admin] token"
+        )
+    try:
+        with path.open("rb") as f:
+            cfg = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise SettingsError(f"{path} is not valid TOML: {e}") from e
+    admin = cfg.get("admin")
+    token = admin.get("token") if isinstance(admin, dict) else None
+    if not isinstance(token, str) or not token.strip():
+        raise SettingsError(f"{path} needs a non-empty token under [admin]")
+    return token
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    with _SETTINGS_PATH.open("rb") as f:
-        cfg = tomllib.load(f)
-    app.state.admin_token = cfg["admin"]["token"]
+    app.state.admin_token = load_admin_token()
 
     db = Database(DB_PATH)
     await db.initialize()

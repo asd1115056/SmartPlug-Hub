@@ -12,6 +12,7 @@ export const panel = {
   name:               document.getElementById('panelName'),
   nameInput:          document.getElementById('panelNameInput'),
   groupInput:         document.getElementById('panelGroupInput'),
+  broadcastInput:     document.getElementById('panelBroadcastInput'),
   hiddenInput:        document.getElementById('panelHiddenInput'),
   status:             document.getElementById('panelStatus'),
   model:              document.getElementById('panelModel'),
@@ -218,6 +219,7 @@ export function fillDetailPanel(device) {
   panel.name.textContent = displayName
   panel.nameInput.value = device.name ?? ''
   panel.groupInput.value = device.group_name ?? ''
+  panel.broadcastInput.value = device.broadcast
 
   fillPanelInfo(device)
 
