@@ -9,6 +9,7 @@ import select
 import socket
 import struct
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import tinytuya
@@ -69,14 +70,21 @@ class TuyaBackend(DeviceBackend):
         return bool(cfg.tuya_device_id and cfg.tuya_local_key)
 
     async def discover(self, cfg: DeviceConfig) -> str | None:
+        # Only the configured subnet, like the other backends: no silent fallback to the rest
+        iface_pairs = [pair for pair in get_interface_pairs() if pair[1] == cfg.broadcast]
+        if not iface_pairs:
+            # The discovery request carries a local IP, so it needs a matching interface
+            logger.warning(
+                "Tuya discovery for %s: broadcast %s is not on any interface of this host",
+                cfg.mac, cfg.broadcast,
+            )
+            return None
         try:
-            found = await asyncio.to_thread(_sync_discover, get_interface_pairs(), _SCAN_TIMEOUT)
+            return await asyncio.to_thread(_sync_find, iface_pairs, cfg)
         except OSError as e:
-            # Typically a discovery port held by another Tuya client on this host: report the
-            # device as not found (503) rather than letting the error surface as a 500
+            # Report the device as not found (503) rather than letting it surface as a 500
             logger.warning("Tuya discovery for %s failed: %s", cfg.mac, e)
             return None
-        return next((d.last_known_ip for d in found if d.mac == cfg.mac), None)
 
     async def probe(self, cfg: DeviceConfig) -> DeviceState:
         _require_credentials(cfg)
@@ -197,81 +205,132 @@ def _require_credentials(cfg: DeviceConfig) -> None:
 
 # ── Network scan ──────────────────────────────────────────────────────────────
 
-_UDP_PORTS = (6666, 6667, 7000)
-_SCAN_TIMEOUT = 5.0
+_UDP_PORTS = (6666, 6667, 7000)   # v3.1 broadcasts, v3.2-3.4 broadcasts, v3.5 replies
+# v3.5 devices only answer a discovery request, so it is repeated (tinytuya's BROADCASTTIME);
+# the timeout leaves room for a second one in case the first is lost
+_REQUEST_INTERVAL = 6.0
+_SEARCH_TIMEOUT = 7.0
+
+# (ip, gwId, payload) → True to stop listening
+OnReply = Callable[[str, str, dict], bool]
 
 
-async def scan(iface_pairs: list[tuple[str, str]], timeout: float = _SCAN_TIMEOUT) -> list[DeviceConfig]:
+async def scan(
+    iface_pairs: list[tuple[str, str]], timeout: float = _SEARCH_TIMEOUT,
+) -> list[DeviceConfig]:
     """Discover Tuya devices via encrypted UDP discovery on all local interfaces."""
+    return await asyncio.to_thread(_sync_scan, iface_pairs, timeout)
+
+
+def _sync_find(iface_pairs: list[tuple[str, str]], cfg: DeviceConfig) -> str | None:
+    """IP of the device whose gwId is cfg.tuya_device_id, as soon as it answers."""
+    found: list[str] = []
+
+    def on_reply(ip: str, gwid: str, _payload: dict) -> bool:
+        if gwid != cfg.tuya_device_id:
+            return False
+        # One ARP lookup, for the match only. As with Kasa, an unresolvable MAC is accepted.
+        mac = mac_from_ip(ip)
+        if mac and normalize_mac(mac) != cfg.mac:
+            logger.warning("Tuya %s answered from %s, but that IP has MAC %s", gwid, ip, mac)
+            return False
+        found.append(ip)
+        return True
+
+    _listen(iface_pairs, _SEARCH_TIMEOUT, on_reply)
+    return found[0] if found else None
+
+
+def _sync_scan(iface_pairs: list[tuple[str, str]], timeout: float) -> list[DeviceConfig]:
+    found: dict[str, DeviceConfig] = {}
+    unresolved: dict[str, str] = {}   # ip → gwId of devices whose MAC ARP hasn't given yet
+
+    def on_reply(ip: str, gwid: str, payload: dict) -> bool:
+        if ip in found:
+            return False
+        # Device ids are derived from the MAC, so a device without one can't be added. Each
+        # later reply from the same device is another chance for ARP.
+        mac = mac_from_ip(ip) or mac_from_ip(ip)
+        if not mac:
+            unresolved[ip] = gwid
+            return False
+        unresolved.pop(ip, None)
+        mac = normalize_mac(mac)
+        found[ip] = DeviceConfig(
+            id=mac_to_id(mac), mac=mac, type="tuya",
+            broadcast=_iface_broadcast_for(ip, iface_pairs),
+            last_known_ip=ip,
+            tuya_device_id=gwid,
+            tuya_product_id=payload.get("productKey"),
+        )
+        return False
+
+    _listen(iface_pairs, timeout, on_reply)
+    for ip, gwid in unresolved.items():
+        logger.warning(
+            "Tuya %s at %s answered the scan, but its MAC couldn't be resolved", gwid, ip,
+        )
     seen: dict[str, DeviceConfig] = {}
-    for cfg in await asyncio.to_thread(_sync_discover, iface_pairs, timeout):
-        seen.setdefault(cfg.mac, cfg)
+    for dev in found.values():
+        seen.setdefault(dev.mac, dev)
     return list(seen.values())
 
 
-def _sync_discover(iface_pairs: list[tuple[str, str]], timeout: float) -> list[DeviceConfig]:
+def _listen(iface_pairs: list[tuple[str, str]], timeout: float, on_reply: OnReply) -> None:
+    """Request discovery every _REQUEST_INTERVAL; feed decoded replies to on_reply. Blocking."""
     own_ips = {local_ip for local_ip, _ in iface_pairs}
+    # send_discovery_request keeps a sending socket in each entry; closed below
+    targets: dict[str, dict] = {local_ip: {"broadcast": brd} for local_ip, brd in iface_pairs}
     socks: list[socket.socket] = []
-    found: dict[str, DeviceConfig] = {}
     try:
         # Inside the try: a bind failing on a later port must still close the earlier sockets
         for port in _UDP_PORTS:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             socks.append(s)
+            # Linux shares a UDP port only among sockets that all set the same option.
+            # tinytuya-based tools set SO_REUSEPORT, others SO_REUSEADDR: set both.
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             s.bind(("0.0.0.0", port))
             s.setblocking(False)
 
-        _tuya_scanner.send_discovery_request(
-            {local_ip: {"broadcast": brd} for local_ip, brd in iface_pairs}
-        )
-
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            remaining = deadline - time.monotonic()
-            ready, _, _ = select.select(socks, [], [], max(0.0, remaining))
+        next_request = 0.0
+        while (now := time.monotonic()) < deadline:
+            if now >= next_request:
+                _tuya_scanner.send_discovery_request(targets)
+                next_request = now + _REQUEST_INTERVAL
+            wait = min(deadline, next_request) - now
+            ready, _, _ = select.select(socks, [], [], max(0.0, wait))
             for s in ready:
                 try:
                     data, (ip, _) = s.recvfrom(4096)
                 except OSError:
                     continue
-                if ip in own_ips or ip in found:
+                if ip in own_ips:
                     continue
                 payload = _decode_broadcast(data)
-                if not payload:
-                    continue
-                gwid = payload.get("gwId") or payload.get("devId")
-                if not gwid:
-                    continue
-                mac = mac_from_ip(ip)
-                if not mac:
-                    continue
-                mac = normalize_mac(mac)
-                found[ip] = DeviceConfig(
-                    id=mac_to_id(mac), mac=mac, type="tuya",
-                    broadcast=_iface_broadcast_for(ip, iface_pairs),
-                    last_known_ip=ip,
-                    tuya_device_id=gwid,
-                    tuya_product_id=payload.get("productKey"),
-                )
+                gwid = payload and (payload.get("gwId") or payload.get("devId"))
+                if gwid and on_reply(ip, gwid, payload):
+                    return
     finally:
         for s in socks:
             s.close()
-
-    return list(found.values())
+        for target in targets.values():
+            if sender := target.get("socket"):
+                sender.close()
 
 
 def _decode_broadcast(data: bytes) -> dict | None:
+    """Decode any discovery packet: v3.1 plaintext, v3.2-3.4 (55AA) or v3.5 (6699)."""
     try:
-        msg = tinytuya.unpack_message(data, hmac_key=tinytuya.udpkey)
-        return json.loads(msg.payload)
-    except Exception:
-        pass
-    try:
-        # fallback for legacy v3.1 plaintext format
-        return json.loads(_tuya_scanner.decrypt_udp(data))
-    except Exception:
+        # What tinytuya's own scanner uses; it also tells v3.5 packets with and without a
+        # return code apart, which a plain unpack_message does not
+        payload = json.loads(tinytuya.decrypt_udp(data))
+    except Exception as e:   # any UDP packet on these ports reaches here, not just Tuya's
+        logger.debug("Ignoring undecodable discovery packet: %s", e)
         return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _iface_broadcast_for(ip: str, iface_pairs: list[tuple[str, str]]) -> str:
