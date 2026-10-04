@@ -191,7 +191,9 @@ uv run alembic revision --autogenerate -m "add device nickname"
 Autogenerate compares the models with your local `data/smartplug.db`, so start the app once
 first to bring it up to date. Review the generated file: added and removed columns are detected,
 but a renamed column shows up as a drop plus an add, which would lose its data. Edit it into
-`batch_op.alter_column(..., new_column_name=...)` instead. SQLite can't alter most things in
+`batch_op.alter_column(..., new_column_name=...)` instead. A new non-nullable column also needs a
+`server_default=...` in the migration (see `0002_add_device_is_hidden.py`): a model default only
+applies to new rows, and SQLite refuses to add a NOT NULL column without one. SQLite can't alter most things in
 place, so migrations run in batch mode, which rebuilds the table.
 
 `uv run alembic check` reports whether the models and the database have drifted apart. If a
@@ -300,11 +302,18 @@ Send `null` (or an empty string) to clear a token.
 ### Updating a Device (Admin)
 
 `PATCH /admin/api/devices/{id}` is a partial update: only the fields present in the body change,
-and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`, plus
-the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
+and `null` or `""` clears a field. Accepted fields are `name`, `group_name`, `device_token`,
+`is_hidden` (`true` / `false`, never cleared), plus the credentials for the device's type — `kasa_username` / `kasa_password`, `miio_id` /
 `miio_token`, or `tuya_device_id` / `tuya_local_key` / `tuya_product_id`. A field for another
 type returns `400`. Changing credentials takes effect immediately: the device reconnects with
 them without losing its current state.
+
+### Hidden Devices (Admin)
+
+Setting `is_hidden: true` removes a device from the public side entirely: it is left out of
+`GET /api/v1/devices` and the SSE stream, and every `/api/v1/devices/{id}` endpoint answers `404`
+for it, exactly as for a device that doesn't exist. It is still polled and stays fully manageable in
+the admin panel, where its card is marked with a crossed-out eye.
 
 ### Device ID
 

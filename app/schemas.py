@@ -60,6 +60,7 @@ class AdminDeviceOut(BaseModel):
     hw_is_strip: bool
     last_known_ip: str | None
     device_token: str | None
+    is_hidden: bool
     is_online: bool
     is_on: bool | None
     outlets: list[AdminOutletOut]
@@ -107,6 +108,7 @@ class UpdateDeviceRequest(BaseModel):
     name: str | None = None
     group_name: str | None = None
     device_token: str | None = None
+    is_hidden: bool | None = None
     kasa_username: str | None = None
     kasa_password: str | None = None
     miio_id: str | None = None
@@ -205,6 +207,7 @@ def build_admin_device_out(
         hw_is_strip=row.hw_is_strip,
         last_known_ip=row.last_known_ip,
         device_token=row.device_token,
+        is_hidden=row.is_hidden,
         is_online=entry.is_online if entry else False,
         is_on=state.is_on if state else None,
         outlets=_build_admin_outlets(entry) if entry else [],

@@ -46,6 +46,7 @@ class DeviceEntry:
     outlet_names: dict[str, str]    # outlet_id → user-set name, loaded from DB at startup
     outlet_tokens: dict[str, str]   # outlet_id → access token (only set outlets)
     device_token: str | None        # access token for whole-device on/off
+    is_hidden: bool                 # still polled; only the public API leaves it out
 
 
 # ── Service ───────────────────────────────────────────────────────────────────
@@ -202,6 +203,7 @@ class DeviceService:
         entry.name = row.name
         entry.group_name = row.group_name
         entry.device_token = row.device_token
+        entry.is_hidden = row.is_hidden
         self._broadcast()
         if is_reconnect:
             self._spawn(self._probe_one(row.id, entry, is_reconnect=True))
@@ -351,6 +353,7 @@ class DeviceService:
             outlet_names=outlet_names,
             outlet_tokens=outlet_tokens or {},
             device_token=row.device_token,
+            is_hidden=row.is_hidden,
         )
         return entry
 

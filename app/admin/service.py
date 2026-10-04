@@ -56,7 +56,7 @@ async def remove_device(device_id: str, db: Database, svc: DeviceService) -> Non
     logger.info("Device removed: %s", device_id)
 
 
-_COMMON_FIELDS = {"name", "group_name", "device_token"}
+_COMMON_FIELDS = {"name", "group_name", "device_token", "is_hidden"}
 _CREDENTIAL_FIELDS = {
     "kasa": {"kasa_username", "kasa_password"},
     "miio": {"miio_id", "miio_token"},
@@ -76,7 +76,12 @@ async def update_device(
     if unknown := fields.keys() - _COMMON_FIELDS - credential_fields:
         raise ValueError(f"Not applicable to a {row.type} device: {', '.join(sorted(unknown))}")
 
-    cleaned = {k: _clean(v, is_trimmed=k in _TRIMMED_FIELDS) for k, v in fields.items()}
+    if "is_hidden" in fields and fields["is_hidden"] is None:
+        raise ValueError("is_hidden must be true or false")
+    cleaned = {
+        k: v if isinstance(v, bool) else _clean(v, is_trimmed=k in _TRIMMED_FIELDS)
+        for k, v in fields.items()
+    }
     row = await db.update_device(device_id, cleaned)
     if row is None:
         raise DeviceNotFoundError(device_id)
