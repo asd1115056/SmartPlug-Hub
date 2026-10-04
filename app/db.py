@@ -43,6 +43,7 @@ class Device(SQLModel, table=True):
     tuya_product_id: str | None = None
 
     device_token: str | None = None       # optional on/off protection token
+    is_hidden: bool = False               # hidden devices don't exist for the public API
 
     # Hardware snapshot — updated after each successful poll
     hw_alias: str | None = None
