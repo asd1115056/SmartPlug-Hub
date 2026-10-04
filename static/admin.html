@@ -93,6 +93,12 @@
       <div>
         <div id="panelName" class="fw-semibold fs-6"></div>
         <div id="panelStatus" class="mt-1 small text-muted"></div>
+        <div class="form-check form-switch small mt-2 mb-0">
+          <input id="panelHiddenInput" class="form-check-input" type="checkbox" role="switch">
+          <label class="form-check-label" for="panelHiddenInput">Hide from dashboard</label>
+          <i class="bi bi-info-circle ms-1 text-muted"
+            title="Hidden devices can't be seen or controlled from the main page or the public API"></i>
+        </div>
       </div>
       <button id="panelClose" class="btn btn-sm btn-outline-secondary py-0 px-2">
         <i class="bi bi-x-lg"></i>
@@ -109,11 +115,6 @@
     <div>
       <label class="form-label fw-semibold">Group</label>
       <input id="panelGroupInput" class="form-control">
-    </div>
-    <div class="form-check form-switch mt-3">
-      <input id="panelHiddenInput" class="form-check-input" type="checkbox" role="switch">
-      <label class="form-check-label" for="panelHiddenInput">Hide from dashboard</label>
-      <div class="form-text">Hidden devices can't be seen or controlled from the main page or the public API.</div>
     </div>
   </div>
 
