@@ -235,6 +235,28 @@ function closePanel() {
 panelClose.addEventListener('click', closePanel)
 panelBackdrop.addEventListener('click', closePanel)
 
+// ── Hide switch ───────────────────────────────────────────────────────────────
+
+// Applies at once, unlike the panel's other fields: only is_hidden is sent, so unsaved edits
+// elsewhere in the panel stay as they are until Save
+panel.hiddenInput.addEventListener('change', async () => {
+  const deviceId = _activeDeviceId
+  if (!deviceId) return
+  const isHidden = panel.hiddenInput.checked
+  panel.hiddenInput.disabled = true
+  try {
+    await adminApi.updateDevice(deviceId, { is_hidden: isHidden })
+    showToast(isHidden ? 'Hidden from dashboard' : 'Shown on dashboard', 'success')
+  } catch (err) {
+    if (_activeDeviceId === deviceId) panel.hiddenInput.checked = !isHidden
+    if (err.status === 401) onUnauth()
+    else showToast(err.message || 'Failed to change visibility', 'danger')
+  } finally {
+    panel.hiddenInput.disabled = false
+  }
+  await loadDevices()
+})
+
 // ── Panel save ────────────────────────────────────────────────────────────────
 
 panelSaveBtn.addEventListener('click', async () => {
@@ -255,8 +277,6 @@ panelSaveBtn.addEventListener('click', async () => {
 
     const newGroup = panel.groupInput.value.trim() || null
     if (newGroup !== (device.group_name ?? null)) patch.group_name = newGroup
-
-    if (panel.hiddenInput.checked !== device.is_hidden) patch.is_hidden = panel.hiddenInput.checked
 
     if (!panel.tuya.hidden) {
       const tuya = {
