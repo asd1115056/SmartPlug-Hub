@@ -1,15 +1,21 @@
 """SQLite persistence — user intent and hardware snapshot cache."""
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import event, text
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import Field, SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from .migrate import upgrade
+
 logger = logging.getLogger(__name__)
+
+# Anchored to the repo, not the working directory, so the service starts from anywhere
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "smartplug.db"
 
 
 # ── Tables ────────────────────────────────────────────────────────────────────
@@ -65,6 +71,7 @@ class Database:
 
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        self._path = path
         self._engine: AsyncEngine = create_async_engine(
             f"sqlite+aiosqlite:///{path}", echo=False
         )
@@ -78,14 +85,8 @@ class Database:
             cursor.close()
 
     async def initialize(self) -> None:
-        async with self._engine.begin() as conn:
-            await conn.run_sync(SQLModel.metadata.create_all)
-            # create_all never alters existing tables: add columns introduced after a DB was made
-            rows = await conn.execute(text("PRAGMA table_info(device)"))
-            existing = {row[1] for row in rows}
-            for col in ("kasa_username", "kasa_password", "device_token"):
-                if col not in existing:
-                    await conn.execute(text(f"ALTER TABLE device ADD COLUMN {col} TEXT"))
+        """Create or migrate the schema (app/migrations) before any other access."""
+        await asyncio.to_thread(upgrade, self._path)
 
     async def close(self) -> None:
         await self._engine.dispose()

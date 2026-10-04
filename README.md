@@ -100,10 +100,13 @@ smartplug-hub/
 │   ├── command_queue.py     # Per-device command serialization with session lifecycle
 │   ├── core.py              # DeviceBackend ABC, DeviceConfig, DeviceState, exceptions
 │   ├── db.py                # SQLite layer (devices, outlet names, outlet tokens)
+│   ├── migrate.py           # Applies Alembic migrations at startup
+│   ├── migrations/          # Alembic environment and versions/ (one file per schema change)
 │   ├── device_service.py    # Runtime state: polling, command dispatch, SSE broadcast
 │   ├── logging.py           # Rich handler + library log suppression
 │   ├── main.py              # FastAPI app, public API, SSE, lifespan
 │   └── schemas.py           # Pydantic request/response models
+├── alembic.ini              # Alembic CLI settings (for creating migrations)
 ├── config/
 │   ├── settings.toml        # Admin token (create from example)
 │   └── settings.toml.example
@@ -170,6 +173,30 @@ Tuya devices use **local encrypted LAN protocol** via [tinytuya](https://github.
 ### Scan Strategy (Tuya)
 
 Tuya scan sends an **encrypted UDP discovery broadcast** on ports 6666, 6667, and 7000 using tinytuya's hardcoded `udpkey`. All Tuya protocol versions (v3.1 through v3.5) respond to this broadcast. The response includes `gwId` (Device ID), `productKey`, and `version` — no credentials needed. The Local Key is not in the response and must be entered manually from the Tuya IoT Platform.
+
+### Database Migrations
+
+The schema is managed with [Alembic](https://alembic.sqlalchemy.org/). On startup the app applies
+any pending migration from `app/migrations/versions/` to `data/smartplug.db` in one transaction,
+so a failing migration leaves the database unchanged. A database created before Alembic is
+recognised and adopted automatically, keeping its data.
+
+To change the schema, edit the models in `app/db.py`, then generate a migration and commit it
+with the change:
+
+```bash
+uv run alembic revision --autogenerate -m "add device nickname"
+```
+
+Autogenerate compares the models with your local `data/smartplug.db`, so start the app once
+first to bring it up to date. Review the generated file: added and removed columns are detected,
+but a renamed column shows up as a drop plus an add, which would lose its data. Edit it into
+`batch_op.alter_column(..., new_column_name=...)` instead. SQLite can't alter most things in
+place, so migrations run in batch mode, which rebuilds the table.
+
+`uv run alembic check` reports whether the models and the database have drifted apart. If a
+database is newer than the code (for example after checking out an older commit), startup stops
+with `Can't locate revision` instead of touching it.
 
 ### Command Queue
 
