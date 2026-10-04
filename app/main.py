@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .admin.router import router as admin_router
 from .core import DeviceNotFoundError, DeviceOfflineError, DeviceRejectedError, tokens_match
-from .db import Database
+from .db import DB_PATH, Database
 from .device_service import DeviceService
 from .schemas import DeviceOut, SetPowerRequest, build_device_out
 
@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 # Anchored to the repo, not the working directory, so the service starts from anywhere
 _ROOT = Path(__file__).resolve().parent.parent
-_DB_PATH = _ROOT / "data" / "smartplug.db"
 _SETTINGS_PATH = _ROOT / "config" / "settings.toml"
 _STATIC_DIR = _ROOT / "static"
 
@@ -33,7 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         cfg = tomllib.load(f)
     app.state.admin_token = cfg["admin"]["token"]
 
-    db = Database(_DB_PATH)
+    db = Database(DB_PATH)
     await db.initialize()
     app.state.db = db
 
