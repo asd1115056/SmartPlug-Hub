@@ -1,7 +1,6 @@
 """Alembic environment: migrate the connection the app passes in, or open one for the CLI."""
 
 from logging.config import fileConfig
-from pathlib import Path
 
 from alembic import context
 from sqlalchemy import Connection, String
@@ -52,9 +51,7 @@ if connection is not None:
 else:
     if config.config_file_name is not None:
         fileConfig(config.config_file_name)
-    # `alembic -x db=<path> ...` targets another database than the app's
-    path = Path(context.get_x_argument(as_dictionary=True).get("db", DB_PATH))
-    engine = migration_engine(path)
+    engine = migration_engine(DB_PATH)
     try:
         with engine.begin() as conn:
             run_migrations(conn)

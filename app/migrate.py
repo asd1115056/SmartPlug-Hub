@@ -12,10 +12,8 @@ from sqlalchemy import Connection, Engine, create_engine, event, inspect
 logger = logging.getLogger(__name__)
 
 _SCRIPT_DIR = Path(__file__).parent / "migrations"
-# The schema of every database made before Alembic, once the columns below are added
+# The schema the last release before Alembic left every database in
 _BASELINE_REVISION = "0001"
-# Added by hand to databases created before them, prior to Alembic
-_PRE_ALEMBIC_COLUMNS = ("kasa_username", "kasa_password", "device_token")
 
 
 class MigrationError(Exception):
@@ -57,8 +55,7 @@ def upgrade(path: Path) -> None:
             before = MigrationContext.configure(conn).get_current_revision()
             cfg = alembic_config(conn)
             if before is None and inspect(conn).has_table("device"):
-                _add_pre_alembic_columns(conn)
-                command.stamp(cfg, _BASELINE_REVISION)
+                command.stamp(cfg, _BASELINE_REVISION)   # made before Alembic: adopt as is
             command.upgrade(cfg, "head")
             if violations := conn.exec_driver_sql("PRAGMA foreign_key_check").all():
                 raise MigrationError(f"Foreign key violations after migrating: {violations}")
@@ -67,10 +64,3 @@ def upgrade(path: Path) -> None:
         engine.dispose()
     if after != before:
         logger.info("Database migrated: %s → %s", before or "empty", after)
-
-
-def _add_pre_alembic_columns(conn: Connection) -> None:
-    existing = {col["name"] for col in inspect(conn).get_columns("device")}
-    for col in _PRE_ALEMBIC_COLUMNS:
-        if col not in existing:
-            conn.exec_driver_sql(f"ALTER TABLE device ADD COLUMN {col} VARCHAR")
